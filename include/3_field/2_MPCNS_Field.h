@@ -24,9 +24,6 @@ public:
     // 注册一个物理场（记录 desc，立刻分配）
     void register_field(const FieldDescriptor &desc);
 
-    // 分配所有 field × block 的数据
-    void allocate_all();
-
     // 分配所有 fieldid 下 block 的数据
     void allocate(int32_t fieldID);
 
@@ -71,6 +68,8 @@ private:
     // 所有场的描述
     std::vector<FieldDescriptor> field_descs_;
     std::unordered_map<std::string, int32_t> name_to_id_;
+
+    std::unordered_map<std::string, std::vector<int>> blocks_by_name_;
 
     // 真正的数据：field_blocks_[fid][iblock]
     std::vector<std::vector<FieldBlock>> field_blocks_;

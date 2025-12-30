@@ -15,7 +15,13 @@ public:
     FieldBlock() {}
     ~FieldBlock() = default;
 
+    // 真正分配数据
     void allocate(const Block &blk, const FieldDescriptor &desc_in);
+
+    // 不分配数据，但绑定 block/desc/extent，供上层统一查询 lo/hi
+    void bind_inactive(const Block &blk, const FieldDescriptor &desc_in);
+
+    bool is_allocated() const { return allocated_; }
 
     // 逻辑 index 范围（包含 ghost）：[lo, hi)，半开区间
     const Int3 &get_lo() const { return lo; }
@@ -49,6 +55,8 @@ private:
 
     // 你可以用自己的多维数组类型，比如类似 Phy_Tensor 那样：
     Vector data; // 假定有 SetSize(Ni, Nj, Nk, ncomp) / operator()(i,j,k,m)
+
+    bool allocated_ = false;
 
     void compute_extent(const Block &blk); // 根据 desc.location 计算 lo/hi
 };

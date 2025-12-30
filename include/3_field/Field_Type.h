@@ -19,4 +19,7 @@ struct FieldDescriptor
     StaggerLocation location; // Cell / FaceX / ...
     int ncomp;                // 分量个数：Euler=5, MHD=8 之类
     int nghost;               // ghost 层数（新 halo 只看这个）
+
+    // 新增：所属物理域（= block_name）。空串表示所有 block 都分配
+    std::string physics = "";
 };

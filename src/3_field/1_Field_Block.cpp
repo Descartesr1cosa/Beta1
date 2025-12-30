@@ -20,6 +20,19 @@ void FieldBlock::allocate(const Block &blk, const FieldDescriptor &desc_in)
     // 有效索引范围是：
     //   n1 ∈ [-ghost, dim1-ghost-1] 等价于 [lo, hi)
     data.SetSize(nx, ny, nz, ngh, desc.ncomp);
+
+    allocated_ = true;
+}
+
+// 不分配数据，但绑定 block/desc/extent，供上层统一查询 lo/hi
+void FieldBlock::bind_inactive(const Block &blk, const FieldDescriptor &desc_in)
+{
+    block = &blk;
+    desc = desc_in;
+    compute_extent(blk);
+
+    data = Vector{}; // 或 data.Clear()/SetSize(0,0,0,0)
+    allocated_ = false;
 }
 
 // 根据 desc.location 计算逻辑 index 范围 [lo,hi)
