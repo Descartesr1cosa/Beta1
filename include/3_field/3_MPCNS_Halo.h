@@ -116,4 +116,9 @@ private:
     // vertex_node 是顶点附近的 node 区域（通常 [i,i+1)×[j,j+1)×[k,k+1)）
     Box3 make_cell_vertex_ghost_box(Box3 &vertex_node, Direction &dir1, Direction &dir2, Direction &dir3, int nghost);
     Box3 make_cell_vertex_innerghost_box(Box3 &vertex_node, Direction &dir1, Direction &dir2, Direction &dir3, int nghost);
+
+    bool field_active_(int fid, int iblock) const
+    {
+        return fld_->field(fid, iblock).is_allocated();
+    }
 };

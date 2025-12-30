@@ -78,6 +78,22 @@ int main(int arg, char **argv)
     // fld->register_field(FieldDescriptor{"RHS_eta", StaggerLocation::FaceEt, 1, 0});
     // fld->register_field(FieldDescriptor{"RHS_zeta", StaggerLocation::FaceZe, 1, 0});
     //--------------------------------------------------------------------------
+    // 注册耦合定义（CouplingPairDesc）
+    // fld->register_coupling_pair(...); // 例如 SOLID->FLUID: T(Cell), B(Face)
+    CouplingPairDesc s2f;
+    s2f.pair = {"SOLID", "FLUID"};
+    s2f.channels.push_back({"U_b", StaggerLocation::Cell, 3, ngg}); // 只做缓冲，不是全场
+
+    CouplingPairDesc f2s;
+    f2s.pair = {"FLUID", "SOLID"};
+    f2s.channels.push_back({"U_b", StaggerLocation::Cell, 3, ngg});
+
+    fld->register_coupling_pair(s2f);
+    fld->register_coupling_pair(f2s);
+
+    // 构建 coupling buffers（一次）
+    fld->build_coupling_buffers(topology, par->GetInt("dimension"));
+    //--------------------------------------------------------------------------
     // 建立Halo通信
     Halo *hal = new Halo(fld, &topology);
     //=============================================================================================

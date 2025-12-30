@@ -6,6 +6,7 @@
 #include "1_grid/1_MPCNS_Grid.h"   // Block
 #include "3_field/1_Field_Block.h" // FieldBlock
 #include "3_field/Field_Type.h"    // FieldDescriptor
+#include "3_field/Coupling_Type.h"
 
 class Field
 {
@@ -58,6 +59,14 @@ public:
     void build_geometry();
     //===================================================================================
 
+    // 注册一个“物理对 -> 多通道”的耦合定义（src->dst 有向）
+    void register_coupling_pair(const CouplingPairDesc &desc);
+    // 查询（后面分配缓冲/Halo 会用）
+    bool has_coupling_pair(const std::string &src, const std::string &dst) const;
+    const CouplingPairDesc &coupling_pair(const std::string &src, const std::string &dst) const;
+
+    void build_coupling_buffers(const TOPO::Topology &topo, int dimension);
+
 private:
     // 存储网格指针
     void set_blocks(Grid *grd);
@@ -74,24 +83,13 @@ private:
     // 真正的数据：field_blocks_[fid][iblock]
     std::vector<std::vector<FieldBlock>> field_blocks_;
 
+    // physic pair唯一表
+    using PairKey = std::pair<std::string, std::string>; // (src,dst)
+    std::map<PairKey, CouplingPairDesc> coupling_pairs_;
+
+    std::map<PairKey, CouplingBuffersForPair> coupling_buffers_;
+
 public:
     Grid *grd;
     Param *par;
-    // // 用一批 Block 指针初始化（一个 rank 上的所有本地块）
-    // explicit Field(const std::vector<Block *> &blocks)
-    // {
-    //     reset_blocks(blocks);
-    // }
-    // // 如果你以后想换一批 Block（比如重分块），可以重置
-    // void reset_blocks(const std::vector<Block *> &blocks);
-    // // 遍历某个 block 上所有场：f(fid, desc, fb)
-    // template <typename Func>
-    // void for_each_field_on_block(int iblock, Func f)
-    // {
-    //     const int nf = num_fields();
-    //     for (int32_t fid = 0; fid < nf; ++fid)
-    //     {
-    //         f(fid, field_descs_[fid], field_blocks_[fid][iblock]);
-    //     }
-    // }
 };
