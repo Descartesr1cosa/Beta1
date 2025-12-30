@@ -29,6 +29,8 @@ namespace TOPO
 
         int32_t send_flag = 0;
         int32_t recv_flag = 0;
+
+        bool is_coupling = false;
     };
 
     void build_edge_patches(Grid &grid, Topology &topo, int dimension)
@@ -75,7 +77,7 @@ namespace TOPO
         };
 
         // 按优先级 Inner > Parallel > Physical
-        auto priority = [](PatchKind k) -> int
+        auto kind_priority = [](PatchKind k) -> int
         {
             if (k == PatchKind::Inner)
                 return 3;
@@ -84,6 +86,14 @@ namespace TOPO
             if (k == PatchKind::Physical)
                 return 1;
             return 0;
+        };
+
+        // 复合优先级：先非 coupling，再 kind
+        auto priority = [&](PatchKind k, bool is_coupling) -> int
+        {
+            // non_cpl: 1(非耦合) > 0(耦合)
+            int non_cpl = is_coupling ? 0 : 1;
+            return non_cpl * 10 + kind_priority(k); // 10 只要大于 kind_priority 最大值即可
         };
 
         // 从本块的 node 范围 + face 的 node_box 推断面是 X±/Y±/Z±
@@ -191,6 +201,8 @@ namespace TOPO
                 f.trans = p.trans;
                 f.send_flag = p.send_flag;
                 f.recv_flag = p.recv_flag;
+
+                f.is_coupling = p.is_coupling;
                 // ============================================
 
                 const Block &blk = grid.grids(f.this_block); // TODO: 按你 Grid 改
@@ -224,6 +236,8 @@ namespace TOPO
                 f.trans = IndexTransform{}; // identity
                 f.send_flag = 0;
                 f.recv_flag = 0;
+
+                f.is_coupling = false; // 物理边界不是“跨物理耦合面”
                 // 假设 PhysicalPatch 里有 int direction 字段（±1/±2/±3）
                 f.dir_code = p.direction;
                 // ============================================
@@ -266,7 +280,7 @@ namespace TOPO
                     // 2.1 只用这“一对面”决定 edge 的 owner
                     //==============================
                     const FaceOnBlock *owner = &f1;
-                    if (priority(f2.kind) > priority(f1.kind))
+                    if (priority(f2.kind, f2.is_coupling) > priority(f1.kind, f1.is_coupling))
                         owner = &f2;
 
                     //==============================
@@ -280,6 +294,7 @@ namespace TOPO
                     ep.nb_block = owner->nb_block;
                     ep.this_block_name = owner->this_block_name;
                     ep.nb_block_name = owner->nb_block_name;
+                    ep.is_coupling = owner->is_coupling;
 
                     // 本块上的棱 node 区域
                     ep.this_box_node = node_edge;
@@ -355,7 +370,7 @@ namespace TOPO
             return (b.hi.i <= b.lo.i) || (b.hi.j <= b.lo.j) || (b.hi.k <= b.lo.k);
         };
 
-        auto priority = [](PatchKind k) -> int
+        auto kind_priority = [](PatchKind k) -> int
         {
             if (k == PatchKind::Inner)
                 return 3;
@@ -364,6 +379,14 @@ namespace TOPO
             if (k == PatchKind::Physical)
                 return 1;
             return 0;
+        };
+
+        // 复合优先级：先非 coupling，再 kind
+        auto priority = [&](PatchKind k, bool is_coupling) -> int
+        {
+            // non_cpl: 1(非耦合) > 0(耦合)
+            int non_cpl = is_coupling ? 0 : 1;
+            return non_cpl * 10 + kind_priority(k); // 10 只要大于 kind_priority 最大值即可
         };
 
         // 和 build_edge_patches 里的 transform_box_node 一样
@@ -507,7 +530,7 @@ namespace TOPO
                     const EdgePatch *owner = candidates[0];
                     for (size_t k = 1; k < candidates.size(); ++k)
                     {
-                        if (priority(candidates[k]->kind) > priority(owner->kind))
+                        if (priority(candidates[k]->kind, candidates[k]->is_coupling) > priority(owner->kind, owner->is_coupling))
                             owner = candidates[k];
                     }
 
@@ -522,6 +545,7 @@ namespace TOPO
                     vp.nb_block = owner->nb_block;
                     vp.this_block_name = owner->this_block_name;
                     vp.nb_block_name = owner->nb_block_name;
+                    vp.is_coupling = owner->is_coupling;
 
                     vp.this_box_node = node_vert;
 

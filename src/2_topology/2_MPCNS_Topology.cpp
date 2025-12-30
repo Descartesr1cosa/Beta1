@@ -95,6 +95,8 @@ namespace TOPO
                 interface.this_block_name = inner.this_block_name;
                 interface.nb_block_name = inner.target_block_name;
 
+                interface.is_coupling = (interface.this_block_name != interface.nb_block_name);
+
                 node_box_from_subsup(inner.sub, inner.sup, interface.this_box_node);
                 node_box_from_subsup(inner.tar_sub, inner.tar_sup, interface.nb_box_node);
 
@@ -316,6 +318,8 @@ namespace TOPO
 
                 interface.this_block_name = para.this_block_name;
                 interface.nb_block_name = para.target_block_name;
+
+                interface.is_coupling = (interface.this_block_name != interface.nb_block_name);
 
                 node_box_from_subsup(para.sub, para.sup, interface.this_box_node);
                 node_box_from_subsup(tar_para.sub, tar_para.sup, interface.nb_box_node);

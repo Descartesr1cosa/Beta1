@@ -49,6 +49,8 @@ namespace TOPO
         IndexTransform trans;
 
         int32_t send_flag, recv_flag; // kind == PatchKind::Parallel才生效
+
+        bool is_coupling; // 记录是否为耦合边界面
     };
 
     // 物理边界 patch：只在本块/本 rank 的一侧
@@ -96,6 +98,8 @@ namespace TOPO
         // 只有 Parallel 时才真正使用，用于 MPI 通信
         int32_t send_flag = 0;
         int32_t recv_flag = 0;
+
+        bool is_coupling; // 记录是否为耦合边界面
     };
 
     // 三维角区（vertex 区）：三个坐标都在 inner 外
@@ -124,6 +128,8 @@ namespace TOPO
 
         int32_t send_flag = 0;
         int32_t recv_flag = 0;
+
+        bool is_coupling; // 记录是否为耦合边界面
     };
 
     // 汇总：以后 3_field 只拿 Topology 这一个对象
