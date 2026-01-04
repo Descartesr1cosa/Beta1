@@ -72,6 +72,7 @@ void Field::build_coupling_buffers(const TOPO::Topology &topo, int dimension)
     // 0) 清空并为每个已注册 (src,dst) 建空壳
     coupling_buffers_.clear();
 
+    // 1) 根据coupling_pairs_以及topo中patch的数量开辟[cid][ipatch]数组的空间
     for (const auto &kv : coupling_pairs_)
     {
         const PairKey &key = kv.first;
@@ -392,6 +393,7 @@ void Field::build_coupling_buffers(const TOPO::Topology &topo, int dimension)
                 exit(-1);
             }
 
+            // 对于patch上的每一个channel开辟合适的空间
             for (int cid = 0; cid < (int)bs.desc.channels.size(); ++cid)
             {
                 const auto &ch = bs.desc.channels[cid];
