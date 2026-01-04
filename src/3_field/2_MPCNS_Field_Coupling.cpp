@@ -1,50 +1,53 @@
 #include "3_field/2_MPCNS_Field.h"
 
-void Field::register_coupling_pair(const CouplingPairDesc &desc)
+void Field::register_coupling_channel(const std::string &src,
+                                      const std::string &dst,
+                                      const std::string &tag,
+                                      StaggerLocation location,
+                                      int ncomp,
+                                      int nghost)
 {
-    const auto &src = desc.pair.src;
-    const auto &dst = desc.pair.dst;
-
-    PairKey key{src, dst};
-
-    // (src,dst) 必须唯一
-    if (coupling_pairs_.count(key))
+    auto add_one = [&](const std::string &a, const std::string &b)
     {
-        std::cout << "Duplicate CouplingPairDesc for (" << src << " -> " << dst << ")\n";
-        exit(-1);
-    }
+        PairKey key{a, b};
+        auto &pd = coupling_pairs_[key]; // 不存在会默认构造
 
-    // channels 内 tag 必须唯一
-    std::unordered_map<std::string, int> seen;
-    for (const auto &ch : desc.channels)
-    {
-        if (ch.tag.empty())
+        // 第一次创建时补 pair
+        if (pd.pair.src.empty() && pd.pair.dst.empty())
         {
-            std::cout << "CouplingChannelSpec tag is empty for (" << src << " -> " << dst << ")\n";
-            exit(-1);
+            pd.pair.src = a;
+            pd.pair.dst = b;
         }
-        if (ch.ncomp <= 0)
-        {
-            std::cout << "CouplingChannelSpec ncomp <= 0 for tag=" << ch.tag
-                      << " (" << src << " -> " << dst << ")\n";
-            exit(-1);
-        }
-        if (ch.nghost <= 0)
-        {
-            std::cout << "CouplingChannelSpec nghost <= 0 for tag=" << ch.tag
-                      << " (" << src << " -> " << dst << ")\n";
-            exit(-1);
-        }
-        if (seen.count(ch.tag))
-        {
-            std::cout << "Duplicate channel tag=" << ch.tag
-                      << " in (" << src << " -> " << dst << ")\n";
-            exit(-1);
-        }
-        seen[ch.tag] = 1;
-    }
 
-    coupling_pairs_[key] = desc;
+        // enforce: 同一 (a->b) 下 tag 唯一；若重复则必须完全一致
+        for (const auto &ch : pd.channels)
+        {
+            if (ch.tag != tag)
+                continue;
+
+            const bool same =
+                (ch.location == location) &&
+                (ch.ncomp == ncomp) &&
+                (ch.nghost == nghost);
+
+            if (same)
+                return; // 幂等：重复注册同样的 channel，直接忽略
+
+            std::cout << "Fatal: coupling channel tag duplicated but spec differs: "
+                      << a << " -> " << b << " tag=" << tag << "\n";
+            std::exit(-1);
+        }
+
+        CouplingChannelSpec spec;
+        spec.tag = tag;
+        spec.location = location;
+        spec.ncomp = ncomp;
+        spec.nghost = nghost;
+
+        pd.channels.push_back(spec);
+    };
+
+    add_one(src, dst);
 }
 
 bool Field::has_coupling_pair(const std::string &src, const std::string &dst) const

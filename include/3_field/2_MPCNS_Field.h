@@ -59,13 +59,23 @@ public:
     void build_geometry();
     //===================================================================================
 
-    // 注册一个“物理对 -> 多通道”的耦合定义（src->dst 有向）
-    void register_coupling_pair(const CouplingPairDesc &desc);
+    //===================================================================================
+    // 为多物理场面耦合开辟缓冲区域
+    //-----------------------------------------------------------------------------------
+    void register_coupling_channel(const std::string &src,   // 源物理块
+                                   const std::string &dst,   // 目标物理块
+                                   const std::string &tag,   // 所需传输物理场的名称
+                                   StaggerLocation location, // 物理场挂载的几何位置
+                                   int ncomp,
+                                   int nghost);
+    //-----------------------------------------------------------------------------------
+    // 为所注册的耦合方式（Channel）开辟缓冲空间，调用一次即可
+    void build_coupling_buffers(const TOPO::Topology &topo, int dimension);
+    //-----------------------------------------------------------------------------------
     // 查询（后面分配缓冲/Halo 会用）
     bool has_coupling_pair(const std::string &src, const std::string &dst) const;
     const CouplingPairDesc &coupling_pair(const std::string &src, const std::string &dst) const;
-
-    void build_coupling_buffers(const TOPO::Topology &topo, int dimension);
+    //===================================================================================
 
 private:
     // 存储网格指针
