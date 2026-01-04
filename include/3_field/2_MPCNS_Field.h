@@ -29,6 +29,10 @@ public:
     void allocate(int32_t fieldID);
 
     int field_id(std::string field_name) { return name_to_id_[field_name]; }
+    bool has_field(const std::string &name) const
+    {
+        return name_to_id_.find(name) != name_to_id_.end();
+    }
     int num_fields() const { return static_cast<int>(field_descs_.size()); }
     int num_blocks() const { return static_cast<int>(blocks_.size()); }
 

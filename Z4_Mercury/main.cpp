@@ -8,7 +8,7 @@
 #include "0_basic/MPI_WRAPPER.h"
 #include "2_topology/2_MPCNS_Topology.h"
 #include "3_field/2_MPCNS_Field.h"
-#include "3_field/3_MPCNS_Halo.h"
+#include "4_halo/1_MPCNS_Halo.h"
 
 // #include "MercurySolver.h"
 // #include "4_solver/ImplicitHall_Solver.h"
@@ -86,6 +86,15 @@ int main(int arg, char **argv)
     //--------------------------------------------------------------------------
     // 建立Halo通信
     Halo *hal = new Halo(fld, &topology);
+
+    std::string fieldname;
+    fieldname = "U_H";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "U_Na";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "U_b";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    // hal->register_halo_field(fieldname, HaloLevel::FaceOnly);
     //=============================================================================================
 
     //=============================================================================================
