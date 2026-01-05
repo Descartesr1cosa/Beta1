@@ -79,6 +79,7 @@ public:
     // 查询（后面分配缓冲/Halo 会用）
     bool has_coupling_pair(const std::string &src, const std::string &dst) const;
     const CouplingPairDesc &coupling_pair(const std::string &src, const std::string &dst) const;
+    CouplingBuffersForPair &coupling_buffers(const std::string &src, const std::string &dst);
     //===================================================================================
 
 private:
