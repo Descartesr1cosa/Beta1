@@ -11,6 +11,9 @@
 class Field
 {
 public:
+    // physic pair唯一表
+    using PairKey = std::pair<std::string, std::string>; // (src,dst)
+
     Field() = default;
     ~Field() = default;
 
@@ -80,6 +83,7 @@ public:
     bool has_coupling_pair(const std::string &src, const std::string &dst) const;
     const CouplingPairDesc &coupling_pair(const std::string &src, const std::string &dst) const;
     CouplingBuffersForPair &coupling_buffers(const std::string &src, const std::string &dst);
+    const std::map<PairKey, CouplingPairDesc> &coupling_pairs() const;
     //===================================================================================
 
 private:
@@ -98,8 +102,6 @@ private:
     // 真正的数据：field_blocks_[fid][iblock]
     std::vector<std::vector<FieldBlock>> field_blocks_;
 
-    // physic pair唯一表
-    using PairKey = std::pair<std::string, std::string>; // (src,dst)
     std::map<PairKey, CouplingPairDesc> coupling_pairs_;
 
     std::map<PairKey, CouplingBuffersForPair> coupling_buffers_;

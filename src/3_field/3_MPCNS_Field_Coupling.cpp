@@ -76,6 +76,11 @@ CouplingBuffersForPair &Field::coupling_buffers(const std::string &src, const st
     return it->second;
 }
 
+const std::map<Field::PairKey, CouplingPairDesc> &Field::coupling_pairs() const
+{
+    return coupling_pairs_;
+}
+
 void Field::build_coupling_buffers(const TOPO::Topology &topo, int dimension)
 {
     // 0) 清空并为每个已注册 (src,dst) 建空壳
