@@ -37,6 +37,12 @@ void Halo::build_registered_patterns()
     parallel_vertex_patterns_send.clear();
     parallel_vertex_patterns_recv.clear();
 
+    // coupling parallel corner patterns
+    coupling_parallel_edge_patterns_send.clear();
+    coupling_parallel_edge_patterns_recv.clear();
+    coupling_parallel_vertex_patterns_send.clear();
+    coupling_parallel_vertex_patterns_recv.clear();
+
     // 维度
     const int dim = fld_->grd->dimension;
 
@@ -86,6 +92,51 @@ void Halo::build_registered_patterns()
         {
             build_inner_3DCorner_pattern(k.first, k.second);
             build_parallel_3DCorner_pattern(k.first, k.second);
+        }
+    }
+
+    // 5) Coupling parallel corner patterns (directed src -> dst)
+    //    Build once here to avoid lazy rebuild during frequent coupling exchanges.
+    const auto &cpairs = fld_->coupling_pairs();
+    if (!cpairs.empty())
+    {
+        // small helpers: check whether any matching coupling patches exist on this rank
+        auto has_parallel_coupling_edge = [&](const std::string &src, const std::string &dst) -> bool
+        {
+            for (const auto &ep : topo_->parallel_edge_patches)
+                if (ep.is_coupling && ep.nb_block_name == src && ep.this_block_name == dst)
+                    return true;
+            return false;
+        };
+        auto has_parallel_coupling_vertex = [&](const std::string &src, const std::string &dst) -> bool
+        {
+            for (const auto &vp : topo_->parallel_vertex_patches)
+                if (vp.is_coupling && vp.nb_block_name == src && vp.this_block_name == dst)
+                    return true;
+            return false;
+        };
+
+        for (const auto &kv : cpairs)
+        {
+            const CouplingPairDesc &pd = kv.second;
+            const std::string &src = pd.pair.src;
+            const std::string &dst = pd.pair.dst;
+
+            std::set<PatternKey> ckeys;
+            for (const auto &ch : pd.channels)
+                ckeys.insert(PatternKey{ch.location, ch.nghost});
+
+            if (dim >= 2 && has_parallel_coupling_edge(src, dst))
+            {
+                for (const auto &k : ckeys)
+                    build_coupling_parallel_2DCorner_pattern(src, dst, k.first, k.second);
+            }
+
+            if (dim >= 3 && has_parallel_coupling_vertex(src, dst))
+            {
+                for (const auto &k : ckeys)
+                    build_coupling_parallel_3DCorner_pattern(src, dst, k.first, k.second);
+            }
         }
     }
 }

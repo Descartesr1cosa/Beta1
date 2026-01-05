@@ -116,6 +116,34 @@ private:
     std::map<PatternKey, HaloPattern> parallel_vertex_patterns_send;
     std::map<PatternKey, HaloPattern> parallel_vertex_patterns_recv;
 
+    // Coupling (src->dst) parallel corner patterns need their own cache,
+    // because the pattern depends on the directed physical pair in addition
+    // to (loc, nghost).
+    struct CouplingPatternKey
+    {
+        std::string src;
+        std::string dst;
+        StaggerLocation loc;
+        int nghost;
+
+        bool operator<(const CouplingPatternKey &o) const
+        {
+            if (src != o.src)
+                return src < o.src;
+            if (dst != o.dst)
+                return dst < o.dst;
+            if ((int)loc != (int)o.loc)
+                return (int)loc < (int)o.loc;
+            return nghost < o.nghost;
+        }
+    };
+
+    // For Coupling (Parallel Corner): patterns are directed (src -> dst)
+    std::map<CouplingPatternKey, HaloPattern> coupling_parallel_edge_patterns_send;
+    std::map<CouplingPatternKey, HaloPattern> coupling_parallel_edge_patterns_recv;
+    std::map<CouplingPatternKey, HaloPattern> coupling_parallel_vertex_patterns_send;
+    std::map<CouplingPatternKey, HaloPattern> coupling_parallel_vertex_patterns_recv;
+
     // 复用的 send / recv 缓冲区（MPI 并行用）
     std::vector<std::vector<double>> send_buf;
     std::vector<std::vector<double>> recv_buf;
@@ -131,6 +159,16 @@ private:
     void build_parallel_2DCorner_pattern(StaggerLocation loc, int nghost);
     void build_inner_3DCorner_pattern(StaggerLocation loc, int nghost);
     void build_parallel_3DCorner_pattern(StaggerLocation loc, int nghost);
+
+    // Coupling (Parallel) corner patterns (directed src -> dst)
+    void build_coupling_parallel_2DCorner_pattern(const std::string &src,
+                                                  const std::string &dst,
+                                                  StaggerLocation loc,
+                                                  int nghost);
+    void build_coupling_parallel_3DCorner_pattern(const std::string &src,
+                                                  const std::string &dst,
+                                                  StaggerLocation loc,
+                                                  int nghost);
 
     void mpi_exchange_edge_meta(
         const std::map<int, std::vector<EdgeMeta>> &meta_to_send,

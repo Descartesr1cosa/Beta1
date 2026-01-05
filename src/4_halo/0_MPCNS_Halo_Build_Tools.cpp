@@ -261,5 +261,90 @@ namespace HALO_TOOLS
         io = tar[0];
         jo = tar[1];
         ko = tar[2];
-    };
+    }
+
+    void pack_to_neighbor_order(FieldBlock &fb,
+                                const Box3 &sb,
+                                int ncomp,
+                                const TOPO::IndexTransform &T, // this -> nb
+                                std::vector<double> &out)
+    {
+        const int32_t n_total =
+            (sb.hi.i - sb.lo.i) * (sb.hi.j - sb.lo.j) * (sb.hi.k - sb.lo.k) * ncomp;
+        out.resize(n_total);
+
+        int loc_lo[3] = {sb.lo.i, sb.lo.j, sb.lo.k};
+        int loc_hi[3] = {sb.hi.i - 1, sb.hi.j - 1, sb.hi.k - 1}; // closed interval
+        int len_loc[3] = {sb.hi.i - sb.lo.i, sb.hi.j - sb.lo.j, sb.hi.k - sb.lo.k};
+
+        int offset[3] = {T.offset.i, T.offset.j, T.offset.k};
+        int tar1[3], tar2[3], tar_ref[3];
+
+        for (int d = 0; d < 3; ++d)
+            tar1[T.perm[d]] = T.sign[d] * loc_lo[d] + offset[d];
+        for (int d = 0; d < 3; ++d)
+            tar2[T.perm[d]] = T.sign[d] * loc_hi[d] + offset[d];
+
+        tar_ref[0] = (tar1[0] <= tar2[0]) ? tar1[0] : tar2[0];
+        tar_ref[1] = (tar1[1] <= tar2[1]) ? tar1[1] : tar2[1];
+        tar_ref[2] = (tar1[2] <= tar2[2]) ? tar1[2] : tar2[2];
+
+        int len_nb[3] = {0, 0, 0};
+        for (int d = 0; d < 3; ++d)
+            len_nb[T.perm[d]] = len_loc[d];
+
+        int ijk[3], tar_ijk[3];
+        for (ijk[0] = sb.lo.i; ijk[0] < sb.hi.i; ++ijk[0])
+            for (ijk[1] = sb.lo.j; ijk[1] < sb.hi.j; ++ijk[1])
+                for (ijk[2] = sb.lo.k; ijk[2] < sb.hi.k; ++ijk[2])
+                {
+                    for (int ii = 0; ii < 3; ++ii)
+                        tar_ijk[T.perm[ii]] = T.sign[ii] * ijk[ii] + offset[ii];
+
+                    int ri = tar_ijk[0] - tar_ref[0];
+                    int rj = tar_ijk[1] - tar_ref[1];
+                    int rk = tar_ijk[2] - tar_ref[2];
+
+                    int32_t base = ((ri * len_nb[1] + rj) * len_nb[2] + rk) * ncomp;
+
+                    for (int m = 0; m < ncomp; ++m)
+                        out[base + m] = fb(ijk[0], ijk[1], ijk[2], m);
+                }
+    }
+
+    void unpack_to_coupling_buffer(CouplingBufferBlock &bufblk,
+                                   const Box3 &rb,
+                                   int ncomp,
+                                   const std::vector<double> &in)
+    {
+        const int ni = rb.hi.i - rb.lo.i;
+        const int nj = rb.hi.j - rb.lo.j;
+        const int nk = rb.hi.k - rb.lo.k;
+
+        const int32_t n_total = ni * nj * nk * ncomp;
+        if ((int32_t)in.size() != n_total)
+        {
+            std::cout << "Fatal Error!!! unpack_to_coupling_buffer size mismatch\n";
+            std::exit(-1);
+        }
+
+        for (int ii = 0; ii < ni; ++ii)
+            for (int jj = 0; jj < nj; ++jj)
+                for (int kk = 0; kk < nk; ++kk)
+                {
+                    int i = rb.lo.i + ii;
+                    int j = rb.lo.j + jj;
+                    int k = rb.lo.k + kk;
+
+                    int32_t base = (((ii * nj + jj) * nk) + kk) * ncomp;
+                    for (int m = 0; m < ncomp; ++m)
+                        bufblk(i, j, k, m) = in[base + m];
+                }
+    }
+
+    bool box_equal(const Box3 &a, const Box3 &b)
+    {
+        return (a.lo.i == b.lo.i && a.lo.j == b.lo.j && a.lo.k == b.lo.k &&
+                a.hi.i == b.hi.i && a.hi.j == b.hi.j && a.hi.k == b.hi.k);
+    }
 }

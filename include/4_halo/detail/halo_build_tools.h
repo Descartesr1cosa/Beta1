@@ -4,6 +4,8 @@
 #include <cstddef> // for nullptr_t
 
 #include "4_halo/Halo_Type.h"
+#include "3_field/1_Field_Block.h"
+#include "3_field/Coupling_Type.h"
 
 namespace HALO_TOOLS
 {
@@ -60,4 +62,20 @@ namespace HALO_TOOLS
     void apply_transform(const TOPO::IndexTransform &T,
                          int i, int j, int k,
                          int &io, int &jo, int &ko);
+
+    // For Coupling 1D 2D 3D Corner
+    // pack：按“邻居坐标顺序”打包 fb --> out
+    void pack_to_neighbor_order(FieldBlock &fb,
+                                const Box3 &sb,
+                                int ncomp,
+                                const TOPO::IndexTransform &T, // this -> nb
+                                std::vector<double> &out);
+
+    // 按 recv_box 的 i/j/k 顺序解包到 CouplingBufferBlock in --> bufblk
+    void unpack_to_coupling_buffer(CouplingBufferBlock &bufblk,
+                                   const Box3 &rb,
+                                   int ncomp,
+                                   const std::vector<double> &in);
+
+    bool box_equal(const Box3 &a, const Box3 &b);
 } // namespace HALO_TOOLS
