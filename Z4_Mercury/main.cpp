@@ -10,7 +10,7 @@
 #include "3_field/2_MPCNS_Field.h"
 #include "4_halo/1_MPCNS_Halo.h"
 
-// #include "MercurySolver.h"
+#include "MercurySolver.h"
 // #include "4_solver/ImplicitHall_Solver.h"
 //==============================================================================
 
@@ -45,48 +45,43 @@ int main(int arg, char **argv)
     //-------------------------------------
     // 加入求解物理场
     int ngg = par->GetInt("ngg");
-    // 守恒变量、独立变量，用于构建CT方法
-    fld->register_field({"U_H", StaggerLocation::Cell, 5, ngg});  // H+
-    fld->register_field({"U_Na", StaggerLocation::Cell, 5, ngg}); // Na+
-    fld->register_field({"U_b", StaggerLocation::Cell, 3, ngg});  // induced magnetic fields
+    // 守恒变量、独立变量
+    fld->register_field({"U_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+
+    fld->register_field({"U_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+
+    fld->register_field({"U_b", StaggerLocation::Cell, 3, ngg});           // induced magnetic fields
 
     // 辅助物理场
-    fld->register_field({"Badd", StaggerLocation::Cell, 3, ngg});   // initial applied magnetic fields
-    fld->register_field({"B_cell", StaggerLocation::Cell, 3, ngg}); // 总磁场
+    fld->register_field({"Na", StaggerLocation::Cell, 1, ngg, "Fluid"});         // Na neutral atom
+    fld->register_field({"Photo_rate", StaggerLocation::Cell, 1, ngg, "Fluid"}); // Photoionization rate
+    fld->register_field({"Badd", StaggerLocation::Cell, 3, ngg});                // initial applied magnetic fields
+    fld->register_field({"B_cell", StaggerLocation::Cell, 3, ngg});              // 总磁场
 
-    fld->register_field(FieldDescriptor{"PV_H", StaggerLocation::Cell, 5, ngg});  // H+的原始变量 u v w p T
-    fld->register_field(FieldDescriptor{"PV_Na", StaggerLocation::Cell, 5, ngg}); // Na+的原始变量 u v w p T
+    fld->register_field(FieldDescriptor{"PV_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+的原始变量 u v w p T
+    fld->register_field(FieldDescriptor{"PV_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+的原始变量 u v w p T
 
     // 辅助通量场
-    fld->register_field({"F_xi", StaggerLocation::FaceXi, 5, 0});   // 仅临存流体方程通量，无需虚网格
-    fld->register_field({"F_eta", StaggerLocation::FaceEt, 5, 0});  // 仅临存流体方程通量，无需虚网格
-    fld->register_field({"F_zeta", StaggerLocation::FaceZe, 5, 0}); // 仅临存流体方程通量，无需虚网格
-
-    // 辅助电场变量
-    // fld->register_field({"E_xi", StaggerLocation::EdgeXi, 1, 1});   // 用于CT方法，只需要1层虚网格
-    // fld->register_field({"E_eta", StaggerLocation::EdgeEt, 1, 1});  // 用于CT方法，只需要1层虚网格
-    // fld->register_field({"E_zeta", StaggerLocation::EdgeZe, 1, 1}); // 用于CT方法，只需要1层虚网格
+    fld->register_field({"F_xi", StaggerLocation::FaceXi, 5, 0, "Fluid"});   // 仅临存流体方程通量，无需虚网格
+    fld->register_field({"F_eta", StaggerLocation::FaceEt, 5, 0, "Fluid"});  // 仅临存流体方程通量，无需虚网格
+    fld->register_field({"F_zeta", StaggerLocation::FaceZe, 5, 0, "Fluid"}); // 仅临存流体方程通量，无需虚网格
 
     // 计算辅助场
     // fld->register_field(FieldDescriptor{"old_U_", StaggerLocation::Cell, 5, 0});
     // fld->register_field(FieldDescriptor{"divB", StaggerLocation::Cell, 1, 1}); // 输出存在插值到node的需要，增加一层虚网格
-    // fld->register_field(FieldDescriptor{"old_B_xi", StaggerLocation::FaceXi, 1, 0});
-    // fld->register_field(FieldDescriptor{"old_B_eta", StaggerLocation::FaceEt, 1, 0});
-    // fld->register_field(FieldDescriptor{"old_B_zeta", StaggerLocation::FaceZe, 1, 0});
     // fld->register_field(FieldDescriptor{"RHS", StaggerLocation::Cell, 5, 0});
     // fld->register_field(FieldDescriptor{"RHS_xi", StaggerLocation::FaceXi, 1, 0});
     // fld->register_field(FieldDescriptor{"RHS_eta", StaggerLocation::FaceEt, 1, 0});
     // fld->register_field(FieldDescriptor{"RHS_zeta", StaggerLocation::FaceZe, 1, 0});
     //--------------------------------------------------------------------------
     // 注册耦合定义（CouplingPairDesc）
-    fld->register_coupling_channel("SOLID", "FLUID", "U_b", StaggerLocation::Cell, 3, ngg); // Solid -> Fluid
-    fld->register_coupling_channel("FLUID", "SOLID", "U_b", StaggerLocation::Cell, 3, ngg); // Fluid -> Solid
+    fld->register_coupling_channel("Solid", "Fluid", "U_b", StaggerLocation::Cell, 3, ngg); // Solid -> Fluid
+    fld->register_coupling_channel("Fluid", "Solid", "U_b", StaggerLocation::Cell, 3, ngg); // Fluid -> Solid
     // 构建 coupling buffers（一次）
     fld->build_coupling_buffers(topology, par->GetInt("dimension"));
     //--------------------------------------------------------------------------
     // 建立Halo通信
     Halo *hal = new Halo(fld, &topology);
 
+    // 注册同物理场之间的halo通信
     std::string fieldname;
     fieldname = "U_H";
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
@@ -94,11 +89,12 @@ int main(int arg, char **argv)
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
     fieldname = "U_b";
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
-    // hal->register_halo_field(fieldname, HaloLevel::FaceOnly);
+    // 建立同物理场以及多物理场耦合通信的特征
+    hal->build_registered_patterns();
     //=============================================================================================
 
     //=============================================================================================
-    // HallMHDSolver solver(grd, &topology, fld, hal, par, hall_imp); //, {"U_", "B_xi", "B_eta", "B_zeta"});
+    MercurySolver solver(grd, &topology, fld, hal, par);
     // solver.Advance();
     //=============================================================================================
 

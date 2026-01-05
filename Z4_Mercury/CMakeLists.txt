@@ -25,6 +25,7 @@ aux_source_directory(../src/0_basic  DIRSRCS0)
 aux_source_directory(../src/1_grid  DIRSRCS1)
 aux_source_directory(../src/2_topology  DIRSRCS2)
 aux_source_directory(../src/3_field  DIRSRCS3)
+aux_source_directory(../src/4_halo  DIRSRCS4)
 
 # Mercury Solver Files
 aux_source_directory(./src  SRC)
@@ -36,7 +37,7 @@ aux_source_directory(./src  SRC)
 # aux_source_directory(./src/tools  SRC5)
 
 # build the executable program
-add_executable(Mercury main.cpp ${DIRSRCS0} ${DIRSRCS1} ${DIRSRCS2} ${DIRSRCS3} ${SRC})
+add_executable(Mercury main.cpp ${DIRSRCS0} ${DIRSRCS1} ${DIRSRCS2} ${DIRSRCS3} ${DIRSRCS4} ${SRC})
 #  ${SRC0} ${SRC1} ${SRC2} ${SRC3} ${SRC4} ${SRC5} ${SRC6})
 
 # add the mpi linkings
