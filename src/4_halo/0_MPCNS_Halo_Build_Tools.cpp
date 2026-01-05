@@ -245,4 +245,21 @@ namespace HALO_TOOLS
     }
     //=========================================================================
 
+    //=========================================================================
+    // T: (i,j,k) --> (io,jo,ko)
+    void apply_transform(const TOPO::IndexTransform &T,
+                         int i, int j, int k,
+                         int &io, int &jo, int &ko)
+    {
+        const int loc[3] = {i, j, k};
+        int tar[3] = {0, 0, 0};
+        const int off[3] = {T.offset.i, T.offset.j, T.offset.k};
+
+        for (int d = 0; d < 3; ++d)
+            tar[T.perm[d]] = T.sign[d] * loc[d] + off[d];
+
+        io = tar[0];
+        jo = tar[1];
+        ko = tar[2];
+    };
 }

@@ -55,4 +55,9 @@ namespace HALO_TOOLS
 
     //=========================================================================
 
+    //=========================================================================
+    // T: (i,j,k) --> (io,jo,ko)
+    void apply_transform(const TOPO::IndexTransform &T,
+                         int i, int j, int k,
+                         int &io, int &jo, int &ko);
 } // namespace HALO_TOOLS
