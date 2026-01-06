@@ -6,7 +6,7 @@
 #include <cstring>
 #include <iostream>
 
-void IOModule::Setup(Param *par, Grid *grd, Field *fld)
+void IOModule::Setup(Param *par, Grid *grd, Field *fld, int nvar)
 {
     par_ = par;
     grd_ = grd;
@@ -26,6 +26,11 @@ void IOModule::Setup(Param *par, Grid *grd, Field *fld)
     };
     restart_path_ = "./DATA/flow_field" + rank4(myid) + ".bin";
     tecplot_path_ = "./DATA/flow_field" + rank4(myid) + ".plt";
+
+    myid_ = par->GetInt("myid");
+
+    // residual_ref 长度由 solver 给定（nvar）
+    run_.ResizeResidualRef(nvar, 1.0);
 }
 
 void IOModule::Fail_(const std::string &msg)

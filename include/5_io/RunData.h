@@ -26,8 +26,14 @@ public:
     std::map<std::string, double> monitor_d;
     std::map<std::string, int32_t> monitor_i;
 
+    // output path
+    std::string rundata_path_;
+
 public:
-    RunData() = default;
+    RunData()
+    {
+        rundata_path_ = "./DTAT/RunData.bin";
+    };
     ~RunData() = default;
 
     void ResetMonitors()
@@ -96,8 +102,9 @@ public:
     // residual_max(f64)
     // nd(i32) + [ key(str) + val(f64) ] * nd
     // ni(i32) + [ key(str) + val(i32) ] * ni
-    void WriteBinary(const std::string &path) const
+    void WriteBinary() const
     {
+        std::string path = rundata_path_;
         std::ofstream out(path, std::ios::binary);
         if (!out)
             Fail_("RunData::WriteBinary cannot open " + path);
@@ -141,8 +148,9 @@ public:
     }
 
     // expected_nref >= 0: enforce residual_ref size match
-    void ReadBinary(const std::string &path, int expected_nref = -1)
+    void ReadBinary(int expected_nref = -1)
     {
+        std::string path = rundata_path_;
         std::ifstream in(path, std::ios::binary);
         if (!in)
             Fail_("RunData::ReadBinary cannot open " + path);

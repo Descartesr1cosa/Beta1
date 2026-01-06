@@ -19,7 +19,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
   fid_.Init(fld_);
 
   // ---- Build IO Module ----
-  io_.Setup(par_, grd_, fld_);
+  io_.Setup(par_, grd_, fld_, 13);
 
   {
     std::vector<std::string> bin_name = {"U_H", "U_Na", "U_b"};

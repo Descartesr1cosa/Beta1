@@ -10,7 +10,7 @@
 class IOModule
 {
 public:
-    void Setup(Param *par, Grid *grd, Field *fld);
+    void Setup(Param *par, Grid *grd, Field *fld, int nvar);
 
     //=========================================================================
     // 1) Restart Binary File IO
@@ -48,8 +48,14 @@ public:
     void SetTecplotBlock(const std::vector<std::string> &bn) { tec_block_ = bn; }
     //=========================================================================
 
+    //=========================================================================
     // 3) Run info / diagnostics
-    // void AppendRunInfo(int step, double time, double dt);
+    RunData &Run() { return run_; }
+    // 所有进程读同一个文件
+    void ReadRunDataFile();
+    // 仅 rank0 调用写出
+    void WriteRunDataFile();
+    //=========================================================================
 
 private:
     //=========================================================================
@@ -106,6 +112,12 @@ private:
     double EvalValue_CellAsNode_(const TecVar &tv, int ib, int i, int j, int k) const;
     double EvalValue_CellToNode_(const TecVar &tv, int ib, int i, int j, int k) const;
     double EvalValue_Mixed_(const TecVar &tv, int ib, int i, int j, int k) const;
+    //=========================================================================
+
+    //=========================================================================
+    // run time data for residual control and restart
+    RunData run_;
+    int myid_;
     //=========================================================================
 
     //=========================================================================
