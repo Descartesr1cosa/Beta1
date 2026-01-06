@@ -19,7 +19,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
   fid_.Init(fld_);
 
   // ---- Build IO Module ----
-  io_.Setup(par_, grd_, fld_, 13);
+  constexpr int NRES = 13; // 只统计H Na 守恒变量和感应磁场
+  io_.Setup(par_, grd_, fld_, NRES);
 
   {
     std::vector<std::string> bin_name = {"U_H", "U_Na", "U_b"};
@@ -47,14 +48,19 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
   }
 
   // ---- Calc Constants ----
-  calc_physical_constant(par);
+  calc_physical_constant(par_);
 
   // ---- components ----
   // bound_.SetUp(grd_, fld_, topo_, par_);
 
   // ---- Initialization ----
+  if (par_->GetBoo("continue_calc"))
+  {
+    io_.ReadRestartBinFile();
+    io_.ReadRunDataFile();
+  }
   initial_.Initialization(fld_, fid_);
 
   // ---- components ----
-  // control_.SetUp(par_, 8);
+  control_.Setup(par_);
 }

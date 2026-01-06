@@ -4,6 +4,7 @@
 
 #include "0_SolverFields.h"
 #include "2_Initial.h"
+#include "3_Control.h"
 
 // ---- forward declarations (avoid heavy includes in header) ----
 class Grid;
@@ -32,7 +33,7 @@ private:
     Param *par_{nullptr};
 
     // --- components ---
-    // MHD_Control control_;
+    Control control_;
     // MHD_Boundary bound_;
     IOModule io_;
     Mercury_Initial initial_;
