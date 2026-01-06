@@ -1,7 +1,8 @@
 #pragma once
 
-#include "0_SolverFields.h"
+#include "5_io/IOModule.h"
 
+#include "0_SolverFields.h"
 #include "2_Initial.h"
 
 // ---- forward declarations (avoid heavy includes in header) ----
@@ -32,8 +33,8 @@ private:
 
     // --- components ---
     // MHD_Control control_;
-    // MHD_Output output_;
     // MHD_Boundary bound_;
+    IOModule io_;
     Mercury_Initial initial_;
 
     // --- cached field ids  ---

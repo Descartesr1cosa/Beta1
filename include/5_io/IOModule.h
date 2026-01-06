@@ -5,6 +5,7 @@
 #include "2_topology/2_MPCNS_Topology.h"
 #include "3_field/2_MPCNS_Field.h"
 #include "4_halo/1_MPCNS_Halo.h"
+#include "5_io/RunData.h"
 
 class IOModule
 {
@@ -48,7 +49,7 @@ public:
     //=========================================================================
 
     // 3) Run info / diagnostics
-    void AppendRunInfo(int step, double time, double dt);
+    // void AppendRunInfo(int step, double time, double dt);
 
 private:
     //=========================================================================
