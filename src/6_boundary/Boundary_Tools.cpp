@@ -41,19 +41,18 @@ void BoundaryCore::ConvertTangent(int lo_n, int hi_n, int delta, int &lo, int &h
     lo = lo_n;
     hi = (delta == 0) ? hi_n : (hi_n - 1);
 }
-
-Box3 BoundaryCore::MakeFaceGhostSlabBox(const Block &blk,
-                                        StaggerLocation loc,
-                                        const Box3 &face_node_box,
-                                        int dir_code,
-                                        int nghost)
+Box3 BoundaryCore::MakeInnerSlabBox_OneLayer(const Block &blk,
+                                             StaggerLocation loc,
+                                             const Box3 &face_node_box,
+                                             int direction)
 {
-    const int ax = std::abs(dir_code); // 1/2/3
-    const int sgn = (dir_code > 0) ? +1 : -1;
+    const int ax = std::abs(direction); // 1/2/3
+    const int sgn = (direction > 0) ? +1 : -1;
 
     const Int3 hi_in = LocInnerHi(blk, loc);
     const Int3 d = LocDelta(loc);
 
+    // 法向轴以外的两条切向轴
     int t1, t2;
     if (ax == 1)
     {
@@ -73,24 +72,7 @@ Box3 BoundaryCore::MakeFaceGhostSlabBox(const Block &blk,
 
     Box3 b{};
 
-    // normal ghost range
-    if (ax == 1)
-    {
-        b.lo.i = (sgn < 0) ? -nghost : hi_in.i;
-        b.hi.i = (sgn < 0) ? 0 : hi_in.i + nghost;
-    }
-    if (ax == 2)
-    {
-        b.lo.j = (sgn < 0) ? -nghost : hi_in.j;
-        b.hi.j = (sgn < 0) ? 0 : hi_in.j + nghost;
-    }
-    if (ax == 3)
-    {
-        b.lo.k = (sgn < 0) ? -nghost : hi_in.k;
-        b.hi.k = (sgn < 0) ? 0 : hi_in.k + nghost;
-    }
-
-    // tangential from node box -> loc box
+    // 1) 先填切向范围：node_box -> loc_box
     auto set_tangent = [&](int t)
     {
         int lo, hi;
@@ -120,5 +102,98 @@ Box3 BoundaryCore::MakeFaceGhostSlabBox(const Block &blk,
     set_tangent(t1);
     set_tangent(t2);
 
+    // 2) 再填法向方向：域内贴边 1 层 slab
+    if (ax == 1)
+    {
+        if (sgn < 0)
+        {
+            b.lo.i = 0;
+            b.hi.i = 1;
+        }
+        else
+        {
+            b.lo.i = hi_in.i - 1;
+            b.hi.i = hi_in.i;
+        }
+    }
+    else if (ax == 2)
+    {
+        if (sgn < 0)
+        {
+            b.lo.j = 0;
+            b.hi.j = 1;
+        }
+        else
+        {
+            b.lo.j = hi_in.j - 1;
+            b.hi.j = hi_in.j;
+        }
+    }
+    else
+    {
+        if (sgn < 0)
+        {
+            b.lo.k = 0;
+            b.hi.k = 1;
+        }
+        else
+        {
+            b.lo.k = hi_in.k - 1;
+            b.hi.k = hi_in.k;
+        }
+    }
+
     return b;
+}
+
+Box3 BoundaryCore::MakeGhostSlabFromInner(const Box3 &inner_slab,
+                                          int direction,
+                                          int nghost)
+{
+    const int ax = std::abs(direction);
+    const int sgn = (direction > 0) ? +1 : -1;
+
+    Box3 g = inner_slab; // 切向范围直接继承
+
+    if (ax == 1)
+    {
+        if (sgn < 0)
+        {
+            g.hi.i = inner_slab.lo.i;
+            g.lo.i = inner_slab.lo.i - nghost;
+        }
+        else
+        {
+            g.lo.i = inner_slab.hi.i;
+            g.hi.i = inner_slab.hi.i + nghost;
+        }
+    }
+    else if (ax == 2)
+    {
+        if (sgn < 0)
+        {
+            g.hi.j = inner_slab.lo.j;
+            g.lo.j = inner_slab.lo.j - nghost;
+        }
+        else
+        {
+            g.lo.j = inner_slab.hi.j;
+            g.hi.j = inner_slab.hi.j + nghost;
+        }
+    }
+    else
+    {
+        if (sgn < 0)
+        {
+            g.hi.k = inner_slab.lo.k;
+            g.lo.k = inner_slab.lo.k - nghost;
+        }
+        else
+        {
+            g.lo.k = inner_slab.hi.k;
+            g.hi.k = inner_slab.hi.k + nghost;
+        }
+    }
+
+    return g;
 }

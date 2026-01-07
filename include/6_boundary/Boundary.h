@@ -40,10 +40,10 @@ public:
     // 注册：对某个 location + 所有 field + 某个 bc_name 的通用处理器
     void RegisterPhysical(StaggerLocation loc,
                           const std::string &bc_name,
-                          BOUND::PhysicalHandler h);
+                          BOUND::PhysicalHandler h); // field_name=""
 
     // 设置：对某个 location 的默认处理器（fallback）
-    void SetDefaultPhysical(StaggerLocation loc, BOUND::PhysicalHandler h);
+    void SetDefaultPhysical(StaggerLocation loc, BOUND::PhysicalHandler h); // field_name="" bc_name=""
 
     // ------------------------------------------------------------
     // Registry: Coupling BC
@@ -60,12 +60,6 @@ public:
                           const std::string &dst,
                           StaggerLocation loc,
                           BOUND::CouplingHandler h);
-
-    // src/dst 的全默认 handler（可选）
-    void RegisterCoupling(const std::string &src,
-                          const std::string &dst,
-                          BOUND::CouplingHandler h);
-
     // ------------------------------------------------------------
     // Apply
     // ------------------------------------------------------------
@@ -96,12 +90,12 @@ private:
     Param *par_ = nullptr;
 
     // ------------------------------------------------------------
-    // Cached physical patch list (from topo_->physical_patches)
+    // Cached physical patch list (from topo_->phy_patterns_)
     //
-    // 这里的 PhysicalRegion.base_box 我们存“node patch box”（p.this_box_node）
-    // Apply 时按 field.location/nghost 动态算 ghost slab box，再临时覆盖 base_box 传给 handler。
+    // 每个 location 一份 regions：regions 内已缓存 inner_slab（法向1层）
+    // Apply 时按 inner_slab/nghost 动态算 box
     // ------------------------------------------------------------
-    std::vector<BOUND::PhysicalRegion> phy_patches_;
+    std::map<StaggerLocation, BOUND::PhysicalPattern> phy_patterns_;
 
     // ------------------------------------------------------------
     // Registries
@@ -128,17 +122,18 @@ private:
     // ------------------------------------------------------------
     static Int3 LocDelta(StaggerLocation loc);
     static Int3 LocInnerHi(const Block &blk, StaggerLocation loc);
-
     static void ConvertTangent(int lo_n, int hi_n, int delta, int &lo, int &hi);
 
-    // 给定：block、field location、边界 face 的 node-box、dir_code(±1/±2/±3)、nghost
-    // 返回：该 location 下的 ghost slab box（half-open [lo,hi)）
-    static Box3 MakeFaceGhostSlabBox(const Block &blk,
-                                     StaggerLocation loc,
-                                     const Box3 &face_node_box,
-                                     int dir_code,
-                                     int nghost);
+    // 根据 (block, location, topo提供的node面patch盒子, direction) 推 inner_slab（法向1层）
+    static Box3 MakeInnerSlabBox_OneLayer(const Block &blk,
+                                          StaggerLocation loc,
+                                          const Box3 &face_node_box,
+                                          int direction);
 
+    // 运行时：由 inner_slab + direction + nghost 得 ghost slab（仅 O(1)）
+    static Box3 MakeGhostSlabFromInner(const Box3 &inner_slab,
+                                       int direction,
+                                       int nghost);
     // Build cached physical patch list
-    void BuildPhysicalPatchCache();
+    void BuildPhysicalPatternsCachedInnerSlabs();
 };

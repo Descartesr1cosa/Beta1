@@ -30,22 +30,11 @@ void BoundaryCore::RegisterCoupling(const std::string &src,
     RegisterCoupling(src, dst, loc, "", "", std::move(h));
 }
 
-void BoundaryCore::RegisterCoupling(const std::string &src,
-                                    const std::string &dst,
-                                    BOUND::CouplingHandler h)
-{
-    // pair-level default：loc 这里无法用枚举表示 “Any”，所以用一种常见做法：
-    // 约定：location=StaggerLocation::Cell 且 channel_tag="" dst_field_name="" 作为 pair default
-    // 你也可以改成：只提供 per-location default，不提供 pair default。
-    RegisterCoupling(src, dst, StaggerLocation::Cell, "", "", std::move(h));
-}
-
 // ------------------------------------------------------------
 // Apply Coupling
 // ------------------------------------------------------------
 void BoundaryCore::ApplyCouplingPair(const std::string &src, const std::string &dst)
 {
-    // 需要 coupling buffers 已经 build 且 halo 已经把数据搬到 buf.data 里
     auto &bs = fld_->coupling_buffers(src, dst);
     const auto &channels = bs.desc.channels;
 
@@ -55,25 +44,19 @@ void BoundaryCore::ApplyCouplingPair(const std::string &src, const std::string &
         const std::string &tag = ch.tag;
         const StaggerLocation loc = ch.location;
 
-        // 默认假设：dst field name == channel tag
-        // 如果你未来要 tag!=dst_field，就在 RegisterCoupling 时用 dst_field_name 覆盖，并在这里按你的规则映射。
+        // 默认：dst field = tag（你可按需要映射）
         const std::string dst_field = tag;
-
         const int fid_dst = fld_->field_id(dst_field);
-        (void)fid_dst; // 防止未使用告警（如果你想加 assert 可用它）
 
-        // Resolve handler（不绑定）
         auto h = ResolveCoupling(src, dst, loc, tag, dst_field);
 
-        auto apply_one_list = [&](std::vector<CouplingBufferBlock> &lst)
+        auto apply_list = [&](std::vector<CouplingBufferBlock> &lst)
         {
             for (auto &buf : lst)
             {
                 if (!buf.allocated)
                     continue;
-
-                const int ib = buf.this_block;
-                FieldBlock &Udst = fld_->field(fid_dst, ib);
+                FieldBlock &Udst = fld_->field(fid_dst, buf.this_block);
 
                 if (h)
                     h(Udst, fld_, buf, src, dst, tag);
@@ -82,17 +65,12 @@ void BoundaryCore::ApplyCouplingPair(const std::string &src, const std::string &
             }
         };
 
-        // face
-        apply_one_list(bs.inner_face[cid]);
-        apply_one_list(bs.parallel_face[cid]);
-
-        // edge
-        apply_one_list(bs.inner_edge[cid]);
-        apply_one_list(bs.parallel_edge[cid]);
-
-        // vertex
-        apply_one_list(bs.inner_vertex[cid]);
-        apply_one_list(bs.parallel_vertex[cid]);
+        apply_list(bs.inner_face[cid]);
+        apply_list(bs.parallel_face[cid]);
+        apply_list(bs.inner_edge[cid]);
+        apply_list(bs.parallel_edge[cid]);
+        apply_list(bs.inner_vertex[cid]);
+        apply_list(bs.parallel_vertex[cid]);
     }
 }
 
@@ -133,8 +111,6 @@ BOUND::CouplingHandler BoundaryCore::ResolveCoupling(const std::string &src,
         return h;
     if (auto h = find_one(loc, "", ""))
         return h;
-    if (auto h = find_one(StaggerLocation::Cell, "", ""))
-        return h; // pair default（弱约定）
     return nullptr;
 }
 

@@ -15,7 +15,7 @@ void BoundaryCore::SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par
     if (!grd_ || !fld_ || !topo_ || !par_)
         throw std::runtime_error("[BoundaryCore] SetUp got null pointer");
 
-    BuildPhysicalPatchCache();
+    BuildPhysicalPatternsCachedInnerSlabs();
 
     // 如果你不注册任何 handler，也要能跑：
     // 这里不强制插 registry，而是 Resolve 失败时直接回退到 Default*Copy。
@@ -57,25 +57,23 @@ void BoundaryCore::ApplyPhysical(const std::string &field_name)
     const StaggerLocation loc = desc.location;
     const int nghost = desc.nghost;
 
-    for (const auto &patch : phy_patches_)
+    auto pit = phy_patterns_.find(loc);
+    if (pit == phy_patterns_.end())
+        return;
+
+    for (const auto &cached : pit->second.regions)
     {
-        const int ib = patch.this_block;
-        FieldBlock &U = fld_->field(fid, ib);
+        FieldBlock &U = fld_->field(fid, cached.this_block);
 
-        // 1) 把 topo 的 node patch box 转成该 loc 下的 ghost slab box
-        const Block &blk = grd_->grids(ib);
-        const Box3 ghost_box = MakeFaceGhostSlabBox(blk, loc, patch.base_box, patch.direction, nghost);
+        // 运行时仅 O(1)：inner_slab -> ghost_slab
+        BOUND::PhysicalRegion work = cached;
+        work.box = MakeGhostSlabFromInner(cached.inner_slab, cached.direction, nghost);
 
-        // 2) 构造一个临时 region：把 base_box 覆盖成 ghost_box，传给 handler
-        BOUND::PhysicalRegion r = patch;
-        r.base_box = ghost_box;
-
-        // 3) Resolve handler（不绑定，每次查 registry）
-        auto h = ResolvePhysical(loc, field_name, patch.bc_name);
+        auto h = ResolvePhysical(loc, field_name, cached.bc_name);
         if (h)
-            h(U, fld_, r, nghost);
+            h(U, fld_, work, nghost);
         else
-            DefaultPhysicalCopy(U, fld_, r, nghost);
+            DefaultPhysicalCopy(U, fld_, work, nghost);
     }
 }
 
@@ -120,45 +118,54 @@ BOUND::PhysicalHandler BoundaryCore::ResolvePhysical(StaggerLocation loc,
 // ------------------------------------------------------------
 // Physical patch cache
 // ------------------------------------------------------------
-void BoundaryCore::BuildPhysicalPatchCache()
+void BoundaryCore::BuildPhysicalPatternsCachedInnerSlabs()
 {
-    phy_patches_.clear();
-    phy_patches_.reserve(topo_->physical_patches.size());
+    phy_patterns_.clear();
+
+    // 只构建你当前会用到的 location；这里示例构建常用 7 类
+    const std::vector<StaggerLocation> locs = {
+        StaggerLocation::Cell,
+        StaggerLocation::FaceXi, StaggerLocation::FaceEt, StaggerLocation::FaceZe,
+        StaggerLocation::EdgeXi, StaggerLocation::EdgeEt, StaggerLocation::EdgeZe};
+
+    for (auto loc : locs)
+    {
+        BOUND::PhysicalPattern pat;
+        pat.location = loc;
+        phy_patterns_[loc] = std::move(pat);
+    }
 
     for (const auto &p : topo_->physical_patches)
     {
-        BOUND::PhysicalRegion r;
-        r.this_block = p.this_block;
-        r.this_block_name = p.this_block_name;
-        r.bc_id = p.bc_id;
-        r.bc_name = p.bc_name;
-        r.direction = p.direction;
-        r.raw = p.raw;
+        const int ib = p.this_block;
+        const Block &blk = grd_->grids(ib); // 你工程里取 block 的接口按实际改
 
-        // cycle：如果 raw 提供就用 raw；否则也可从 direction 推导
-        if (p.raw)
+        const Box3 face_node_box = p.this_box_node; // topo 给的 node patch box（半开区间）
+        const int dir = p.direction;
+
+        for (auto loc : locs)
         {
-            r.cycle.i = p.raw->cycle[0];
-            r.cycle.j = p.raw->cycle[1];
-            r.cycle.k = p.raw->cycle[2];
-        }
-        else
-        {
-            r.cycle = {0, 0, 0};
-            const int ax = std::abs(p.direction);
-            const int sgn = (p.direction > 0) ? +1 : -1;
-            if (ax == 1)
-                r.cycle.i = sgn;
-            if (ax == 2)
-                r.cycle.j = sgn;
-            if (ax == 3)
-                r.cycle.k = sgn;
-        }
+            BOUND::PhysicalRegion r;
+            r.this_block = p.this_block;
+            r.this_block_name = p.this_block_name;
+            r.bc_id = p.bc_id;
+            r.bc_name = p.bc_name;
+            r.direction = dir;
+            r.raw = p.raw;
 
-        // base_box：这里暂存 topo 的 node patch box
-        r.base_box = p.this_box_node;
+            // cycle 可选：也可完全由 direction 推导
+            if (p.raw)
+            {
+                r.cycle.i = p.raw->cycle[0];
+                r.cycle.j = p.raw->cycle[1];
+                r.cycle.k = p.raw->cycle[2];
+            }
 
-        phy_patches_.push_back(r);
+            // 关键：Build 阶段推导“域内贴边1层”的 inner_slab（loc 坐标）
+            r.inner_slab = MakeInnerSlabBox_OneLayer(blk, loc, face_node_box, dir);
+
+            phy_patterns_[loc].regions.push_back(std::move(r));
+        }
     }
 }
 
@@ -168,32 +175,16 @@ void BoundaryCore::BuildPhysicalPatchCache()
 void BoundaryCore::DefaultPhysicalCopy(FieldBlock &U, Field * /*fld*/,
                                        const BOUND::PhysicalRegion &r, int /*nghost*/)
 {
-    // 约定：r.base_box 在 ApplyPhysical 里已被覆盖成“ghost slab box”
-    const Box3 &g = r.base_box;
+    const Box3 &g = r.box;            // ghost slab：需要写入
+    const Box3 &inner = r.inner_slab; // 域内贴边一层：参考
 
-    // 计算 interior 参考面索引：靠近边界的第一个 interior layer
-    // 使用 U.block + U.desc.location 推出 interior hi
-    const Block &blk = U.get_block();
-    const Int3 hi_in = LocInnerHi(blk, U.descriptor().location);
-
-    const int ax = std::abs(r.direction);
+    const int ax = std::abs(r.direction); // 1/2/3
     const int sgn = (r.direction > 0) ? +1 : -1;
 
-    int i_ref = 0, j_ref = 0, k_ref = 0;
-    // 默认用“相同 (j,k)”复制，normal 方向取 interior 的贴边层
-    // 例如 X-: i_ref=0; X+: i_ref=hi_in.i-1
-    auto ref_index = [&](int i, int j, int k, int &ir, int &jr, int &kr)
-    {
-        ir = i;
-        jr = j;
-        kr = k;
-        if (ax == 1)
-            ir = (sgn < 0) ? 0 : (hi_in.i - 1);
-        if (ax == 2)
-            jr = (sgn < 0) ? 0 : (hi_in.j - 1);
-        if (ax == 3)
-            kr = (sgn < 0) ? 0 : (hi_in.k - 1);
-    };
+    // 法向参考索引：inner slab 的那一层（厚度=1）
+    const int i_ref = (ax == 1) ? ((sgn < 0) ? inner.lo.i : (inner.hi.i - 1)) : 0;
+    const int j_ref = (ax == 2) ? ((sgn < 0) ? inner.lo.j : (inner.hi.j - 1)) : 0;
+    const int k_ref = (ax == 3) ? ((sgn < 0) ? inner.lo.k : (inner.hi.k - 1)) : 0;
 
     const int ncomp = U.descriptor().ncomp;
 
@@ -201,8 +192,11 @@ void BoundaryCore::DefaultPhysicalCopy(FieldBlock &U, Field * /*fld*/,
         for (int j = g.lo.j; j < g.hi.j; ++j)
             for (int k = g.lo.k; k < g.hi.k; ++k)
             {
-                ref_index(i, j, k, i_ref, j_ref, k_ref);
+                const int ii = (ax == 1) ? i_ref : i;
+                const int jj = (ax == 2) ? j_ref : j;
+                const int kk = (ax == 3) ? k_ref : k;
+
                 for (int m = 0; m < ncomp; ++m)
-                    U(i, j, k, m) = U(i_ref, j_ref, k_ref, m);
+                    U(i, j, k, m) = U(ii, jj, kk, m);
             }
 }

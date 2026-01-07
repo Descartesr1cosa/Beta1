@@ -26,10 +26,12 @@ namespace BOUND
         int direction = 0;   // topo patch direction: +/-1,+/-2,+/-3
         Int3 cycle{};        // raw->cycle：指向 ghost 的方向(通常只有一个分量非 0)
 
-        // ---- base_box：边界内侧“参考区域”
-        //     坐标体系取决于 location（Cell/FaceXi/EdgeEt...）
-        //     base_box 的构建通常来源 raw->sub/sup，再加上“node-based 维度 +1”校正
-        Box3 base_box{};
+        // 缓存：域内贴边 1 层 slab（已经是该 location 的索引体系）
+        Box3 inner_slab{};
+
+        // 运行时临时：要写入的 ghost slab（Apply 时由 inner_slab + nghost 推出）
+        // 注意：inner_slab 是缓存数据；box 是临时工作数据（可不写入缓存容器中）
+        Box3 box{};
 
         // ---- 回指 topo 原始结构（可选，用于 debug 或获取更多信息）
         const Physical_Boundary *raw = nullptr;
