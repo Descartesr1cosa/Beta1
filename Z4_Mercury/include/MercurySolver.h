@@ -1,6 +1,7 @@
 #pragma once
 
 #include "5_io/IOModule.h"
+#include "6_boundary/Boundary.h"
 
 #include "0_SolverFields.h"
 #include "2_Initial.h"
@@ -34,7 +35,7 @@ private:
 
     // --- components ---
     Control control_;
-    // MHD_Boundary bound_;
+    BoundaryCore bound_;
     IOModule io_;
     Mercury_Initial initial_;
 
