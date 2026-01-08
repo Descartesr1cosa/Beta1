@@ -1,5 +1,6 @@
 #include "4_halo/detail/halo_build_boxmakers.h"
 #include <stdexcept>
+#include "0_basic/Error.h"
 
 namespace HALO_BOX
 {
@@ -123,7 +124,7 @@ namespace HALO_BOX
                 box.hi = {face_node.hi.i, face_node.hi.j, face_node.hi.k - 1};
                 break;
             default:
-                throw std::runtime_error("make_base_dof_box_1D: unsupported StaggerLocation");
+                ERROR::Abort("make_base_dof_box_1D: unsupported StaggerLocation");
             }
 
             return box;
@@ -168,7 +169,7 @@ namespace HALO_BOX
     {
 
         if (detail::dir_axis(dir1) == detail::dir_axis(dir2))
-            throw std::runtime_error("make_2DCorner_ghost_box: dir1/dir2 are on the same axis");
+            ERROR::Abort("make_2DCorner_ghost_box: dir1/dir2 are on the same axis");
 
         // edge_node 是“沿棱的一条 node strip”：[lo, hi)
         Box3 box = detail::make_base_dof_box_from_node(loc, edge_node);
@@ -184,7 +185,7 @@ namespace HALO_BOX
                                       Direction dir1, Direction dir2, int nghost)
     {
         if (detail::dir_axis(dir1) == detail::dir_axis(dir2))
-            throw std::runtime_error("make_2DCorner_innerghost_box: dir1/dir2 are on the same axis");
+            ERROR::Abort("make_2DCorner_innerghost_box: dir1/dir2 are on the same axis");
 
         Box3 box = detail::make_base_dof_box_from_node(loc, edge_node);
 

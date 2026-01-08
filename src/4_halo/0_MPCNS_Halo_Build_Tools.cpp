@@ -1,4 +1,5 @@
 #include "4_halo/detail/halo_build_tools.h"
+#include "0_basic/Error.h"
 
 namespace HALO_TOOLS
 {
@@ -32,7 +33,7 @@ namespace HALO_TOOLS
         oss = "detect_face_direction: cannot determine direction from node_box";
         if (where)
             oss = oss + " in " + where;
-        throw std::runtime_error(oss);
+        ERROR::Abort(oss);
     }
     //=========================================================================
 
@@ -57,7 +58,7 @@ namespace HALO_TOOLS
         case -3:
             return Direction::ZMinus;
         default:
-            throw std::runtime_error("int_to_direction: invalid direction");
+            ERROR::Abort("int_to_direction: invalid direction");
         }
     }
 
@@ -159,7 +160,7 @@ namespace HALO_TOOLS
             if (where)
                 oss = oss + " in " + where;
 
-            throw std::runtime_error(oss);
+            ERROR::Abort(oss);
         }
 
         // 防止同一轴同时匹配 +/-（理论上不该发生，但加一道保险）
@@ -169,7 +170,7 @@ namespace HALO_TOOLS
             oss += ("detect_edge_dirs: invalid dirs (same axis) dir1=" + std::to_string(dir1) + " dir2=" + std::to_string(dir2));
             if (where)
                 oss = oss + " in " + where;
-            throw std::runtime_error(oss);
+            ERROR::Abort(oss);
         }
     }
     //=========================================================================
@@ -229,7 +230,7 @@ namespace HALO_TOOLS
             if (where)
                 oss = oss + " in " + where;
 
-            throw std::runtime_error(oss);
+            ERROR::Abort(oss);
         }
 
         // 防御：不允许重复轴
@@ -240,7 +241,7 @@ namespace HALO_TOOLS
             oss += ("detect_vertex_direction: invalid dirs (repeated axis)  dir1=" + std::to_string(dir1) + " dir2=" + std::to_string(dir2) + " dir3=" + std::to_string(dir3));
             if (where)
                 oss = oss + " in " + where;
-            throw std::runtime_error(oss);
+            ERROR::Abort(oss);
         }
     }
     //=========================================================================

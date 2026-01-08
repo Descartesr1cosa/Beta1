@@ -1,6 +1,7 @@
 #include "3_field/Coupling_Type.h"
 #include "2_topology/2_MPCNS_Topology.h"
 #include "6_boundary/Boundary.h"
+#include "0_basic/Error.h"
 
 // ------------------------------------------------------------
 // Registry: Coupling
@@ -17,7 +18,7 @@ void BoundaryCore::RegisterCoupling(const std::string &src,
     const int fid = fld_->field_id(dst_field_name);
     const auto &desc = fld_->descriptor(fid);
     if (desc.location != loc)
-        throw std::runtime_error("[BoundaryCore] RegisterCoupling: dst_field location mismatch");
+        ERROR::Abort("[BoundaryCore] RegisterCoupling: dst_field location mismatch");
 
     BOUND::CouplingKey k{src, dst, loc, channel_tag, dst_field_name};
     cpl_reg_[k] = std::move(h);

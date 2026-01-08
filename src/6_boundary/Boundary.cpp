@@ -1,4 +1,5 @@
 #include "6_boundary/Boundary.h"
+#include "0_basic/Error.h"
 #include <iostream>
 #include <cstdlib>
 
@@ -13,7 +14,7 @@ void BoundaryCore::SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par
     par_ = par;
 
     if (!grd_ || !fld_ || !topo_ || !par_)
-        throw std::runtime_error("[BoundaryCore] SetUp got null pointer");
+        ERROR::Abort("[BoundaryCore] SetUp got null pointer");
 
     // 1) 从 field_ids 推导需要的 locations
     enabled_locs_.clear();
@@ -44,7 +45,7 @@ void BoundaryCore::RegisterPhysical(const std::string &field_name,
                                     BOUND::PhysicalHandler h)
 {
     if (!fld_)
-        throw std::runtime_error("[BoundaryCore] RegisterPhysical called before SetUp");
+        ERROR::Abort("[BoundaryCore] RegisterPhysical called before SetUp");
 
     const int fid = fld_->field_id(field_name);
     const auto &desc = fld_->descriptor(fid);
@@ -52,7 +53,7 @@ void BoundaryCore::RegisterPhysical(const std::string &field_name,
 
     // 强制要求：SetUp(field_ids) 已经包含该 field 的 location（更严格：包含该 fid）
     if (enabled_locs_.find(loc) == enabled_locs_.end())
-        throw std::runtime_error("[BoundaryCore] RegisterPhysical: location not enabled by SetUp(field_ids).");
+        ERROR::Abort("[BoundaryCore] RegisterPhysical: location not enabled by SetUp(field_ids).");
 
     RegisterPhysical(loc, field_name, bc_name, std::move(h));
 }
@@ -61,7 +62,7 @@ void BoundaryCore::CheckPhysicalHandlers(const std::vector<std::string> &field_n
 {
     // 0) 基本一致性检查
     if (!fld_ || !topo_ || !grd_)
-        throw std::runtime_error("[BoundaryCore] AssertPhysicalHandlers called before SetUp");
+        ERROR::Abort("[BoundaryCore] AssertPhysicalHandlers called before SetUp");
 
     // 1) 收集：loc -> (bc_name -> sample_region*)
     std::map<StaggerLocation, std::map<std::string, const BOUND::PhysicalRegion *>> bcset;
@@ -97,7 +98,7 @@ void BoundaryCore::CheckPhysicalHandlers(const std::vector<std::string> &field_n
         auto pit = phy_patterns_.find(loc);
         if (pit == phy_patterns_.end())
         {
-            throw std::runtime_error("[BoundaryCore] No physical pattern built for location of field: " + field_name);
+            ERROR::Abort("[BoundaryCore] No physical pattern built for location of field: " + field_name);
         }
 
         // 2.2) 该 loc 下出现过的每个 bc_name，都必须能找到 handler
@@ -131,7 +132,7 @@ void BoundaryCore::CheckPhysicalHandlers(const std::vector<std::string> &field_n
         {
             msg += "  field=" + m.field + " loc=" + std::to_string((int)m.loc) + " bc_name=" + m.bc + " (example: block=" + std::to_string(m.example_block) + " bc_id=" + std::to_string(m.bc_id) + " dir=" + std::to_string(m.direction) + ")\n";
         }
-        throw std::runtime_error(msg);
+        ERROR::Abort(msg);
         std::abort();
         // 或者你想“直接停止”也可以：std::cerr<<msg; std::abort();
     }
@@ -150,7 +151,7 @@ void BoundaryCore::ApplyPhysical(const std::string &field_name)
 
     auto pit = phy_patterns_.find(loc);
     if (pit == phy_patterns_.end())
-        throw std::runtime_error("[BoundaryCore] ApplyPhysical: pattern not built for this field/location: " + field_name);
+        ERROR::Abort("[BoundaryCore] ApplyPhysical: pattern not built for this field/location: " + field_name);
 
     for (const auto &cached : pit->second.regions)
     {
@@ -162,7 +163,7 @@ void BoundaryCore::ApplyPhysical(const std::string &field_name)
 
         auto h = ResolvePhysical(loc, field_name, cached.bc_name);
         if (!h)
-            throw std::runtime_error("[BoundaryCore] ApplyPhysical: missing handler for field=" + field_name + " bc=" + cached.bc_name);
+            ERROR::Abort("[BoundaryCore] ApplyPhysical: missing handler for field=" + field_name + " bc=" + cached.bc_name);
         h(U, fld_, work, nghost);
     }
 }

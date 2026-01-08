@@ -1,4 +1,5 @@
 #include "3_field/2_MPCNS_Field.h"
+#include "0_basic/Error.h"
 
 void Field::register_coupling_channel(const std::string &src,
                                       const std::string &dst,
@@ -72,7 +73,7 @@ CouplingBuffersForPair &Field::coupling_buffers(const std::string &src, const st
     PairKey k{src, dst};
     auto it = coupling_buffers_.find(k);
     if (it == coupling_buffers_.end())
-        throw std::runtime_error("Field::coupling_buffers: buffers not built for coupling pair");
+        ERROR::Abort("Field::coupling_buffers: buffers not built for coupling pair");
     return it->second;
 }
 
