@@ -47,6 +47,12 @@ private:
     double dt{0.0};
 
 private:
+    //=========================================================================
+    void BC_UH_Farfield_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_UH_Farfield_b(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+
+private:
     //     // =============================== Step driver ============================
     //     bool StepOnce();
     //     //-------------------------------------------------------------------------

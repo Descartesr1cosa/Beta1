@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <cstdio>
 
@@ -23,31 +24,53 @@ public:
     BoundaryCore() = default;
     ~BoundaryCore() = default;
 
+    //===================================================================================
     // ------------------------------------------------------------
-    // Setup
+    // Setup & Initialization
     // ------------------------------------------------------------
-    void SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par);
+    // 根据输入的物理场编号，推导所需要的Location的边界条件Pattern
+    void SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par, const std::vector<std::string> &field_names);
 
-    // ------------------------------------------------------------
-    // Registry: Physical BC
-    // ------------------------------------------------------------
+private:
+    // Build cached physical patch list
+    void BuildPhysicalPatterns();
+    //===================================================================================
+
+    //===================================================================================
+    // Physical Boundary
+public:
+    // 注册：某个 field + 某个 bc_name 的处理器
+    void RegisterPhysical(const std::string &field_name,
+                          const std::string &bc_name,
+                          BOUND::PhysicalHandler h);
+
+    // 检测是否所有需要添加边界条件的物理场都已经设置了Handlers
+    void CheckPhysicalHandlers(const std::vector<std::string> &field_names) const;
+
+    // 施加边界条件
+    void ApplyPhysical(const std::string &field_name);
+    void ApplyPhysical(const std::vector<std::string> &field_names);
+
+    // 提供默认的拷贝边界条件
+    static void DefaultPhysicalCopy(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int nghost);
+
+private:
     // 注册：对某个 location + 某个 field + 某个 bc_name 的处理器
     void RegisterPhysical(StaggerLocation loc,
                           const std::string &field_name,
                           const std::string &bc_name,
                           BOUND::PhysicalHandler h);
 
-    // 注册：对某个 location + 所有 field + 某个 bc_name 的通用处理器
-    void RegisterPhysical(StaggerLocation loc,
-                          const std::string &bc_name,
-                          BOUND::PhysicalHandler h); // field_name=""
+    BOUND::PhysicalHandler ResolvePhysical(StaggerLocation loc,
+                                           const std::string &field_name,
+                                           const std::string &bc_name) const;
 
-    // 设置：对某个 location 的默认处理器（fallback）
-    void SetDefaultPhysical(StaggerLocation loc, BOUND::PhysicalHandler h); // field_name="" bc_name=""
+    //===================================================================================
 
-    // ------------------------------------------------------------
+    //===================================================================================
+    // Coupling Boundary
+public:
     // Registry: Coupling BC
-    // ------------------------------------------------------------
     void RegisterCoupling(const std::string &src,
                           const std::string &dst,
                           StaggerLocation loc,
@@ -60,26 +83,15 @@ public:
                           const std::string &dst,
                           StaggerLocation loc,
                           BOUND::CouplingHandler h);
-    // ------------------------------------------------------------
-    // Apply
-    // ------------------------------------------------------------
-    void ApplyPhysical(const std::string &field_name);
-    void ApplyPhysical(const std::vector<std::string> &field_names);
 
     // 对一个 coupling pair 执行：把 buffer 写入 dst ghost
     void ApplyCouplingPair(const std::string &src, const std::string &dst);
-
-protected:
-    // ------------------------------------------------------------
-    // You may override these defaults if needed
-    // ------------------------------------------------------------
-    static void DefaultPhysicalCopy(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int nghost);
     static void DefaultCouplingCopy(FieldBlock &Udst, Field *fld,
                                     CouplingBufferBlock &buf,
                                     const std::string &src,
                                     const std::string &dst,
                                     const std::string &channel_tag);
-
+    //===================================================================================
 private:
     // ------------------------------------------------------------
     // Pointers
@@ -88,6 +100,11 @@ private:
     Field *fld_ = nullptr;
     TOPO::Topology *topo_ = nullptr;
     Param *par_ = nullptr;
+
+    // ------------------------------------------------------------
+    // 存储哪些Location需要添加边界Pattern
+    // ------------------------------------------------------------
+    std::set<StaggerLocation> enabled_locs_;
 
     // ------------------------------------------------------------
     // Cached physical patch list (from topo_->phy_patterns_)
@@ -106,9 +123,6 @@ private:
     // ------------------------------------------------------------
     // Internal helpers: resolve handlers
     // ------------------------------------------------------------
-    BOUND::PhysicalHandler ResolvePhysical(StaggerLocation loc,
-                                           const std::string &field_name,
-                                           const std::string &bc_name) const;
 
     BOUND::CouplingHandler ResolveCoupling(const std::string &src,
                                            const std::string &dst,
@@ -116,6 +130,7 @@ private:
                                            const std::string &channel_tag,
                                            const std::string &dst_field_name) const;
 
+    //===================================================================================
     // ------------------------------------------------------------
     // Internal helpers: geometry for ghost slab on a boundary face
     // This copies the logic style used in your coupling buffer builder.
@@ -134,6 +149,5 @@ private:
     static Box3 MakeGhostSlabFromInner(const Box3 &inner_slab,
                                        int direction,
                                        int nghost);
-    // Build cached physical patch list
-    void BuildPhysicalPatternsCachedInnerSlabs();
+    //===================================================================================
 };

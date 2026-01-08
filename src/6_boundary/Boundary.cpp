@@ -5,7 +5,7 @@
 // ------------------------------------------------------------
 // Setup
 // ------------------------------------------------------------
-void BoundaryCore::SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par)
+void BoundaryCore::SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par, const std::vector<std::string> &field_names)
 {
     grd_ = grd;
     fld_ = fld;
@@ -15,10 +15,17 @@ void BoundaryCore::SetUp(Grid *grd, Field *fld, TOPO::Topology *topo, Param *par
     if (!grd_ || !fld_ || !topo_ || !par_)
         throw std::runtime_error("[BoundaryCore] SetUp got null pointer");
 
-    BuildPhysicalPatternsCachedInnerSlabs();
+    // 1) 从 field_ids 推导需要的 locations
+    enabled_locs_.clear();
+    for (auto field : field_names)
+    {
+        int fid = fld_->field_id(field);
+        const auto &desc = fld_->descriptor(fid);
+        enabled_locs_.insert(desc.location);
+    }
 
-    // 如果你不注册任何 handler，也要能跑：
-    // 这里不强制插 registry，而是 Resolve 失败时直接回退到 Default*Copy。
+    // 2) 只为这些 locations 构建 Pattern（inner_slab，不扩 ghost）
+    BuildPhysicalPatterns();
 }
 
 // ------------------------------------------------------------
@@ -29,21 +36,105 @@ void BoundaryCore::RegisterPhysical(StaggerLocation loc,
                                     const std::string &bc_name,
                                     BOUND::PhysicalHandler h)
 {
-    BOUND::PhysicalKey k{loc, field_name, bc_name};
-    phy_reg_[k] = std::move(h);
+    phy_reg_[BOUND::PhysicalKey{loc, field_name, bc_name}] = std::move(h);
 }
 
-void BoundaryCore::RegisterPhysical(StaggerLocation loc,
+void BoundaryCore::RegisterPhysical(const std::string &field_name,
                                     const std::string &bc_name,
                                     BOUND::PhysicalHandler h)
 {
-    RegisterPhysical(loc, "", bc_name, std::move(h));
+    if (!fld_)
+        throw std::runtime_error("[BoundaryCore] RegisterPhysical called before SetUp");
+
+    const int fid = fld_->field_id(field_name);
+    const auto &desc = fld_->descriptor(fid);
+    const StaggerLocation loc = desc.location;
+
+    // 强制要求：SetUp(field_ids) 已经包含该 field 的 location（更严格：包含该 fid）
+    if (enabled_locs_.find(loc) == enabled_locs_.end())
+        throw std::runtime_error("[BoundaryCore] RegisterPhysical: location not enabled by SetUp(field_ids).");
+
+    RegisterPhysical(loc, field_name, bc_name, std::move(h));
 }
 
-void BoundaryCore::SetDefaultPhysical(StaggerLocation loc, BOUND::PhysicalHandler h)
+void BoundaryCore::CheckPhysicalHandlers(const std::vector<std::string> &field_names) const
 {
-    // default 的约定：bc_name="" 且 field_name=""
-    RegisterPhysical(loc, "", "", std::move(h));
+    // 0) 基本一致性检查
+    if (!fld_ || !topo_ || !grd_)
+        throw std::runtime_error("[BoundaryCore] AssertPhysicalHandlers called before SetUp");
+
+    // 1) 收集：loc -> (bc_name -> sample_region*)
+    std::map<StaggerLocation, std::map<std::string, const BOUND::PhysicalRegion *>> bcset;
+    for (const auto &[loc, pat] : phy_patterns_)
+    {
+        for (const auto &r : pat.regions)
+        {
+            if (!bcset[loc].count(r.bc_name))
+                bcset[loc][r.bc_name] = &r; // 存一个样例用于报错，如果没找到，可用该记录输出信息
+        }
+    }
+
+    struct Missing
+    {
+        std::string field;
+        StaggerLocation loc{};
+        std::string bc;
+        int example_block = -1;
+        int bc_id = -1;
+        int direction = 0;
+    };
+
+    std::vector<Missing> missing;
+
+    // 2) 对每个 field 检查覆盖情况
+    for (const auto &field_name : field_names)
+    {
+        const int fid = fld_->field_id(field_name);
+        const auto &desc = fld_->descriptor(fid);
+        const StaggerLocation loc = desc.location;
+
+        // 2.1) pattern 必须存在，否则 SetUp(field_ids) 或 BuildPhysicalPatterns 有问题
+        auto pit = phy_patterns_.find(loc);
+        if (pit == phy_patterns_.end())
+        {
+            throw std::runtime_error("[BoundaryCore] No physical pattern built for location of field: " + field_name);
+        }
+
+        // 2.2) 该 loc 下出现过的每个 bc_name，都必须能找到 handler
+        auto bit = bcset.find(loc);
+        if (bit == bcset.end())
+        {
+            // 该 location 没有任何 patch（可能是全周期、或没有外边界），这不算错
+            continue;
+        }
+
+        for (const auto &[bc_name, sample] : bit->second)
+        {
+            BOUND::PhysicalKey key{loc, field_name, bc_name};
+            if (phy_reg_.find(key) == phy_reg_.end())
+            {
+                missing.push_back(Missing{
+                    field_name, loc, bc_name,
+                    sample ? sample->this_block : -1,
+                    sample ? sample->bc_id : -1,
+                    sample ? sample->direction : 0});
+            }
+        }
+    }
+
+    // 3) 缺失则严格停止
+    if (!missing.empty())
+    {
+        std::string msg;
+        msg += "[BoundaryCore] Missing Physical BC handlers:\n";
+        for (const auto &m : missing)
+        {
+            msg += "  field=" + m.field + " loc=" + std::to_string((int)m.loc) + " bc_name=" + m.bc + " (example: block=" + std::to_string(m.example_block) + " bc_id=" + std::to_string(m.bc_id) + " dir=" + std::to_string(m.direction) + ")\n";
+        }
+        throw std::runtime_error(msg);
+        std::abort();
+        // 或者你想“直接停止”也可以：std::cerr<<msg; std::abort();
+    }
 }
 
 // ------------------------------------------------------------
@@ -59,7 +150,7 @@ void BoundaryCore::ApplyPhysical(const std::string &field_name)
 
     auto pit = phy_patterns_.find(loc);
     if (pit == phy_patterns_.end())
-        return;
+        throw std::runtime_error("[BoundaryCore] ApplyPhysical: pattern not built for this field/location: " + field_name);
 
     for (const auto &cached : pit->second.regions)
     {
@@ -70,10 +161,9 @@ void BoundaryCore::ApplyPhysical(const std::string &field_name)
         work.box = MakeGhostSlabFromInner(cached.inner_slab, cached.direction, nghost);
 
         auto h = ResolvePhysical(loc, field_name, cached.bc_name);
-        if (h)
-            h(U, fld_, work, nghost);
-        else
-            DefaultPhysicalCopy(U, fld_, work, nghost);
+        if (!h)
+            throw std::runtime_error("[BoundaryCore] ApplyPhysical: missing handler for field=" + field_name + " bc=" + cached.bc_name);
+        h(U, fld_, work, nghost);
     }
 }
 
@@ -106,67 +196,13 @@ BOUND::PhysicalHandler BoundaryCore::ResolvePhysical(StaggerLocation loc,
 
     if (auto h = find_one(field_name, bc_name))
         return h;
-    if (auto h = find_one("", bc_name))
-        return h;
-    if (auto h = find_one(field_name, ""))
-        return h;
-    if (auto h = find_one("", ""))
-        return h;
+    // if (auto h = find_one("", bc_name))
+    //     return h;
+    // if (auto h = find_one(field_name, ""))
+    //     return h;
+    // if (auto h = find_one("", ""))
+    //     return h;
     return nullptr;
-}
-
-// ------------------------------------------------------------
-// Physical patch cache
-// ------------------------------------------------------------
-void BoundaryCore::BuildPhysicalPatternsCachedInnerSlabs()
-{
-    phy_patterns_.clear();
-
-    // 只构建你当前会用到的 location；这里示例构建常用 7 类
-    const std::vector<StaggerLocation> locs = {
-        StaggerLocation::Cell,
-        StaggerLocation::FaceXi, StaggerLocation::FaceEt, StaggerLocation::FaceZe,
-        StaggerLocation::EdgeXi, StaggerLocation::EdgeEt, StaggerLocation::EdgeZe};
-
-    for (auto loc : locs)
-    {
-        BOUND::PhysicalPattern pat;
-        pat.location = loc;
-        phy_patterns_[loc] = std::move(pat);
-    }
-
-    for (const auto &p : topo_->physical_patches)
-    {
-        const int ib = p.this_block;
-        const Block &blk = grd_->grids(ib); // 你工程里取 block 的接口按实际改
-
-        const Box3 face_node_box = p.this_box_node; // topo 给的 node patch box（半开区间）
-        const int dir = p.direction;
-
-        for (auto loc : locs)
-        {
-            BOUND::PhysicalRegion r;
-            r.this_block = p.this_block;
-            r.this_block_name = p.this_block_name;
-            r.bc_id = p.bc_id;
-            r.bc_name = p.bc_name;
-            r.direction = dir;
-            r.raw = p.raw;
-
-            // cycle 可选：也可完全由 direction 推导
-            if (p.raw)
-            {
-                r.cycle.i = p.raw->cycle[0];
-                r.cycle.j = p.raw->cycle[1];
-                r.cycle.k = p.raw->cycle[2];
-            }
-
-            // 关键：Build 阶段推导“域内贴边1层”的 inner_slab（loc 坐标）
-            r.inner_slab = MakeInnerSlabBox_OneLayer(blk, loc, face_node_box, dir);
-
-            phy_patterns_[loc].regions.push_back(std::move(r));
-        }
-    }
 }
 
 // ------------------------------------------------------------

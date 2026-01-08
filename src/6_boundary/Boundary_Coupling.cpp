@@ -12,12 +12,14 @@ void BoundaryCore::RegisterCoupling(const std::string &src,
                                     const std::string &dst_field_name,
                                     BOUND::CouplingHandler h)
 {
-    BOUND::CouplingKey k;
-    k.src = src;
-    k.dst = dst;
-    k.location = loc;
-    k.channel_tag = channel_tag;
-    k.dst_field_name = dst_field_name;
+    // 做一致性检查
+    // 例如 dst_field_name 的 descriptor.location 必须等于 loc，否则后面会写错场/错位置
+    const int fid = fld_->field_id(dst_field_name);
+    const auto &desc = fld_->descriptor(fid);
+    if (desc.location != loc)
+        throw std::runtime_error("[BoundaryCore] RegisterCoupling: dst_field location mismatch");
+
+    BOUND::CouplingKey k{src, dst, loc, channel_tag, dst_field_name};
     cpl_reg_[k] = std::move(h);
 }
 
@@ -26,8 +28,8 @@ void BoundaryCore::RegisterCoupling(const std::string &src,
                                     StaggerLocation loc,
                                     BOUND::CouplingHandler h)
 {
-    // wildcard: channel_tag="" dst_field_name=""
-    RegisterCoupling(src, dst, loc, "", "", std::move(h));
+    BOUND::CouplingKey k{src, dst, loc, "", ""};
+    cpl_reg_[k] = std::move(h);
 }
 
 // ------------------------------------------------------------
@@ -67,10 +69,10 @@ void BoundaryCore::ApplyCouplingPair(const std::string &src, const std::string &
 
         apply_list(bs.inner_face[cid]);
         apply_list(bs.parallel_face[cid]);
-        apply_list(bs.inner_edge[cid]);
-        apply_list(bs.parallel_edge[cid]);
-        apply_list(bs.inner_vertex[cid]);
-        apply_list(bs.parallel_vertex[cid]);
+        // apply_list(bs.inner_edge[cid]);
+        // apply_list(bs.parallel_edge[cid]);
+        // apply_list(bs.inner_vertex[cid]);
+        // apply_list(bs.parallel_vertex[cid]);
     }
 }
 
