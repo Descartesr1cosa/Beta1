@@ -112,11 +112,11 @@ public:
 
         // qinfs[5], q_pv_infs[5];// Na+: seed initial state
 
-        q_pv_infs[0] = 0.0;       // 静止，速度为零
-        q_pv_infs[1] = 0.0;       // 静止，速度为零
-        q_pv_infs[2] = 0.0;       // 静止，速度为零
-        q_pv_infs[3] = p0 * 1E-6; // 极低压力背景场
-        q_pv_infs[4] = T0;        // 温度与来流一致
+        q_pv_infs[0] = 0.0;                   // 静止，速度为零
+        q_pv_infs[1] = 0.0;                   // 静止，速度为零
+        q_pv_infs[2] = 0.0;                   // 静止，速度为零
+        q_pv_infs[3] = p0 * rho_small / 23.0; // 极低压力背景场
+        q_pv_infs[4] = T0;                    // 温度与来流一致
 
         qinfs[0] = rho_small * rho0;
         qinfs[1] = 0.0;

@@ -15,6 +15,9 @@ int	corner_treat	2
 double	eta_max_mercury	1.25E7	//水星最大电阻
 
 int	ns		2	//离子种类
+double  mole_mass1   0.001 //H
+double  mole_mass2   0.023 //Na
+
 
 LIST==================================================================
 constant		6

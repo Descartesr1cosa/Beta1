@@ -23,7 +23,7 @@ class MercurySolver
 public:
     MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo, Param *par);
 
-    void Advance() {};
+    void Advance();
 
 private:
     // --- core pointers ---
@@ -45,12 +45,26 @@ private:
     // --- constants ---
     double gamma_{0.0};
     double dt{0.0};
+    double state_coeff_H{0.0};
+    double state_coeff_Na{0.0};
+    double CFL{0.0};
 
 private:
     //=========================================================================
-    void BC_UH_Farfield_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
-    void BC_UH_Farfield_b(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
-    void BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_UH_Farfield_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
+    void BC_UH_Farfield_b(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
+    void BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
+    //=========================================================================
+    bool StepOnce();
+    void PrepareStep();
+    void Compute_Timestep();
+    bool UpdateControlAndOutput();
+
+    // 派生量（先为了输出和 dt）
+    void calc_Bcell();
+    void calc_PV();
+
+    void calc_physical_constant(Param *par);
 
 private:
     //     // =============================== Step driver ============================
@@ -107,7 +121,7 @@ private:
     //     void AssembleFaceRHS_FromEdgeEMF_Curl_();
 
     //     // ================================== TOOLS ==============================
-    void calc_physical_constant(Param *par) {};
+
     //     void calc_PV();
     //     void calc_Bcell();
     //     void calc_divB();
