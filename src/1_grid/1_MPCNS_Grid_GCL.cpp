@@ -5,13 +5,14 @@
 
 void Block::calc_Dual_Grids()
 {
+    int ngg = jacobi.Getghostmesh();
     // dual grid的i，j，k都向正向偏移半个单位即为正常网格坐标
-    dual_x.SetSize(mx + 5, my + 5, mz + 5, 2);
-    dual_y.SetSize(mx + 5, my + 5, mz + 5, 2);
-    dual_z.SetSize(mx + 5, my + 5, mz + 5, 2);
-    for (int i = -2; i <= mx + 2; i++)
-        for (int j = -2; j <= my + 2; j++)
-            for (int k = -2; k <= mz + 2; k++)
+    dual_x.SetSize(mx + 2 * ngg + 1, my + 2 * ngg + 1, mz + 2 * ngg + 1, ngg);
+    dual_y.SetSize(mx + 2 * ngg + 1, my + 2 * ngg + 1, mz + 2 * ngg + 1, ngg);
+    dual_z.SetSize(mx + 2 * ngg + 1, my + 2 * ngg + 1, mz + 2 * ngg + 1, ngg);
+    for (int i = -ngg; i <= mx + ngg; i++)
+        for (int j = -ngg; j <= my + ngg; j++)
+            for (int k = -ngg; k <= mz + ngg; k++)
             {
                 dual_x(i, j, k) = 0.125 * (x(i, j, k) + x(i - 1, j, k) + x(i, j - 1, k) + x(i - 1, j - 1, k) +
                                            x(i, j, k - 1) + x(i - 1, j, k - 1) + x(i, j - 1, k - 1) + x(i - 1, j - 1, k - 1));
