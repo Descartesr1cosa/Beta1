@@ -323,7 +323,7 @@ namespace HALO_TOOLS
         const int nk = rb.hi.k - rb.lo.k;
 
         const int32_t n_total = ni * nj * nk * ncomp;
-        if ((int32_t)in.size() != n_total)
+        if ((int32_t)in.size() < n_total)
         {
             std::cout << "Fatal Error!!! unpack_to_coupling_buffer size mismatch\n";
             std::exit(-1);
