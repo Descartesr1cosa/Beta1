@@ -1,5 +1,5 @@
 LIST==================================================================
-Boundary_Priority		4
+Boundary_Priority		5
 (int)
 Pole		Outflow	Absorbing Solid_Surface Farfield
 0    		4		2		3 			1
