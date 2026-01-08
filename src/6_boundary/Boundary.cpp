@@ -209,10 +209,10 @@ BOUND::PhysicalHandler BoundaryCore::ResolvePhysical(StaggerLocation loc,
 // ------------------------------------------------------------
 // Default handlers
 // ------------------------------------------------------------
-void BoundaryCore::DefaultPhysicalCopy(FieldBlock &U, Field * /*fld*/,
-                                       const BOUND::PhysicalRegion &r, int /*nghost*/)
+void BoundaryCore::DefaultPhysicalCopy(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int nghost)
 {
-    const Box3 &g = r.box;            // ghost slab：需要写入
+    if (!U.is_allocated())
+        return;
     const Box3 &inner = r.inner_slab; // 域内贴边一层：参考
 
     const int ax = std::abs(r.direction); // 1/2/3
@@ -224,6 +224,8 @@ void BoundaryCore::DefaultPhysicalCopy(FieldBlock &U, Field * /*fld*/,
     const int k_ref = (ax == 3) ? ((sgn < 0) ? inner.lo.k : (inner.hi.k - 1)) : 0;
 
     const int ncomp = U.descriptor().ncomp;
+
+    Box3 g = MakeGhostSlabFromInner(inner, r.direction, nghost);
 
     for (int i = g.lo.i; i < g.hi.i; ++i)
         for (int j = g.lo.j; j < g.hi.j; ++j)
