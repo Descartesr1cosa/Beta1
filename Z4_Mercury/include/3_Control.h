@@ -46,7 +46,7 @@ public:
         if_stop = false;
 
         // max steps
-        if (maximum_Nstep_ > 0 && run_data.step >= maximum_Nstep_)
+        if (run_data.step >= maximum_Nstep_)
             if_stop = true;
 
         // max time
