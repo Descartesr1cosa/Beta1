@@ -32,7 +32,7 @@ public:
 public:
     RunData()
     {
-        rundata_path_ = "./DTAT/RunData.bin";
+        rundata_path_ = "./DATA/RunData.bin";
     };
     ~RunData() = default;
 
