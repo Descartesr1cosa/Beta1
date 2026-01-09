@@ -87,6 +87,16 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
                             {
                               this->BC_UH_Farfield_H(U, fld, r, ngh);
                             });
+
+    bound_.RegisterPhysical("U_H", "Coupled-Solid",
+                            [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                            {
+                              this->BC_UH_Solid_H(U, fld, r, ngh);
+                            });
+
+    bound_.RegisterPhysical("U_H", "Coupled-Fluid",
+                            [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {});
+
     bound_.RegisterPhysical("U_Na", "Outflow",
                             [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                             {
@@ -105,6 +115,15 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
                               this->BC_UH_Farfield_Na(U, fld, r, ngh);
                             });
 
+    bound_.RegisterPhysical("U_Na", "Coupled-Solid",
+                            [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                            {
+                              this->BC_UH_Solid_Na(U, fld, r, ngh);
+                            });
+
+    bound_.RegisterPhysical("U_Na", "Coupled-Fluid",
+                            [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {});
+
     bound_.RegisterPhysical("U_b", "Outflow",
                             [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                             {
@@ -122,6 +141,12 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
                             {
                               this->BC_UH_Farfield_b(U, fld, r, ngh);
                             });
+
+    bound_.RegisterPhysical("U_b", "Coupled-Fluid",
+                            [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {}); // 交给耦合处理，啥都不干
+
+    bound_.RegisterPhysical("U_b", "Coupled-Solid",
+                            [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {}); // 交给耦合处理，啥都不干
 
     // 4) coupling handler 注册（可选：你也可以先不注册，让默认 copy 工作）
     // 注意：coupling buffers 的 build 发生在 Field 注册 coupling channels 并 build buffers 之后

@@ -398,6 +398,9 @@ namespace TOPO
         build_edge_patches(grid, topo, dimension);
         build_vertex_patches(grid, topo, dimension);
 
+        // 追加 Coupled-* 到 physical_patches（不影响上面角区构建）
+        append_coupling_faces_as_physical_patches(grid, topo, dimension, "Coupled-");
+
         if (my_rank == 0)
         {
             std::cout << "*************Finish the Topology Manipulating Process! !**************\n\n";

@@ -158,4 +158,11 @@ namespace TOPO
     // 从现有 inner/parallel/physical patch 自动生成 edge / vertex patch
     void build_edge_patches(Grid &grid, Topology &topo, int dimension);
     void build_vertex_patches(Grid &grid, Topology &topo, int dimension);
+
+    // 在 build_edge_patches / build_vertex_patches 之后调用：
+    // 把 coupling 的 InterfacePatch 追加为 PhysicalPatch，bc_name = prefix + nb_block_name
+    void append_coupling_faces_as_physical_patches(Grid &grid,
+                                                   Topology &topo,
+                                                   int dimension,
+                                                   const std::string &prefix = "Coupled-");
 } // namespace TOPO
