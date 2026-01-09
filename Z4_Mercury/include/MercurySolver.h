@@ -39,6 +39,7 @@ private:
     IOModule io_;
     Mercury_Initial initial_;
     RunData *run_data_;
+    RuntimeMonitor *runtime_data_;
 
     // --- cached field ids  ---
     SolverFields fid_;

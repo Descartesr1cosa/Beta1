@@ -81,15 +81,11 @@ void MercurySolver::Boundary_Condition()
 bool MercurySolver::UpdateControlAndOutput()
 {
     RunData &run = io_.Run();
+    runtime_data_->UpdateOnOutres(run);
 
     if (control_.if_outres)
     {
-        if (par_->GetInt("myid") == 0)
-        {
-            std::cout << "[Mercury] step=" << run.step
-                      << " time=" << run.time
-                      << " dt=" << run.dt << "\n";
-        }
+        runtime_data_->PrintLineMinimal(run);
     }
 
     if (control_.if_outfile)

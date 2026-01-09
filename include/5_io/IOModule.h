@@ -6,6 +6,7 @@
 #include "3_field/2_MPCNS_Field.h"
 #include "4_halo/1_MPCNS_Halo.h"
 #include "5_io/RunData.h"
+#include "5_io/RuntimeMonitor.h"
 
 class IOModule
 {
@@ -51,6 +52,7 @@ public:
     //=========================================================================
     // 3) Run info / diagnostics
     RunData &Run() { return run_; }
+    RuntimeMonitor &Runtime() { return runtime_; }
     // 所有进程读同一个文件
     void ReadRunDataFile();
     // 仅 rank0 调用写出
@@ -117,6 +119,7 @@ private:
     //=========================================================================
     // run time data for residual control and restart
     RunData run_;
+    RuntimeMonitor runtime_;
     int myid_;
     //=========================================================================
 
