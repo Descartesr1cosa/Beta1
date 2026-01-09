@@ -70,7 +70,10 @@ private:
     // void Time_Advance();
     //---------------------------------------------------------------
     void ZeroRHS_();
+    void Scheme_U_();
     void Scheme_B_();
+    void AddSourceToRHS_B();
+    void AddSourceToRHS_Fluid();
     void ApplyUpdate_Euler_();
     void calc_Uplus();
     //=========================================================================

@@ -7,14 +7,14 @@ void MercurySolver::Time_Advance()
     ZeroRHS_();
 
     // 2) tvdrhs_ns：流体 RHS（先做 H、Na 各一次）
-    // tvdrhs_ns_(fid_.fid_U_H, fid_.fid_PV_H, fid_.fid_dU_H);
-    // tvdrhs_ns_(fid_.fid_U_Na, fid_.fid_PV_Na, fid_.fid_dU_Na);
+    Scheme_U_();
 
     // 3) RHS_B：磁场 RHS（使用 B_cell + U_plus，写进 dB）
     Scheme_B_();
 
-    // 4) source_species（先留空也行，但接口先占好）
-    // source_species_();
+    // 4) source
+    AddSourceToRHS_B();     // 对应 source_species 中对 db 的三项补充
+    AddSourceToRHS_Fluid(); // 对 RHS_H/RHS_Na 加 source_species 的 dq 部分
 
     // 5) 人工黏性 cf/cb（Fortran 在更新前加到 dq/db）
     // add_artificial_viscosity_();

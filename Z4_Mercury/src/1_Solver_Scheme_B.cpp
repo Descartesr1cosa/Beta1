@@ -104,7 +104,7 @@ void MercurySolver::Scheme_B_()
         FieldBlock &Aet = fld_->field(fid_.fid_metric.eta, ib);  // JDet (FaceEt,3)
         FieldBlock &Aze = fld_->field(fid_.fid_metric.zeta, ib); // JDze (FaceZe,3)
 
-        FieldBlock &B = fld_->field(fid_.fid_Bcell, ib);   // B_cell (Cell,3,ngg)
+        FieldBlock &B = fld_->field(fid_.fid_U_b, ib);     // B_cell (Cell,3,ngg)
         FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib); // U_plus (Cell,3,ngg)
         FieldBlock &RHS = fld_->field(fid_.fid_RHS_b, ib); // RHS_B  (Cell,3,0)
 
@@ -199,5 +199,287 @@ void MercurySolver::Scheme_B_()
                         RHS(i, j, k, 2) += ffs[2];
                     }
         }
+    }
+}
+
+void MercurySolver::AddSourceToRHS_B()
+{
+    // ---------- coefficients (default 0 if not provided) ----------
+    double a7 = 0.0, a8 = 0.0;
+    // {
+    //     auto &mp = par_->GetDou_List("constant").data;
+    //     if (mp.count("a7"))
+    //         a7 = mp["a7"];
+    //     if (mp.count("a8"))
+    //         a8 = mp["a8"];
+    // }
+
+    const double ne_floor = 1e-30;
+    const double inv23 = 1.0 / 23.0; // Na 质量比（与 calc_Uplus 一致）
+
+    auto dd = [](double a, double b, double c,
+                 double fp_i, double fm_i,
+                 double fp_j, double fm_j,
+                 double fp_k, double fm_k) -> double
+    {
+        return 0.5 * (a * (fp_i - fm_i) + b * (fp_j - fm_j) + c * (fp_k - fm_k));
+    };
+
+    const int nb = fld_->num_blocks();
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        FieldBlock &Jac = fld_->field(fid_.fid_Jac, ib);
+        FieldBlock &Axi = fld_->field(fid_.fid_metric.xi, ib);
+        FieldBlock &Aet = fld_->field(fid_.fid_metric.eta, ib);
+        FieldBlock &Aze = fld_->field(fid_.fid_metric.zeta, ib);
+
+        FieldBlock &Ub = fld_->field(fid_.fid_U_b, ib);    // qb(1:3)
+        FieldBlock &B0 = fld_->field(fid_.fid_Badd, ib);   // B0
+        FieldBlock &Bt = fld_->field(fid_.fid_Bcell, ib);  // Bt=qb+B0
+        FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib); // u+
+
+        FieldBlock &UH = fld_->field(fid_.fid_U_H, ib);
+        FieldBlock &UNa = fld_->field(fid_.fid_U_Na, ib);
+        FieldBlock &PVH = fld_->field(fid_.fid_PV_H, ib); // p in comp=3
+        FieldBlock &PVN = fld_->field(fid_.fid_PV_Na, ib);
+
+        FieldBlock &RHS = fld_->field(fid_.fid_RHS_b, ib); // db(1:3)
+
+        if (!Jac.is_allocated() || !Axi.is_allocated() || !Aet.is_allocated() || !Aze.is_allocated())
+            continue;
+        if (!Ub.is_allocated() || !B0.is_allocated() || !Bt.is_allocated() || !Up.is_allocated())
+            continue;
+        if (!UH.is_allocated() || !UNa.is_allocated() || !PVH.is_allocated() || !PVN.is_allocated())
+            continue;
+        if (!RHS.is_allocated())
+            continue;
+
+        Int3 lo = Jac.inner_lo();
+        Int3 hi = Jac.inner_hi();
+
+        auto derv_at = [&](int i, int j, int k,
+                           double &ax, double &ay, double &az,
+                           double &bx, double &by, double &bz,
+                           double &cx, double &cy, double &cz)
+        {
+            const double V = std::abs(Jac(i, j, k, 0));
+            if (V <= 0.0)
+            {
+                ax = ay = az = bx = by = bz = cx = cy = cz = 0.0;
+                return;
+            }
+
+            // Axi(i,j,k) is i+1/2 face: cell i uses faces (i-1) and (i)
+            ax = 0.5 * (Axi(i - 1, j, k, 0) + Axi(i, j, k, 0)) / V;
+            ay = 0.5 * (Axi(i - 1, j, k, 1) + Axi(i, j, k, 1)) / V;
+            az = 0.5 * (Axi(i - 1, j, k, 2) + Axi(i, j, k, 2)) / V;
+
+            bx = 0.5 * (Aet(i, j - 1, k, 0) + Aet(i, j, k, 0)) / V;
+            by = 0.5 * (Aet(i, j - 1, k, 1) + Aet(i, j, k, 1)) / V;
+            bz = 0.5 * (Aet(i, j - 1, k, 2) + Aet(i, j, k, 2)) / V;
+
+            cx = 0.5 * (Aze(i, j, k - 1, 0) + Aze(i, j, k, 0)) / V;
+            cy = 0.5 * (Aze(i, j, k - 1, 1) + Aze(i, j, k, 1)) / V;
+            cz = 0.5 * (Aze(i, j, k - 1, 2) + Aze(i, j, k, 2)) / V;
+        };
+
+        auto ne_at = [&](int i, int j, int k) -> double
+        {
+            const double rhoH = std::max(UH(i, j, k, 0), 0.0);
+            const double rhoNa = std::max(UNa(i, j, k, 0), 0.0);
+            // number density ~ rho / m : m_H=1, m_Na=23
+            return rhoH + rhoNa * inv23;
+        };
+
+        auto pe_at = [&](int i, int j, int k) -> double
+        {
+            return PVH(i, j, k, 3) + PVN(i, j, k, 3);
+        };
+
+        // compute curl(qb) at a point -> J
+        auto J_at = [&](int i, int j, int k, double J[3])
+        {
+            double ax, ay, az, bx, by, bz, cx, cy, cz;
+            derv_at(i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
+
+            const double Bx_p_i = Ub(i + 1, j, k, 0), Bx_m_i = Ub(i - 1, j, k, 0);
+            const double Bx_p_j = Ub(i, j + 1, k, 0), Bx_m_j = Ub(i, j - 1, k, 0);
+            const double Bx_p_k = Ub(i, j, k + 1, 0), Bx_m_k = Ub(i, j, k - 1, 0);
+
+            const double By_p_i = Ub(i + 1, j, k, 1), By_m_i = Ub(i - 1, j, k, 1);
+            const double By_p_j = Ub(i, j + 1, k, 1), By_m_j = Ub(i, j - 1, k, 1);
+            const double By_p_k = Ub(i, j, k + 1, 1), By_m_k = Ub(i, j, k - 1, 1);
+
+            const double Bz_p_i = Ub(i + 1, j, k, 2), Bz_m_i = Ub(i - 1, j, k, 2);
+            const double Bz_p_j = Ub(i, j + 1, k, 2), Bz_m_j = Ub(i, j - 1, k, 2);
+            const double Bz_p_k = Ub(i, j, k + 1, 2), Bz_m_k = Ub(i, j, k - 1, 2);
+
+            // Fortran form:
+            const double Bzy = dd(ay, by, cy, Bz_p_i, Bz_m_i, Bz_p_j, Bz_m_j, Bz_p_k, Bz_m_k);
+            const double Byz = dd(az, bz, cz, By_p_i, By_m_i, By_p_j, By_m_j, By_p_k, By_m_k);
+
+            const double Bxz = dd(az, bz, cz, Bx_p_i, Bx_m_i, Bx_p_j, Bx_m_j, Bx_p_k, Bx_m_k);
+            const double Bzx = dd(ax, bx, cx, Bz_p_i, Bz_m_i, Bz_p_j, Bz_m_j, Bz_p_k, Bz_m_k);
+
+            const double Byx = dd(ax, bx, cx, By_p_i, By_m_i, By_p_j, By_m_j, By_p_k, By_m_k);
+            const double Bxy = dd(ay, by, cy, Bx_p_i, Bx_m_i, Bx_p_j, Bx_m_j, Bx_p_k, Bx_m_k);
+
+            J[0] = Bzy - Byz;
+            J[1] = Bxz - Bzx;
+            J[2] = Byx - Bxy;
+        };
+
+        auto sjbne_at = [&](int i, int j, int k, double out[3])
+        {
+            const double ne = ne_at(i, j, k);
+            if (ne < ne_floor)
+            {
+                out[0] = out[1] = out[2] = 0.0;
+                return;
+            }
+
+            double J[3];
+            J_at(i, j, k, J);
+
+            const double Btx = Bt(i, j, k, 0);
+            const double Bty = Bt(i, j, k, 1);
+            const double Btz = Bt(i, j, k, 2);
+
+            // sjb = J x Bt
+            const double sjbx = J[1] * Btz - J[2] * Bty;
+            const double sjby = J[2] * Btx - J[0] * Btz;
+            const double sjbz = J[0] * Bty - J[1] * Btx;
+
+            const double invne = 1.0 / ne;
+            out[0] = sjbx * invne;
+            out[1] = sjby * invne;
+            out[2] = sjbz * invne;
+        };
+
+        auto upb0_comp = [&](int i, int j, int k, int comp) -> double
+        {
+            const double ux = Up(i, j, k, 0), uy = Up(i, j, k, 1), uz = Up(i, j, k, 2);
+            const double Bx = B0(i, j, k, 0), By = B0(i, j, k, 1), Bz = B0(i, j, k, 2);
+            // u x B0
+            const double cx = uy * Bz - uz * By;
+            const double cy = uz * Bx - ux * Bz;
+            const double cz = ux * By - uy * Bx;
+            return (comp == 0) ? cx : ((comp == 1) ? cy : cz);
+        };
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    double ax, ay, az, bx, by, bz, cx, cy, cz;
+                    derv_at(i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
+
+                    // -------- term 1: curl(u+ x B0) --------
+                    const double upb0_1_p_i = upb0_comp(i + 1, j, k, 0), upb0_1_m_i = upb0_comp(i - 1, j, k, 0);
+                    const double upb0_1_p_j = upb0_comp(i, j + 1, k, 0), upb0_1_m_j = upb0_comp(i, j - 1, k, 0);
+                    const double upb0_1_p_k = upb0_comp(i, j, k + 1, 0), upb0_1_m_k = upb0_comp(i, j, k - 1, 0);
+
+                    const double upb0_2_p_i = upb0_comp(i + 1, j, k, 1), upb0_2_m_i = upb0_comp(i - 1, j, k, 1);
+                    const double upb0_2_p_j = upb0_comp(i, j + 1, k, 1), upb0_2_m_j = upb0_comp(i, j - 1, k, 1);
+                    const double upb0_2_p_k = upb0_comp(i, j, k + 1, 1), upb0_2_m_k = upb0_comp(i, j, k - 1, 1);
+
+                    const double upb0_3_p_i = upb0_comp(i + 1, j, k, 2), upb0_3_m_i = upb0_comp(i - 1, j, k, 2);
+                    const double upb0_3_p_j = upb0_comp(i, j + 1, k, 2), upb0_3_m_j = upb0_comp(i, j - 1, k, 2);
+                    const double upb0_3_p_k = upb0_comp(i, j, k + 1, 2), upb0_3_m_k = upb0_comp(i, j, k - 1, 2);
+
+                    const double ubzy = dd(ay, by, cy, upb0_3_p_i, upb0_3_m_i, upb0_3_p_j, upb0_3_m_j, upb0_3_p_k, upb0_3_m_k);
+                    const double ubyz = dd(az, bz, cz, upb0_2_p_i, upb0_2_m_i, upb0_2_p_j, upb0_2_m_j, upb0_2_p_k, upb0_2_m_k);
+
+                    const double ubxz = dd(az, bz, cz, upb0_1_p_i, upb0_1_m_i, upb0_1_p_j, upb0_1_m_j, upb0_1_p_k, upb0_1_m_k);
+                    const double ubzx = dd(ax, bx, cx, upb0_3_p_i, upb0_3_m_i, upb0_3_p_j, upb0_3_m_j, upb0_3_p_k, upb0_3_m_k);
+
+                    const double ubyx = dd(ax, bx, cx, upb0_2_p_i, upb0_2_m_i, upb0_2_p_j, upb0_2_m_j, upb0_2_p_k, upb0_2_m_k);
+                    const double ubxy = dd(ay, by, cy, upb0_1_p_i, upb0_1_m_i, upb0_1_p_j, upb0_1_m_j, upb0_1_p_k, upb0_1_m_k);
+
+                    double srcBx = (ubzy - ubyz);
+                    double srcBy = (ubxz - ubzx);
+                    double srcBz = (ubyx - ubxy);
+
+                    // -------- term 2: -a7 * curl( (J x Bt)/ne ) --------
+                    if (a7 != 0.0)
+                    {
+                        double s_p[3], s_m[3];
+
+                        // ujbxy etc use center derv + neighbor sjbne values (same as Fortran)
+                        double sjbne_1_p_i[3], sjbne_1_m_i[3], sjbne_1_p_j[3], sjbne_1_m_j[3], sjbne_1_p_k[3], sjbne_1_m_k[3];
+                        double sjbne_2_p_i[3], sjbne_2_m_i[3], sjbne_2_p_j[3], sjbne_2_m_j[3], sjbne_2_p_k[3], sjbne_2_m_k[3];
+                        double sjbne_3_p_i[3], sjbne_3_m_i[3], sjbne_3_p_j[3], sjbne_3_m_j[3], sjbne_3_p_k[3], sjbne_3_m_k[3];
+
+                        sjbne_at(i + 1, j, k, sjbne_1_p_i);
+                        sjbne_at(i - 1, j, k, sjbne_1_m_i);
+                        sjbne_at(i, j + 1, k, sjbne_1_p_j);
+                        sjbne_at(i, j - 1, k, sjbne_1_m_j);
+                        sjbne_at(i, j, k + 1, sjbne_1_p_k);
+                        sjbne_at(i, j, k - 1, sjbne_1_m_k);
+
+                        sjbne_at(i + 1, j, k, sjbne_2_p_i);
+                        sjbne_at(i - 1, j, k, sjbne_2_m_i);
+                        sjbne_at(i, j + 1, k, sjbne_2_p_j);
+                        sjbne_at(i, j - 1, k, sjbne_2_m_j);
+                        sjbne_at(i, j, k + 1, sjbne_2_p_k);
+                        sjbne_at(i, j, k - 1, sjbne_2_m_k);
+
+                        sjbne_at(i + 1, j, k, sjbne_3_p_i);
+                        sjbne_at(i - 1, j, k, sjbne_3_m_i);
+                        sjbne_at(i, j + 1, k, sjbne_3_p_j);
+                        sjbne_at(i, j - 1, k, sjbne_3_m_j);
+                        sjbne_at(i, j, k + 1, sjbne_3_p_k);
+                        sjbne_at(i, j, k - 1, sjbne_3_m_k);
+
+                        // Derivatives of sjbne components using center derv (Fortran ujbxy...):
+                        const double ujbxy = dd(ay, by, cy, sjbne_1_p_i[0], sjbne_1_m_i[0], sjbne_1_p_j[0], sjbne_1_m_j[0], sjbne_1_p_k[0], sjbne_1_m_k[0]);
+                        const double ujbxz = dd(az, bz, cz, sjbne_1_p_i[0], sjbne_1_m_i[0], sjbne_1_p_j[0], sjbne_1_m_j[0], sjbne_1_p_k[0], sjbne_1_m_k[0]);
+
+                        const double ujbyx = dd(ax, bx, cx, sjbne_2_p_i[1], sjbne_2_m_i[1], sjbne_2_p_j[1], sjbne_2_m_j[1], sjbne_2_p_k[1], sjbne_2_m_k[1]);
+                        const double ujbyz = dd(az, bz, cz, sjbne_2_p_i[1], sjbne_2_m_i[1], sjbne_2_p_j[1], sjbne_2_m_j[1], sjbne_2_p_k[1], sjbne_2_m_k[1]);
+
+                        const double ujbzx = dd(ax, bx, cx, sjbne_3_p_i[2], sjbne_3_m_i[2], sjbne_3_p_j[2], sjbne_3_m_j[2], sjbne_3_p_k[2], sjbne_3_m_k[2]);
+                        const double ujbzy = dd(ay, by, cy, sjbne_3_p_i[2], sjbne_3_m_i[2], sjbne_3_p_j[2], sjbne_3_m_j[2], sjbne_3_p_k[2], sjbne_3_m_k[2]);
+
+                        const double curl_sjbne_x = (ujbzy - ujbyz);
+                        const double curl_sjbne_y = (ujbxz - ujbzx);
+                        const double curl_sjbne_z = (ujbyx - ujbxy);
+
+                        srcBx += -a7 * curl_sjbne_x;
+                        srcBy += -a7 * curl_sjbne_y;
+                        srcBz += -a7 * curl_sjbne_z;
+                    }
+
+                    // -------- term 3: +a8 * (grad(1/ne) x grad(pe)) --------
+                    if (a8 != 0.0)
+                    {
+                        const double invne_p_i = 1.0 / std::max(ne_at(i + 1, j, k), ne_floor);
+                        const double invne_m_i = 1.0 / std::max(ne_at(i - 1, j, k), ne_floor);
+                        const double invne_p_j = 1.0 / std::max(ne_at(i, j + 1, k), ne_floor);
+                        const double invne_m_j = 1.0 / std::max(ne_at(i, j - 1, k), ne_floor);
+                        const double invne_p_k = 1.0 / std::max(ne_at(i, j, k + 1), ne_floor);
+                        const double invne_m_k = 1.0 / std::max(ne_at(i, j, k - 1), ne_floor);
+
+                        const double pe_p_i = pe_at(i + 1, j, k), pe_m_i = pe_at(i - 1, j, k);
+                        const double pe_p_j = pe_at(i, j + 1, k), pe_m_j = pe_at(i, j - 1, k);
+                        const double pe_p_k = pe_at(i, j, k + 1), pe_m_k = pe_at(i, j, k - 1);
+
+                        const double dpex = dd(ax, bx, cx, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                        const double dpey = dd(ay, by, cy, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                        const double dpez = dd(az, bz, cz, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+
+                        const double dnex = dd(ax, bx, cx, invne_p_i, invne_m_i, invne_p_j, invne_m_j, invne_p_k, invne_m_k);
+                        const double dney = dd(ay, by, cy, invne_p_i, invne_m_i, invne_p_j, invne_m_j, invne_p_k, invne_m_k);
+                        const double dnez = dd(az, bz, cz, invne_p_i, invne_m_i, invne_p_j, invne_m_j, invne_p_k, invne_m_k);
+
+                        srcBx += a8 * (dney * dpez - dnez * dpey);
+                        srcBy += a8 * (dnez * dpex - dnex * dpez);
+                        srcBz += a8 * (dnex * dpey - dney * dpex);
+                    }
+
+                    RHS(i, j, k, 0) += srcBx;
+                    RHS(i, j, k, 1) += srcBy;
+                    RHS(i, j, k, 2) += srcBz;
+                }
     }
 }
