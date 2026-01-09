@@ -36,8 +36,8 @@ public:
     void UpdateSwitches(const RunData &run_data)
     {
         // ---------- output switches ----------
-        // 残差/监测打印：通常只 rank0
-        if_outres = (myid_ == 0) && (res_step_ > 0) && (run_data.step % res_step_ == 0);
+        // 残差/监测打印
+        if_outres = (res_step_ > 0) && (run_data.step % res_step_ == 0);
 
         // 文件输出：一般每个 rank 都要写自己的 flow_field####.bin / zone 数据
         if_outfile = (file_step_ > 0) && (run_data.step % file_step_ == 0);

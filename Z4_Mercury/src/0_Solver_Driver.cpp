@@ -81,11 +81,12 @@ void MercurySolver::Boundary_Condition()
 bool MercurySolver::UpdateControlAndOutput()
 {
     RunData &run = io_.Run();
-    runtime_data_->UpdateOnOutres(run);
 
     if (control_.if_outres)
     {
+        runtime_data_->UpdateOnOutres(run);
         runtime_data_->PrintLineMinimal(run);
+        PrintMinMaxDiagnostics_();
     }
 
     if (control_.if_outfile)

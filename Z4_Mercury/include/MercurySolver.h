@@ -81,6 +81,7 @@ private:
     //=========================================================================
 
     void calc_physical_constant(Param *par);
+    void PrintMinMaxDiagnostics_();
 
 private:
     //     // =============================== Step driver ============================
