@@ -145,6 +145,7 @@ private:
                                           const Box3 &face_node_box,
                                           int direction);
 
+public:
     // 运行时：由 inner_slab + direction + nghost 得 ghost slab（仅 O(1)）
     static Box3 MakeGhostSlabFromInner(const Box3 &inner_slab,
                                        int direction,

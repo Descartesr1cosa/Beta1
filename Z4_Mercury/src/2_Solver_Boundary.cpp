@@ -4,8 +4,8 @@
 
 void MercurySolver::BC_Solid_Surface(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
 {
-    const Box3 &g = r.box;            // ghost slab to write
-    const Box3 &inner = r.inner_slab; // 1-layer inner slab reference
+    const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
+    const Box3 &inner = r.inner_slab;                                                     // 1-layer inner slab reference
 
     const int ax = std::abs(r.direction);        // 1/2/3
     const int sgn = (r.direction > 0) ? +1 : -1; // outward normal sign
