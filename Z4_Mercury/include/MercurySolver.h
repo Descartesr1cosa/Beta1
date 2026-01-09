@@ -57,8 +57,7 @@ private:
     void BC_UH_Farfield_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
     void BC_UH_Farfield_b(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
     void BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
-    void BC_UH_Solid_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
-    void BC_UH_Solid_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
+    void BC_Solid_Surface(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     //=========================================================================
     bool StepOnce();
     //---------------------------------------------------------------

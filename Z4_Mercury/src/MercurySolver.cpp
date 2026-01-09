@@ -91,7 +91,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     bound_.RegisterPhysical("U_H", "Coupled-Solid",
                             [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                             {
-                              this->BC_UH_Solid_H(U, fld, r, ngh);
+                              this->BC_Solid_Surface(U, fld, r, ngh);
                             });
 
     bound_.RegisterPhysical("U_H", "Coupled-Fluid",
@@ -118,7 +118,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     bound_.RegisterPhysical("U_Na", "Coupled-Solid",
                             [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                             {
-                              this->BC_UH_Solid_Na(U, fld, r, ngh);
+                              this->BC_Solid_Surface(U, fld, r, ngh);
                             });
 
     bound_.RegisterPhysical("U_Na", "Coupled-Fluid",
