@@ -38,6 +38,7 @@ private:
     BoundaryCore bound_;
     IOModule io_;
     Mercury_Initial initial_;
+    RunData *run_data_;
 
     // --- cached field ids  ---
     SolverFields fid_;
@@ -45,6 +46,8 @@ private:
     // --- constants ---
     double gamma_{0.0};
     double dt{0.0};
+    double M_H{0.0};
+    double M_Na{0.0};
     double state_coeff_H{0.0};
     double state_coeff_Na{0.0};
     double CFL{0.0};
@@ -56,13 +59,21 @@ private:
     void BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
     //=========================================================================
     bool StepOnce();
-    void PrepareStep();
+    //---------------------------------------------------------------
     void Compute_Timestep();
-    bool UpdateControlAndOutput();
-
-    // 派生量（先为了输出和 dt）
+    void Time_Advance();
+    void Boundary_Condition();
     void calc_Bcell();
     void calc_PV();
+    bool UpdateControlAndOutput();
+    //=========================================================================
+    // void Time_Advance();
+    //---------------------------------------------------------------
+    void ZeroRHS_();
+    void Scheme_B_();
+    void ApplyUpdate_Euler_();
+    void calc_Uplus();
+    //=========================================================================
 
     void calc_physical_constant(Param *par);
 

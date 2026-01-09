@@ -6,15 +6,14 @@
 
 void MercurySolver::Advance()
 {
-    RunData &run = io_.Run();
-
     // 初始先算一遍派生量（用于输出/诊断）
-    PrepareStep();
+    Boundary_Condition();
     calc_Bcell();
     calc_PV();
+    calc_Uplus();
 
     // step=0 也允许输出一次
-    control_.UpdateSwitches(run);
+    control_.UpdateSwitches(*run_data_);
     UpdateControlAndOutput();
 
     while (!control_.if_stop)
@@ -25,23 +24,33 @@ void MercurySolver::Advance()
 
 bool MercurySolver::StepOnce()
 {
-    RunData &run = io_.Run();
-
-    PrepareStep();
-    calc_Bcell();
-    calc_PV();
+    // Calculate time step From CFL
     Compute_Timestep();
 
-    // 这里先只推进“时间与步数”，场量暂不更新（下一步再加 Time_Advance）
-    run.dt = dt;
-    run.time += dt;
-    run.step += 1;
+    // Time Advance
+    Time_Advance();
 
-    control_.UpdateSwitches(run);
+    // Record and Update Runtime DATA
+    {
+        run_data_->dt = dt;
+        run_data_->time += dt;
+        run_data_->step += 1;
+    }
+
+    // Add Boundary Condition And Prepare for Next Step
+    {
+        Boundary_Condition();
+        calc_Bcell();
+        calc_PV();
+        calc_Uplus();
+    }
+
+    // When Stop/Output/Print
+    control_.UpdateSwitches(*run_data_);
     return UpdateControlAndOutput();
 }
 
-void MercurySolver::PrepareStep()
+void MercurySolver::Boundary_Condition()
 {
     // 1) 物理边界
     bound_.ApplyPhysical(std::vector<std::string>{"U_H", "U_Na", "U_b"});

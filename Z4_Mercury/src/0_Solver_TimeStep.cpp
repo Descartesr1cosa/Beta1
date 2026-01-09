@@ -71,20 +71,20 @@ void MercurySolver::Compute_Timestep()
 
                         double denom = 0.0;
 
-                        // xi- at i  : outward = -Axi(i)
-                        denom += face_term(Axi(i, j, k, 0), Axi(i, j, k, 1), Axi(i, j, k, 2), false);
-                        // xi+ at i+1: outward = +Axi(i+1)
-                        denom += face_term(Axi(i + 1, j, k, 0), Axi(i + 1, j, k, 1), Axi(i + 1, j, k, 2), true);
+                        // xi+ at i  : outward = Axi(i)
+                        denom += face_term(Axi(i, j, k, 0), Axi(i, j, k, 1), Axi(i, j, k, 2), true);
+                        // xi- at i+1: outward = -Axi(i+1)
+                        denom += face_term(Axi(i - 1, j, k, 0), Axi(i - 1, j, k, 1), Axi(i - 1, j, k, 2), false);
 
-                        // eta- at j
-                        denom += face_term(Aet(i, j, k, 0), Aet(i, j, k, 1), Aet(i, j, k, 2), false);
-                        // eta+ at j+1
-                        denom += face_term(Aet(i, j + 1, k, 0), Aet(i, j + 1, k, 1), Aet(i, j + 1, k, 2), true);
+                        // eta+ at j
+                        denom += face_term(Aet(i, j, k, 0), Aet(i, j, k, 1), Aet(i, j, k, 2), true);
+                        // eta- at j+1
+                        denom += face_term(Aet(i, j - 1, k, 0), Aet(i, j - 1, k, 1), Aet(i, j - 1, k, 2), false);
 
-                        // zeta- at k
-                        denom += face_term(Aze(i, j, k, 0), Aze(i, j, k, 1), Aze(i, j, k, 2), false);
-                        // zeta+ at k+1
-                        denom += face_term(Aze(i, j, k + 1, 0), Aze(i, j, k + 1, 1), Aze(i, j, k + 1, 2), true);
+                        // zeta+ at k
+                        denom += face_term(Aze(i, j, k, 0), Aze(i, j, k, 1), Aze(i, j, k, 2), true);
+                        // zeta- at k+1
+                        denom += face_term(Aze(i, j, k - 1, 0), Aze(i, j, k - 1, 1), Aze(i, j, k - 1, 2), false);
 
                         if (denom > 0.0)
                         {

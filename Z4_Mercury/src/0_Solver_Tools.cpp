@@ -15,8 +15,8 @@ void MercurySolver::calc_physical_constant(Param *par)
 
     const double U_ref = ref.data.at("U");
     const double T_ref = ref.data.at("T");
-    const double M_H = par->GetDou("mole_mass1");
-    const double M_Na = par->GetDou("mole_mass2");
+    M_H = par->GetDou("mole_mass1");
+    M_Na = par->GetDou("mole_mass2");
 
     // 无量纲状态方程系数：p = rho * T * coeff
     // coeff = (R_uni * T_ref) / (M * U_ref^2)
@@ -110,4 +110,61 @@ void MercurySolver::calc_PV()
 
     fill_one(fid_.fid_U_H, fid_.fid_PV_H, state_coeff_H);
     fill_one(fid_.fid_U_Na, fid_.fid_PV_Na, state_coeff_Na);
+}
+
+void MercurySolver::calc_Uplus()
+{
+    const double rho_floor = 1e-20;
+    const double inv23 = M_H / M_Na; // 与 Fortran sm2≈23*sm1 对齐
+
+    const int nb = fld_->num_blocks();
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        FieldBlock &UH = fld_->field(fid_.fid_U_H, ib);
+        FieldBlock &UN = fld_->field(fid_.fid_U_Na, ib);
+        FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib); // 新增
+
+        if (!UH.is_allocated() || !UN.is_allocated() || !Up.is_allocated())
+            continue;
+
+        const Int3 lo = Up.get_lo();
+        const Int3 hi = Up.get_hi();
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    const double rhoH = std::max(UH(i, j, k, 0), rho_floor);
+                    const double rhoNa = std::max(UN(i, j, k, 0), 0.0);
+
+                    const double uH = UH(i, j, k, 1) / rhoH;
+                    const double vH = UH(i, j, k, 2) / rhoH;
+                    const double wH = UH(i, j, k, 3) / rhoH;
+
+                    double uNa = 0, vNa = 0, wNa = 0;
+                    if (rhoNa > rho_floor)
+                    {
+                        uNa = UN(i, j, k, 1) / rhoNa;
+                        vNa = UN(i, j, k, 2) / rhoNa;
+                        wNa = UN(i, j, k, 3) / rhoNa;
+                    }
+
+                    const double nH = rhoH;
+                    const double nNa = rhoNa * inv23;
+                    const double nt = nH + nNa;
+
+                    if (nt <= rho_floor)
+                    {
+                        Up(i, j, k, 0) = 0.0;
+                        Up(i, j, k, 1) = 0.0;
+                        Up(i, j, k, 2) = 0.0;
+                    }
+                    else
+                    {
+                        Up(i, j, k, 0) = (nH * uH + nNa * uNa) / nt;
+                        Up(i, j, k, 1) = (nH * vH + nNa * vNa) / nt;
+                        Up(i, j, k, 2) = (nH * wH + nNa * wNa) / nt;
+                    }
+                }
+    }
 }

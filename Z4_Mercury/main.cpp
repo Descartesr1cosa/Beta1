@@ -55,6 +55,7 @@ int main(int arg, char **argv)
     fld->register_field({"Photo_rate", StaggerLocation::Cell, 1, ngg, "Fluid"}); // Photoionization rate
     fld->register_field({"Badd", StaggerLocation::Cell, 3, ngg});                // initial applied magnetic fields
     fld->register_field({"B_cell", StaggerLocation::Cell, 3, ngg});              // 总磁场
+    fld->register_field({"U_plus", StaggerLocation::Cell, 3, ngg, "Fluid"});     // 按电荷密度加权的平均速度
 
     fld->register_field(FieldDescriptor{"PV_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+的原始变量 u v w p T
     fld->register_field(FieldDescriptor{"PV_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+的原始变量 u v w p T
@@ -67,10 +68,9 @@ int main(int arg, char **argv)
     // 计算辅助场
     // fld->register_field(FieldDescriptor{"old_U_", StaggerLocation::Cell, 5, 0});
     // fld->register_field(FieldDescriptor{"divB", StaggerLocation::Cell, 1, 1}); // 输出存在插值到node的需要，增加一层虚网格
-    // fld->register_field(FieldDescriptor{"RHS", StaggerLocation::Cell, 5, 0});
-    // fld->register_field(FieldDescriptor{"RHS_xi", StaggerLocation::FaceXi, 1, 0});
-    // fld->register_field(FieldDescriptor{"RHS_eta", StaggerLocation::FaceEt, 1, 0});
-    // fld->register_field(FieldDescriptor{"RHS_zeta", StaggerLocation::FaceZe, 1, 0});
+    fld->register_field(FieldDescriptor{"RHS_H", StaggerLocation::Cell, 5, 0, "Fluid"});
+    fld->register_field(FieldDescriptor{"RHS_Na", StaggerLocation::Cell, 5, 0, "Fluid"});
+    fld->register_field(FieldDescriptor{"RHS_B", StaggerLocation::Cell, 3, 0});
     //--------------------------------------------------------------------------
     // 注册耦合定义（CouplingPairDesc）
     fld->register_coupling_channel("Solid", "Fluid", "U_b", StaggerLocation::Cell, 3, ngg); // Solid -> Fluid

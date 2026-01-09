@@ -68,7 +68,11 @@ struct SolverFields
     // ---- fluid flux and face E ----
     IdTriplet fid_F; // F_xi/F_eta/F_zeta
 
-    // // -------- buffers / time advance ----------
+    // -------- buffers / time advance ----------
+    int fid_RHS_H = -1;
+    int fid_RHS_Na = -1;
+    int fid_RHS_b = -1;
+    int fid_U_plus = -1;
     // int fid_old_U = -1;
     // int fid_divB = -1;
     // IdTriplet fid_old_Bface; // old_B_xi/eta/zeta
@@ -111,6 +115,10 @@ struct SolverFields
         fid_F.zeta = fld->field_id("F_zeta");
 
         // -------- buffers / time advance ----------
+        fid_RHS_H = fld->field_id("RHS_H");
+        fid_RHS_Na = fld->field_id("RHS_Na");
+        fid_RHS_b = fld->field_id("RHS_B");
+        fid_U_plus = fld->field_id("U_plus");
         // fid_old_U = fld->field_id("old_U_");
         // fid_divB = fld->field_id("divB");
         // fid_old_Bface.xi = fld->field_id("old_B_xi");
@@ -161,7 +169,11 @@ struct SolverFields
         require_id(fid_Photo, "Photo_rate");
         fid_F.require_all("Flux(F_xi/F_eta/F_zeta)");
 
-        // // ---- buffers / time advance ----
+        // ---- buffers / time advance ----
+        require_id(fid_RHS_H, "RHS_H");
+        require_id(fid_RHS_Na, "RHS_Na");
+        require_id(fid_RHS_b, "RHS_B");
+        require_id(fid_U_plus, "U_plus");
         // require_id(fid_old_U, "old_U_");
         // require_id(fid_divB, "divB");
         // fid_old_Bface.require_all("old_B_face(old_B_xi/eta/zeta)");

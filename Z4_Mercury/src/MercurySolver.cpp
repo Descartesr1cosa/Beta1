@@ -153,4 +153,6 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
 
   // ---- components ----
   control_.Setup(par_);
+
+  run_data_ = &io_.Run();
 }
