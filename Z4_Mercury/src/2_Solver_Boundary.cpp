@@ -82,3 +82,35 @@ void MercurySolver::BC_Solid_Surface(FieldBlock &U, Field *fld, const BOUND::Phy
                 U(i, j, k, 4) = p_ref / (gamma_ - 1.0);
             }
 }
+
+void MercurySolver::BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
+
+    for (int i = g.lo.i; i < g.hi.i; ++i)
+        for (int j = g.lo.j; j < g.hi.j; ++j)
+            for (int k = g.lo.k; k < g.hi.k; ++k)
+            {
+                U(i, j, k, 0) = initial_.qinf[0];
+                U(i, j, k, 1) = initial_.qinf[1];
+                U(i, j, k, 2) = initial_.qinf[2];
+                U(i, j, k, 3) = initial_.qinf[3];
+                U(i, j, k, 4) = initial_.qinf[4];
+            }
+}
+
+void MercurySolver::BC_UH_Farfield_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
+
+    for (int i = g.lo.i; i < g.hi.i; ++i)
+        for (int j = g.lo.j; j < g.hi.j; ++j)
+            for (int k = g.lo.k; k < g.hi.k; ++k)
+            {
+                U(i, j, k, 0) = initial_.qinfs[0];
+                U(i, j, k, 1) = initial_.qinfs[1];
+                U(i, j, k, 2) = initial_.qinfs[2];
+                U(i, j, k, 3) = initial_.qinfs[3];
+                U(i, j, k, 4) = initial_.qinfs[4];
+            }
+}

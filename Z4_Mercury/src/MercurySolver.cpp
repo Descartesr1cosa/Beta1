@@ -139,7 +139,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     bound_.RegisterPhysical("U_b", "Farfield",
                             [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                             {
-                              this->BC_UH_Farfield_b(U, fld, r, ngh);
+                              // this->BC_UH_Farfield_b(U, fld, r, ngh);
+                              BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
                             });
 
     bound_.RegisterPhysical("U_b", "Coupled-Fluid",
