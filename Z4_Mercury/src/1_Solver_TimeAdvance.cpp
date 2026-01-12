@@ -10,11 +10,11 @@ void MercurySolver::Time_Advance()
     Scheme_U_();
 
     // 3) RHS_B：磁场 RHS（使用 B_cell + U_plus，写进 dB）
-    // Scheme_B_();
+    Scheme_B_();
 
     // 4) source
-    // AddSourceToRHS_B();     // 对应 source_species 中对 db 的三项补充
-    // AddSourceToRHS_Fluid(); // 对 RHS_H/RHS_Na 加 source_species 的 dq 部分
+    AddSourceToRHS_B();     // 对应 source_species 中对 db 的三项补充
+    AddSourceToRHS_Fluid(); // 对 RHS_H/RHS_Na 加 source_species 的 dq 部分
 
     // 5) 人工黏性 cf/cb（Fortran 在更新前加到 dq/db）
     // add_artificial_viscosity_();
