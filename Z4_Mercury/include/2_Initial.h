@@ -3,12 +3,15 @@
 #include "3_field/2_MPCNS_Field.h"
 
 #include "00_Mercury_Const.h"
+#include "9_Dipoles.h"
 
 class Mercury_Initial
 {
 public:
     double qinf[5], q_pv_inf[5], B_imf[3]; // SW: conservative quanities, primitive quantities, IMF
     double qinfs[5], q_pv_infs[5];         // Na+: seed initial state
+
+    Dipoles dipB;
 
     // 注意：Initial 不再负责 restart 读入；restart 由 IOModule 负责
     void Initialization(Field *fld, SolverFields &fid)
@@ -123,6 +126,8 @@ public:
         qinfs[2] = 0.0;
         qinfs[3] = 0.0;
         qinfs[4] = q_pv_infs[3] / (gamma - 1.0) + 0.5 * qinfs[0] * (q_pv_infs[0] * q_pv_infs[0] + q_pv_infs[1] * q_pv_infs[1] + q_pv_infs[2] * q_pv_infs[2]);
+
+        dipB.load_from_param(par);
     }
 
 public:
@@ -211,19 +216,12 @@ private:
                         double by = B_imf[1];
                         double bz = B_imf[2];
 
-                        // 2) Local dipoles (pseudo)
-                        const double x = blk.dual_x(i + 1, j + 1, k + 1);
-                        const double y = blk.dual_y(i + 1, j + 1, k + 1);
-                        const double z = blk.dual_z(i + 1, j + 1, k + 1);
-
-                        // for (auto& dip : dipoles_) {
-                        //    add_dipole_field(dip, x,y,z, bx,by,bz);
-                        // }
-
                         Badd(i, j, k, 0) = bx;
                         Badd(i, j, k, 1) = by;
                         Badd(i, j, k, 2) = bz;
                     }
+
+            dipB.Build_Badd(fld->grd, fld, fid.fid_Badd);
         }
 
         // Calc B_cell
