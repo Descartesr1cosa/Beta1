@@ -482,4 +482,188 @@ void MercurySolver::AddSourceToRHS_B()
                     RHS(i, j, k, 2) += srcBz;
                 }
     }
+
+    // === Resistive magnetic diffusion (Mercury inner/shell):  -curl( yita0 * curl(Ub) ) / Rem8 ===
+    // Put this near the end of MercurySolver::AddSourceToRHS_B()
+
+    auto cst = par_->GetDou_List("constant").data;
+    auto ref = par_->GetDou_List("REF").data;
+
+    // mu_mag should be μ0 (physical). yitamax: max resistivity in SI (Ohm·m) in the legacy code convention.
+    const double mu0 = cst.at("mu_mag");
+    const double yitamax = (cst.count("eta_max_mercury") ? cst.at("eta_max_mercury") : 1.25e7); // default matches legacy
+    const double L_ref = ref.at("L_ref");                                                       // meters
+    const double U_ref = ref.at("U");                                                           // m/s
+
+    // Rem8 = L_ref * U_ref * mu0 / yitamax  => 1/Rem8 = yitamax / (mu0*L_ref*U_ref)
+    const double invRem8 = yitamax / (mu0 * L_ref * U_ref);
+
+    // shell profile parameters (defaults match the legacy Fortran intent)
+    const double r_cut_in = (cst.count("yita_r_cut_in") ? cst.at("yita_r_cut_in") : 0.8);
+    const double r_cut_out = (cst.count("yita_r_cut_out") ? cst.at("yita_r_cut_out") : 1.0);
+    const double r0 = (cst.count("yita_r0") ? cst.at("yita_r0") : 0.8);
+    const double r1 = (cst.count("yita_r1") ? cst.at("yita_r1") : 1.00);
+    const double w = (cst.count("yita_w") ? cst.at("yita_w") : 0.01);
+
+    auto yita0_of_r = [&](double r) -> double
+    {
+        if (r <= r_cut_in || r >= r_cut_out)
+            return 0.0;
+        // 0.5*(tanh((r-r0)/w) - tanh((r-r1)/w)) : ~1 inside [r0,r1], smooth edges
+        return 0.5 * (std::tanh((r - r0) / w) - std::tanh((r - r1) / w));
+    };
+
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        FieldBlock &Jac = fld_->field(fid_.fid_Jac, ib);
+        FieldBlock &Axi = fld_->field(fid_.fid_metric.xi, ib);
+        FieldBlock &Aet = fld_->field(fid_.fid_metric.eta, ib);
+        FieldBlock &Aze = fld_->field(fid_.fid_metric.zeta, ib);
+
+        FieldBlock &Ub = fld_->field(fid_.fid_U_b, ib); // induced B (qb)
+        FieldBlock &RHS = fld_->field(fid_.fid_RHS_b, ib);
+
+        if (!Jac.is_allocated() || !Axi.is_allocated() || !Aet.is_allocated() || !Aze.is_allocated())
+            continue;
+        if (!Ub.is_allocated() || !RHS.is_allocated())
+            continue;
+
+        Block &blk = fld_->grd->grids(ib);
+
+        if (blk.block_name != "Solid")
+            continue;
+
+        Int3 lo = Jac.inner_lo();
+        Int3 hi = Jac.inner_hi();
+
+        // reuse your derv_at / dd / J_at by capturing required blocks
+        auto derv_at = [&](int i, int j, int k,
+                           double &ax, double &ay, double &az,
+                           double &bx, double &by, double &bz,
+                           double &cx, double &cy, double &cz)
+        {
+            const double V = std::abs(Jac(i, j, k, 0));
+            if (V <= 0.0)
+            {
+                ax = ay = az = bx = by = bz = cx = cy = cz = 0.0;
+                return;
+            }
+
+            ax = 0.5 * (Axi(i - 1, j, k, 0) + Axi(i, j, k, 0)) / V;
+            ay = 0.5 * (Axi(i - 1, j, k, 1) + Axi(i, j, k, 1)) / V;
+            az = 0.5 * (Axi(i - 1, j, k, 2) + Axi(i, j, k, 2)) / V;
+
+            bx = 0.5 * (Aet(i, j - 1, k, 0) + Aet(i, j, k, 0)) / V;
+            by = 0.5 * (Aet(i, j - 1, k, 1) + Aet(i, j, k, 1)) / V;
+            bz = 0.5 * (Aet(i, j - 1, k, 2) + Aet(i, j, k, 2)) / V;
+
+            cx = 0.5 * (Aze(i, j, k - 1, 0) + Aze(i, j, k, 0)) / V;
+            cy = 0.5 * (Aze(i, j, k - 1, 1) + Aze(i, j, k, 1)) / V;
+            cz = 0.5 * (Aze(i, j, k - 1, 2) + Aze(i, j, k, 2)) / V;
+        };
+
+        auto dd = [](double a, double b, double c,
+                     double fp_i, double fm_i,
+                     double fp_j, double fm_j,
+                     double fp_k, double fm_k) -> double
+        {
+            return 0.5 * (a * (fp_i - fm_i) + b * (fp_j - fm_j) + c * (fp_k - fm_k));
+        };
+
+        auto J_at = [&](int i, int j, int k, double J[3])
+        {
+            double ax, ay, az, bx, by, bz, cx, cy, cz;
+            derv_at(i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
+
+            const double Bx_p_i = Ub(i + 1, j, k, 0), Bx_m_i = Ub(i - 1, j, k, 0);
+            const double Bx_p_j = Ub(i, j + 1, k, 0), Bx_m_j = Ub(i, j - 1, k, 0);
+            const double Bx_p_k = Ub(i, j, k + 1, 0), Bx_m_k = Ub(i, j, k - 1, 0);
+
+            const double By_p_i = Ub(i + 1, j, k, 1), By_m_i = Ub(i - 1, j, k, 1);
+            const double By_p_j = Ub(i, j + 1, k, 1), By_m_j = Ub(i, j - 1, k, 1);
+            const double By_p_k = Ub(i, j, k + 1, 1), By_m_k = Ub(i, j, k - 1, 1);
+
+            const double Bz_p_i = Ub(i + 1, j, k, 2), Bz_m_i = Ub(i - 1, j, k, 2);
+            const double Bz_p_j = Ub(i, j + 1, k, 2), Bz_m_j = Ub(i, j - 1, k, 2);
+            const double Bz_p_k = Ub(i, j, k + 1, 2), Bz_m_k = Ub(i, j, k - 1, 2);
+
+            const double Bzy = dd(ay, by, cy, Bz_p_i, Bz_m_i, Bz_p_j, Bz_m_j, Bz_p_k, Bz_m_k);
+            const double Byz = dd(az, bz, cz, By_p_i, By_m_i, By_p_j, By_m_j, By_p_k, By_m_k);
+
+            const double Bxz = dd(az, bz, cz, Bx_p_i, Bx_m_i, Bx_p_j, Bx_m_j, Bx_p_k, Bx_m_k);
+            const double Bzx = dd(ax, bx, cx, Bz_p_i, Bz_m_i, Bz_p_j, Bz_m_j, Bz_p_k, Bz_m_k);
+
+            const double Byx = dd(ax, bx, cx, By_p_i, By_m_i, By_p_j, By_m_j, By_p_k, By_m_k);
+            const double Bxy = dd(ay, by, cy, Bx_p_i, Bx_m_i, Bx_p_j, Bx_m_j, Bx_p_k, Bx_m_k);
+
+            J[0] = (Bzy - Byz);
+            J[1] = (Bxz - Bzx);
+            J[2] = (Byx - Bxy);
+        };
+
+        auto F_at = [&](int i, int j, int k, double F[3])
+        {
+            const double x = blk.dual_x(i + 1, j + 1, k + 1);
+            const double y = blk.dual_y(i + 1, j + 1, k + 1);
+            const double z = blk.dual_z(i + 1, j + 1, k + 1);
+            const double r = std::sqrt(x * x + y * y + z * z);
+
+            const double yita0 = yita0_of_r(r);
+            if (yita0 == 0.0)
+            {
+                F[0] = F[1] = F[2] = 0.0;
+                return;
+            }
+
+            double J[3];
+            J_at(i, j, k, J);
+
+            // F = yita0 * curl(B)
+            F[0] = yita0 * J[0];
+            F[1] = yita0 * J[1];
+            F[2] = yita0 * J[2];
+        };
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    // quick reject using center radius (optional)
+                    const double x = blk.dual_x(i + 1, j + 1, k + 1);
+                    const double y = blk.dual_y(i + 1, j + 1, k + 1);
+                    const double z = blk.dual_z(i + 1, j + 1, k + 1);
+                    const double r = std::sqrt(x * x + y * y + z * z);
+                    if (yita0_of_r(r) == 0.0)
+                        continue;
+
+                    double ax, ay, az, bx, by, bz, cx, cy, cz;
+                    derv_at(i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
+
+                    double Fpi[3], Fmi[3], Fpj[3], Fmj[3], Fpk[3], Fmk[3];
+                    F_at(i + 1, j, k, Fpi);
+                    F_at(i - 1, j, k, Fmi);
+                    F_at(i, j + 1, k, Fpj);
+                    F_at(i, j - 1, k, Fmj);
+                    F_at(i, j, k + 1, Fpk);
+                    F_at(i, j, k - 1, Fmk);
+
+                    // curl(F): (dFz/dy - dFy/dz, dFx/dz - dFz/dx, dFy/dx - dFx/dy)
+                    const double Fzy = dd(ay, by, cy, Fpi[2], Fmi[2], Fpj[2], Fmj[2], Fpk[2], Fmk[2]);
+                    const double Fyz = dd(az, bz, cz, Fpi[1], Fmi[1], Fpj[1], Fmj[1], Fpk[1], Fmk[1]);
+
+                    const double Fxz = dd(az, bz, cz, Fpi[0], Fmi[0], Fpj[0], Fmj[0], Fpk[0], Fmk[0]);
+                    const double Fzx = dd(ax, bx, cx, Fpi[2], Fmi[2], Fpj[2], Fmj[2], Fpk[2], Fmk[2]);
+
+                    const double Fyx = dd(ax, bx, cx, Fpi[1], Fmi[1], Fpj[1], Fmj[1], Fpk[1], Fmk[1]);
+                    const double Fxy = dd(ay, by, cy, Fpi[0], Fmi[0], Fpj[0], Fmj[0], Fpk[0], Fmk[0]);
+
+                    const double curlFx = (Fzy - Fyz);
+                    const double curlFy = (Fxz - Fzx);
+                    const double curlFz = (Fyx - Fxy);
+
+                    RHS(i, j, k, 0) += -invRem8 * curlFx;
+                    RHS(i, j, k, 1) += -invRem8 * curlFy;
+                    RHS(i, j, k, 2) += -invRem8 * curlFz;
+                }
+    }
 }
