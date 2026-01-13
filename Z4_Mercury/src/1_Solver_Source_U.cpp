@@ -9,18 +9,26 @@ void MercurySolver::AddSourceToRHS_Fluid()
     const auto &R = par_->GetDou_List("REF").data;
 
     const double NA = C.at("NA");
-    const double q_e = C.at("q_e");    // e (Coulomb)
+    const double q_e = C.at("q_e"); // e (Coulomb)
+    const double R_uni = C.at("R_uni");
+    const double k_Boltz = R_uni / NA;
     const double mu0 = C.at("mu_mag"); // μ0
 
     const double L_ref = R.at("L_ref");         // m
     const double U_ref = R.at("U");             // m/s
     const double B_ref = R.at("B_ref");         // Tesla
     const double n_ref = R.at("n");             // 1/m^3
+    const double T_ref = R.at("T");             // K
     const double Mref = R.at("Molecular_mass"); // kg/mol (molar mass)
+    const double m_ref = Mref / NA;             // 参考质量密度 kg/particle
 
-    const double rho_ref = (Mref / NA) * n_ref; // kg/m^3
-    const double m_H = (Mref / NA);             // kg per particle (assume ref mass = proton)
-    const double m_Na = 23.0 * m_H;
+    const double rho_ref = (Mref / NA) * n_ref;          // kg/m^3
+    const double m_H = par_->GetDou("mole_mass1") / NA;  // kg/particle
+    const double m_Na = par_->GetDou("mole_mass2") / NA; // kg/particle
+
+    const double Tn0 = 185.0;  // K
+    const double sk1 = 5.0e-5; // 1/s  (day side)
+    const double sk2 = 1.0e-5; // 1/s  (night side)
 
     // coefficients matching Fortran structure (see explanation in my previous message)
     const double a2 = (1e6 * q_e * L_ref * B_ref) / (rho_ref * U_ref);
@@ -29,6 +37,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
     // a4 = L_ref / U_ref(秒)，Fortran : a4 = sl8 / v8
     const double a4 = (L_ref / U_ref);
+
+    const double a5 = (3.0 * L_ref * k_Boltz) / (rho_ref * U_ref * U_ref * U_ref);
+
+    const double a6 = (1.0e6 * L_ref * k_Boltz) / (rho_ref * U_ref * U_ref * U_ref * (gamma_ - 1.0));
 
     const double ne_floor = 1e-30;
 
@@ -90,6 +102,8 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
         FieldBlock &RHS_H = fld_->field(fid_.fid_RHS_H, ib);
         FieldBlock &RHS_Na = fld_->field(fid_.fid_RHS_Na, ib);
+
+        double3D &x = fld_->grd->grids(ib).x;
 
         if (!Jac.is_allocated() || !Axi.is_allocated())
             continue;
@@ -201,7 +215,15 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     // C++ 目前没有直接取物理坐标，这里用 Jac/metric 无法得到 x；
                     // 因此：如果你要严格复现 Fortran 的 x 判定，请从几何场里取坐标场（例如 fid_.fid_coord）再判断。
                     // 这里给一个保守默认：统一用 sk1（你也可以改成 sk2 或按你已有的坐标场实现）
-                    // const double vst = sk1;
+                    // const double sk1 = 5E-5;
+                    // const double sk2 = 1E-5;
+                    const double vst = (x(i, j, k) >= 0) ? sk1 : sk2;
+
+                    // b2 = (sm2/(sm1+sm2))*vst ;  b1 = (Tn0 - Ts0)*sm1/(sm1+sm2)
+                    const double b2 = (m_Na / (m_H + m_Na)) * vst;
+
+                    // sse = qm1 (Fortran), here Photo is already (cm^-3 s^-1) For electrics
+                    const double sse = Photo(i, j, k, 0);
 
                     // =====================
                     // species H+  (ls=1)
@@ -216,29 +238,20 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         const double sjbu = sjbx * uH + sjby * vH + sjbz * wH;
                         const double dpeu = dpex * uH + dpey * vH + dpez * wH;
-
                         const double subu = subx * uH + suby * vH + subz * wH;
 
+                        // Ts0 in Kelvin
+                        const double Ts0 = PVH(i, j, k, 4) * T_ref;
+                        const double us2 = uH * uH + vH * vH + wH * wH;
+                        const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
+
                         RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm);
-                        RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm);
-                        RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm);
-                        RHS_H(i, j, k, 4) += a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm);
+                        RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoH_nd * uH * vst;
+                        RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoH_nd * vH * vst;
+                        RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoH_nd * wH * vst;
+                        RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoH_nd * us2 * b2;
 
-                        // RHS_H(i, j, k, 1) += -sns0 * (dpex / ne_cm);
-                        // RHS_H(i, j, k, 2) += -sns0 * (dpey / ne_cm);
-                        // RHS_H(i, j, k, 3) += -sns0 * (dpez / ne_cm);
-
-                        // const double roes0 = rhoH_nd;
-                        // RHS_H(i, j, k, 1) += -a4 * roes0 * uH * vst;
-                        // RHS_H(i, j, k, 2) += -a4 * roes0 * vH * vst;
-                        // RHS_H(i, j, k, 3) += -a4 * roes0 * wH * vst;
-
-                        // RHS_H(i, j, k, 4) += a2 * sns0 * subu;
-                        // // 若你把动量里加了 -rho*nu*u，这里建议同步加入做功项（否则能量方程会“凭空增温/减温”）
-                        // const double roes0 = rhoH_nd;
-                        // const double us2 = uH * uH + vH * vH + wH * wH;
-                        // RHS_H(i, j, k, 4) += -a4 * roes0 * us2 * vst;
+                        RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
                     }
 
                     // =====================
@@ -253,29 +266,23 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         const double sjbu = sjbx * uN + sjby * vN + sjbz * wN;
                         const double dpeu = dpex * uN + dpey * vN + dpez * wN;
-
                         const double subu = subx * uN + suby * vN + subz * wN;
 
+                        const double Ts0 = PVN(i, j, k, 4) * T_ref;
+                        const double us2 = uN * uN + vN * vN + wN * wN;
+                        const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
+
                         RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm);
-                        RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm);
-                        RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm);
-                        RHS_Na(i, j, k, 4) += a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm);
+                        RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoNa_nd * uN * vst;
+                        RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoNa_nd * vN * vst;
+                        RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoNa_nd * wN * vst;
+                        RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) - a4 * rhoNa_nd * us2 * vst;
 
-                        // RHS_Na(i, j, k, 1) += -sns0 * (dpex / ne_cm);
-                        // RHS_Na(i, j, k, 2) += -sns0 * (dpey / ne_cm);
-                        // RHS_Na(i, j, k, 3) += -sns0 * (dpez / ne_cm);
+                        RHS_Na(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm + a6 * sss * Tn0;
 
-                        // const double roes0 = rhoNa_nd;
-                        // RHS_Na(i, j, k, 1) += -a4 * roes0 * uN * vst;
-                        // RHS_Na(i, j, k, 2) += -a4 * roes0 * vN * vst;
-                        // RHS_Na(i, j, k, 3) += -a4 * roes0 * wN * vst;
-
-                        // RHS_Na(i, j, k, 4) += a2 * sns0 * subu;
-
-                        // const double roes0 = rhoNa_nd;
-                        // const double us2 = uN * uN + vN * vN + wN * wN;
-                        // RHS_Na(i, j, k, 4) += -a4 * roes0 * us2 * vst;
+                        // RHS_Na(i, j, k, 1) += -a1_Na * sss * uN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
+                        // RHS_Na(i, j, k, 2) += -a1_Na * sss * vN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
+                        // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
                     }
                 }
     }
