@@ -306,7 +306,7 @@ private:
         const double H_theta_sp = 15.0 * pi / 180.0;
         const double H_theta_sp_night = 10.0 * pi / 180.0;
         const double theta_sp_day = 80.0 * pi / 180.0;
-        const double theta_sp_night = 15.0 * pi / 180.0;
+        const double theta_sp_night = 165.0 * pi / 180.0;
 
         auto gauss2 = [](double d, double H) -> double
         {
@@ -385,11 +385,13 @@ private:
 
                         // SP night (only x < 0)
                         const double n_sp_night = (x < 0.0)
-                                                      ? (radial_sp * gauss2(std::fabs(theta - theta_sp_night), H_theta_sp_night))
+                                                      ? (radial_sp * (gauss2(std::fabs(theta - theta_sp_night), H_theta_sp_night) +
+                                                                      gauss2(std::fabs(theta + theta_sp_night), H_theta_sp_night)))
                                                       : 0.0;
 
                         // roenum_neu in m^-3
                         double roenum_m3 = r_factor * (n_miv + n_td + n_psd + n_sp_day + n_sp_night);
+                        // double roenum_m3 = r_factor * (n_td + n_psd + n_sp_day + n_sp_night);
                         if (roenum_m3 < 0.0)
                             roenum_m3 = 0.0;
 
