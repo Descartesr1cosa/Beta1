@@ -17,12 +17,12 @@ public:
     Field() = default;
     ~Field() = default;
 
-    Field(Grid *grd_, Param *par_)
+    Field(Grid *grd_, Param *par_, int geomtry_ghost_)
     {
         grd = grd_;
         par = par_;
         set_blocks(grd);
-        build_geometry();
+        build_geometry(geomtry_ghost_);
     };
 
     // 注册一个物理场（记录 desc，立刻分配）
@@ -63,7 +63,7 @@ public:
     }
 
     //===================================================================================
-    void build_geometry();
+    void build_geometry(int geomtry_ghost_);
     //===================================================================================
 
     //===================================================================================

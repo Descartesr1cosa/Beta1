@@ -40,11 +40,11 @@ int main(int arg, char **argv)
     // 建立topology
     TOPO::Topology topology = TOPO::build_topology(*grd, myid, par->GetInt("dimension"));
     //--------------------------------------------------------------------------
+    int ngg = par->GetInt("ngg");
     // 建立Field
-    Field *fld = new Field(grd, par);
+    Field *fld = new Field(grd, par, ngg);
     //-------------------------------------
     // 加入求解物理场
-    int ngg = par->GetInt("ngg");
     // 守恒变量、独立变量
     fld->register_field({"U_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+
     fld->register_field({"U_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+
