@@ -1025,11 +1025,12 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     index++;
+            //     continue;
+            // }
             GRID_TRANS::Parallel_send_scalar(&grids(i).parallel_bc[j], ngg + 1, grids(i).x, DATA.buf_send[index]);
             index++;
         }
@@ -1046,13 +1047,14 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                DATA.request_s[index] = MPI_REQUEST_NULL;
-                DATA.request_r[index] = MPI_REQUEST_NULL;
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     DATA.request_s[index] = MPI_REQUEST_NULL;
+            //     DATA.request_r[index] = MPI_REQUEST_NULL;
+            //     index++;
+            //     continue;
+            // }
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
             PARALLEL::mpi_data_recv(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].rece_flag, DATA.buf_recv[index], DATA.length[index], &DATA.request_r[index]);
             index++;
@@ -1074,11 +1076,12 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     index++;
+            //     continue;
+            // }
             GRID_TRANS::Parallel_recv_scalar(&grids(i).parallel_bc[j], ngg + 1, grids(i).x, DATA.buf_recv[index]);
             index++;
         }
@@ -1097,11 +1100,12 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     index++;
+            //     continue;
+            // }
             GRID_TRANS::Parallel_send_scalar(&grids(i).parallel_bc[j], ngg + 1, grids(i).y, DATA.buf_send[index]);
             index++;
         }
@@ -1118,13 +1122,14 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                DATA.request_s[index] = MPI_REQUEST_NULL;
-                DATA.request_r[index] = MPI_REQUEST_NULL;
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     DATA.request_s[index] = MPI_REQUEST_NULL;
+            //     DATA.request_r[index] = MPI_REQUEST_NULL;
+            //     index++;
+            //     continue;
+            // }
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
             PARALLEL::mpi_data_recv(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].rece_flag, DATA.buf_recv[index], DATA.length[index], &DATA.request_r[index]);
             index++;
@@ -1146,11 +1151,12 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     index++;
+            //     continue;
+            // }
             GRID_TRANS::Parallel_recv_scalar(&grids(i).parallel_bc[j], ngg + 1, grids(i).y, DATA.buf_recv[index]);
             index++;
         }
@@ -1169,11 +1175,12 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     index++;
+            //     continue;
+            // }
             GRID_TRANS::Parallel_send_scalar(&grids(i).parallel_bc[j], ngg + 1, grids(i).z, DATA.buf_send[index]);
             index++;
         }
@@ -1190,13 +1197,14 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                DATA.request_s[index] = MPI_REQUEST_NULL;
-                DATA.request_r[index] = MPI_REQUEST_NULL;
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     DATA.request_s[index] = MPI_REQUEST_NULL;
+            //     DATA.request_r[index] = MPI_REQUEST_NULL;
+            //     index++;
+            //     continue;
+            // }
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
             PARALLEL::mpi_data_recv(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].rece_flag, DATA.buf_recv[index], DATA.length[index], &DATA.request_r[index]);
             index++;
@@ -1218,11 +1226,12 @@ void Grid::MeshTrans_Parallel()
             // 周期边界条件send recv flag均用奇数表示,故而只传偶数
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-            {
-                index++;
-                continue;
-            }
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            // {
+            //     index++;
+            //     continue;
+            // }
             GRID_TRANS::Parallel_recv_scalar(&grids(i).parallel_bc[j], ngg + 1, grids(i).z, DATA.buf_recv[index]);
             index++;
         }
@@ -1261,9 +1270,9 @@ void Grid::MeshTrans_Inner()
             // 若此inner面的index不为0，表明已经传值处理过了
             if (grids(i).inner_bc[j].index != 0)
                 continue;
-            // 耦合壁面不需要传
-            if (grids(i).inner_bc[j].target_block_name != grids(i).inner_bc[j].this_block_name)
-                continue;
+            // 耦合壁面不需要传 // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).inner_bc[j].target_block_name != grids(i).inner_bc[j].this_block_name)
+            //     continue;
             //---------------------------------------------------------------------------------
             // Modify(2024/04/26/17:13)该数为正，从0开始，是否为周期信息存在is_period
             tar_block_num = grids(i).inner_bc[j].tar_block_num;

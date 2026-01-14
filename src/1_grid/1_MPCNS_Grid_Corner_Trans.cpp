@@ -22,7 +22,9 @@ void Grid::MeshTrans_Corner_Inner()
 
             Inner_Boundary &inner = *(e.inner_bound);
             // if (inner.target_block_name != inner.this_block_name || e.inner_bound->is_period || e.is_singular)
-            if (inner.target_block_name != inner.this_block_name || e.inner_bound->is_period)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (inner.target_block_name != inner.this_block_name || e.inner_bound->is_period)
+            if (e.inner_bound->is_period)
                 continue;
             block = inner.this_block_num;
             tar_block = inner.tar_block_num;
@@ -57,8 +59,9 @@ void Grid::MeshTrans_Corner_Parallel()
         for (int j = 0; j < num_parallel; j++)
         {
             // 耦合面不传
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-                continue;
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            //     continue;
             // 周期不传
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
@@ -76,7 +79,9 @@ void Grid::MeshTrans_Corner_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
@@ -103,7 +108,9 @@ void Grid::MeshTrans_Corner_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             GRID_TRANS::Parallel_corner_recv_scalar(&grids(i).parallel_bc[j], grids(i).corner[j], ngg + 1, grids(i).x, DATA.buf_recv[index], dimension);
@@ -122,8 +129,9 @@ void Grid::MeshTrans_Corner_Parallel()
         for (int j = 0; j < num_parallel; j++)
         {
             // 耦合面不传
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-                continue;
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            //     continue;
             // 周期不传
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
@@ -141,7 +149,9 @@ void Grid::MeshTrans_Corner_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
@@ -168,7 +178,9 @@ void Grid::MeshTrans_Corner_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             GRID_TRANS::Parallel_corner_recv_scalar(&grids(i).parallel_bc[j], grids(i).corner[j], ngg + 1, grids(i).y, DATA.buf_recv[index], dimension);
@@ -187,8 +199,9 @@ void Grid::MeshTrans_Corner_Parallel()
         for (int j = 0; j < num_parallel; j++)
         {
             // 耦合面不传
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-                continue;
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            //     continue;
             // 周期不传
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
@@ -206,7 +219,9 @@ void Grid::MeshTrans_Corner_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
@@ -233,7 +248,9 @@ void Grid::MeshTrans_Corner_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             GRID_TRANS::Parallel_corner_recv_scalar(&grids(i).parallel_bc[j], grids(i).corner[j], ngg + 1, grids(i).z, DATA.buf_recv[index], dimension);
@@ -264,7 +281,9 @@ void Grid::MeshTrans_Corner3D_Inner()
 
             Inner_Boundary &inner = *(e.inner_bound);
             // if (inner.target_block_name != inner.this_block_name || e.inner_bound->is_period || e.is_singular)
-            if (inner.target_block_name != inner.this_block_name || e.inner_bound->is_period)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (inner.target_block_name != inner.this_block_name || e.inner_bound->is_period)
+            if (e.inner_bound->is_period)
                 continue;
             block = inner.this_block_num;
             tar_block = inner.tar_block_num;
@@ -296,8 +315,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         for (int j = 0; j < num_parallel; j++)
         {
             // 耦合面不传
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-                continue;
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            //     continue;
             // 周期不传
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
@@ -315,7 +335,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
@@ -342,7 +364,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             GRID_TRANS::Parallel_corner3D_recv_scalar(&grids(i).parallel_bc[j], grids(i).corner[j], ngg + 1, grids(i).x, DATA.buf_recv[index], dimension);
@@ -361,8 +385,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         for (int j = 0; j < num_parallel; j++)
         {
             // 耦合面不传
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-                continue;
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            //     continue;
             // 周期不传
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
@@ -380,7 +405,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
@@ -407,7 +434,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             GRID_TRANS::Parallel_corner3D_recv_scalar(&grids(i).parallel_bc[j], grids(i).corner[j], ngg + 1, grids(i).y, DATA.buf_recv[index], dimension);
@@ -425,9 +454,10 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
+            // 修改2026/01/14 16：04 耦合面也需要传值
             // 耦合面不传
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
-                continue;
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name)
+            //     continue;
             // 周期不传
             if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
@@ -445,7 +475,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             PARALLEL::mpi_data_send(grids(i).parallel_bc[j].tar_myid, grids(i).parallel_bc[j].send_flag, DATA.buf_send[index], DATA.length[index], &DATA.request_s[index]);
@@ -472,7 +504,9 @@ void Grid::MeshTrans_Corner3D_Parallel()
         num_parallel = grids(i).parallel_bc.size();
         for (int j = 0; j < num_parallel; j++)
         {
-            if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            // 修改2026/01/14 16：04 耦合面也需要传值
+            // if (grids(i).parallel_bc[j].target_block_name != grids(i).parallel_bc[j].this_block_name || fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
+            if (fmod(grids(i).parallel_bc[j].send_flag, 2) != 0)
                 continue;
 
             GRID_TRANS::Parallel_corner3D_recv_scalar(&grids(i).parallel_bc[j], grids(i).corner[j], ngg + 1, grids(i).z, DATA.buf_recv[index], dimension);

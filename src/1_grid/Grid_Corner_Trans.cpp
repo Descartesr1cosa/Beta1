@@ -229,7 +229,9 @@ namespace GRID_TRANS
             {
                 // 周期边界条件send recv flag均用奇数表示
                 // 同一物理场才传
-                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0)
                 {
                     (*grids_info)(i).corner_send[j].clear();
                     (*grids_info)(i).corner[j].clear();
@@ -257,8 +259,9 @@ namespace GRID_TRANS
                 Edge e_temp(e);
                 if (e.index != 1)
                     continue;
-                if (e.para_bound->target_block_name != e.para_bound->this_block_name)
-                    continue;
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if (e.para_bound->target_block_name != e.para_bound->this_block_name)
+                //     continue;
                 int j = find_para_index(&(*grids_info)(i), e.para_bound);
                 (*grids_info)(i).corner[j].push_back(e_temp);
             }
@@ -277,7 +280,9 @@ namespace GRID_TRANS
             {
                 // 周期边界条件send recv flag均用奇数表示
                 // 同一物理场才传
-                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0)
                     num_parallel_face++;
             }
         }
@@ -305,8 +310,9 @@ namespace GRID_TRANS
             for (int j = 0; j < num_parallel; j++)
             {
                 // 耦合面不传
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name)
-                    continue;
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name)
+                //     continue;
                 // 周期不传
                 if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
@@ -325,7 +331,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
                 PARALLEL::mpi_data_send((*grids_info)(i).parallel_bc[j].tar_myid, (*grids_info)(i).parallel_bc[j].send_flag, &(require_recv_num_edge[index]), 1, &request_s[index]);
                 PARALLEL::mpi_data_recv((*grids_info)(i).parallel_bc[j].tar_myid, (*grids_info)(i).parallel_bc[j].rece_flag, &(require_send_num_edge[index]), 1, &request_r[index]);
@@ -345,7 +353,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
                 double temp_num = require_send_num_edge[index];
                 (*grids_info)(i).corner_send[j].resize((int)temp_num);
@@ -368,7 +378,9 @@ namespace GRID_TRANS
             for (int j = 0; j < num_parallel; j++)
             {
                 // 耦合面不传,周期不传
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                 {
                     continue;
                 }
@@ -455,7 +467,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
 
                 int edge_num = (*grids_info)(i).corner[j].size();
@@ -478,7 +492,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
                 std::vector<Edge> &e = (*grids_info)(i).corner_send[j];
                 for (int ii = 0; ii < e.size(); ii++)
@@ -517,8 +533,9 @@ namespace GRID_TRANS
                 // 物理量传输，周期边界条件也需要传递；若是网格传输，周期边界跳过
                 if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
-                if ((*grids_info)(i).parallel_bc[j].this_block_name != (*grids_info)(i).parallel_bc[j].target_block_name)
-                    continue;
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].this_block_name != (*grids_info)(i).parallel_bc[j].target_block_name)
+                //     continue;
 
                 int direct_face = abs((*grids_info)(i).parallel_bc[j].direction) - 1, send_length = 1, recv_length = 1;
                 // send
@@ -745,7 +762,9 @@ namespace GRID_TRANS
             {
                 // 周期边界条件send recv flag均用奇数表示
                 // 同一物理场才传
-                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0)
                 {
                     (*grids_info)(i).corner_send[j].clear();
                     (*grids_info)(i).corner[j].clear();
@@ -772,8 +791,9 @@ namespace GRID_TRANS
                 Edge e_temp(e);
                 if (e.index != 1)
                     continue;
-                if (e.para_bound->target_block_name != e.para_bound->this_block_name)
-                    continue;
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if (e.para_bound->target_block_name != e.para_bound->this_block_name)
+                //     continue;
                 int j = find_para_index(&(*grids_info)(i), e.para_bound);
                 (*grids_info)(i).corner[j].push_back(e_temp);
             }
@@ -793,7 +813,9 @@ namespace GRID_TRANS
             {
                 // 周期边界条件send recv flag均用奇数表示
                 // 同一物理场才传
-                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0 && (*grids_info)(i).parallel_bc[j].this_block_name == (*grids_info)(i).parallel_bc[j].target_block_name)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) == 0)
                     num_parallel_face++;
             }
         }
@@ -821,8 +843,9 @@ namespace GRID_TRANS
             for (int j = 0; j < num_parallel; j++)
             {
                 // 耦合面不传
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name)
-                    continue;
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name)
+                //     continue;
                 // 周期不传
                 if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
@@ -841,7 +864,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
                 PARALLEL::mpi_data_send((*grids_info)(i).parallel_bc[j].tar_myid, (*grids_info)(i).parallel_bc[j].send_flag, &(require_recv_num_edge[index]), 1, &request_s[index]);
                 PARALLEL::mpi_data_recv((*grids_info)(i).parallel_bc[j].tar_myid, (*grids_info)(i).parallel_bc[j].rece_flag, &(require_send_num_edge[index]), 1, &request_r[index]);
@@ -861,7 +886,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
                 double temp_num = require_send_num_edge[index];
                 (*grids_info)(i).corner_send[j].resize((int)temp_num);
@@ -884,7 +911,9 @@ namespace GRID_TRANS
             for (int j = 0; j < num_parallel; j++)
             {
                 // 耦合面不传,周期不传
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                 {
                     continue;
                 }
@@ -979,7 +1008,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
 
                 int edge_num = (*grids_info)(i).corner[j].size();
@@ -1002,7 +1033,9 @@ namespace GRID_TRANS
             num_parallel = (*grids_info)(i).parallel_bc.size();
             for (int j = 0; j < num_parallel; j++)
             {
-                if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].target_block_name != (*grids_info)(i).parallel_bc[j].this_block_name || fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
+                if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
                 std::vector<Edge> &e = (*grids_info)(i).corner_send[j];
                 for (int ii = 0; ii < e.size(); ii++)
@@ -1041,8 +1074,9 @@ namespace GRID_TRANS
                 // 物理量传输，周期边界条件也需要传递；若是网格传输，周期边界跳过
                 if (fmod((*grids_info)(i).parallel_bc[j].send_flag, 2) != 0)
                     continue;
-                if ((*grids_info)(i).parallel_bc[j].this_block_name != (*grids_info)(i).parallel_bc[j].target_block_name)
-                    continue;
+                // 修改2026/01/14 16：04 耦合面也需要传值
+                // if ((*grids_info)(i).parallel_bc[j].this_block_name != (*grids_info)(i).parallel_bc[j].target_block_name)
+                //     continue;
 
                 int direct_face = abs((*grids_info)(i).parallel_bc[j].direction) - 1, send_length = 1, recv_length = 1;
                 // send
