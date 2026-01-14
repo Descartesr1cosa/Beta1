@@ -105,6 +105,9 @@ void Halo::exchange_inner_edge(std::string field_name)
         FieldBlock &fb_recv = fld_->field(fid, r.this_block);
         FieldBlock &fb_send = fld_->field(fid, r.neighbor_block);
 
+        if (!fb_recv.is_allocated() || !fb_send.is_allocated())
+            continue;
+
         const Box3 &sb = r.send_box; // send box（在 neighbor_block 上）
         const Box3 &rb = r.recv_box; // recv box（在 this_block 上）
 
@@ -169,6 +172,9 @@ void Halo::exchange_inner_vertex(std::string field_name)
         // 发送方和接收方的 FieldBlock
         FieldBlock &fb_recv = fld_->field(fid, r.this_block);
         FieldBlock &fb_send = fld_->field(fid, r.neighbor_block);
+
+        if (!fb_recv.is_allocated() || !fb_send.is_allocated())
+            continue;
 
         const Box3 &sb = r.send_box; // send box（在 neighbor_block 上）
         const Box3 &rb = r.recv_box; // recv box（在 this_block 上）
