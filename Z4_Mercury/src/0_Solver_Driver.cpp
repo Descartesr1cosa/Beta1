@@ -69,12 +69,12 @@ void MercurySolver::Boundary_Condition()
     {
         std::string src = "Solid", dst = "Fluid";
         halo_->coupling_trans_1DCorner(src, dst);
-        bound_.ApplyCouplingPair(src, dst);
+        bound_.ApplyCouplingPair_1DCorner(src, dst);
 
         src = "Fluid";
         dst = "Solid";
         halo_->coupling_trans_1DCorner(src, dst);
-        bound_.ApplyCouplingPair(src, dst);
+        bound_.ApplyCouplingPair_1DCorner(src, dst);
     }
 
     // 4) halo
@@ -91,12 +91,12 @@ void MercurySolver::Boundary_Condition()
     {
         std::string src = "Solid", dst = "Fluid";
         halo_->coupling_trans_2DCorner(src, dst);
-        bound_.ApplyCouplingPair(src, dst);
+        bound_.ApplyCouplingPair_2DCorner(src, dst);
 
         src = "Fluid";
         dst = "Solid";
         halo_->coupling_trans_2DCorner(src, dst);
-        bound_.ApplyCouplingPair(src, dst);
+        bound_.ApplyCouplingPair_2DCorner(src, dst);
     }
 
     // 6) halo
@@ -113,12 +113,12 @@ void MercurySolver::Boundary_Condition()
     {
         std::string src = "Solid", dst = "Fluid";
         halo_->coupling_trans_3DCorner(src, dst);
-        bound_.ApplyCouplingPair(src, dst);
+        bound_.ApplyCouplingPair_3DCorner(src, dst);
 
         src = "Fluid";
         dst = "Solid";
         halo_->coupling_trans_3DCorner(src, dst);
-        bound_.ApplyCouplingPair(src, dst);
+        bound_.ApplyCouplingPair_3DCorner(src, dst);
     }
 }
 

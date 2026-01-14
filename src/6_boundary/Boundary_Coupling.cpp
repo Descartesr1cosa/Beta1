@@ -36,7 +36,7 @@ void BoundaryCore::RegisterCoupling(const std::string &src,
 // ------------------------------------------------------------
 // Apply Coupling
 // ------------------------------------------------------------
-void BoundaryCore::ApplyCouplingPair(const std::string &src, const std::string &dst)
+void BoundaryCore::ApplyCouplingPair_1DCorner(const std::string &src, const std::string &dst)
 {
     auto &bs = fld_->coupling_buffers(src, dst);
     const auto &channels = bs.desc.channels;
@@ -74,6 +74,88 @@ void BoundaryCore::ApplyCouplingPair(const std::string &src, const std::string &
         // apply_list(bs.parallel_edge[cid]);
         // apply_list(bs.inner_vertex[cid]);
         // apply_list(bs.parallel_vertex[cid]);
+    }
+}
+
+void BoundaryCore::ApplyCouplingPair_2DCorner(const std::string &src, const std::string &dst)
+{
+    auto &bs = fld_->coupling_buffers(src, dst);
+    const auto &channels = bs.desc.channels;
+
+    for (int cid = 0; cid < (int)channels.size(); ++cid)
+    {
+        const auto &ch = channels[cid];
+        const std::string &tag = ch.tag;
+        const StaggerLocation loc = ch.location;
+
+        // 默认：dst field = tag（你可按需要映射）
+        const std::string dst_field = tag;
+        const int fid_dst = fld_->field_id(dst_field);
+
+        auto h = ResolveCoupling(src, dst, loc, tag, dst_field);
+
+        auto apply_list = [&](std::vector<CouplingBufferBlock> &lst)
+        {
+            for (auto &buf : lst)
+            {
+                if (!buf.allocated)
+                    continue;
+                FieldBlock &Udst = fld_->field(fid_dst, buf.this_block);
+
+                if (h)
+                    h(Udst, fld_, buf, src, dst, tag);
+                else
+                    DefaultCouplingCopy(Udst, fld_, buf, src, dst, tag);
+            }
+        };
+
+        // apply_list(bs.inner_face[cid]);
+        // apply_list(bs.parallel_face[cid]);
+        apply_list(bs.inner_edge[cid]);
+        apply_list(bs.parallel_edge[cid]);
+        // apply_list(bs.inner_vertex[cid]);
+        // apply_list(bs.parallel_vertex[cid]);
+    }
+}
+
+void BoundaryCore::ApplyCouplingPair_3DCorner(const std::string &src, const std::string &dst)
+{
+    auto &bs = fld_->coupling_buffers(src, dst);
+    const auto &channels = bs.desc.channels;
+
+    for (int cid = 0; cid < (int)channels.size(); ++cid)
+    {
+        const auto &ch = channels[cid];
+        const std::string &tag = ch.tag;
+        const StaggerLocation loc = ch.location;
+
+        // 默认：dst field = tag（你可按需要映射）
+        const std::string dst_field = tag;
+        const int fid_dst = fld_->field_id(dst_field);
+
+        auto h = ResolveCoupling(src, dst, loc, tag, dst_field);
+
+        auto apply_list = [&](std::vector<CouplingBufferBlock> &lst)
+        {
+            for (auto &buf : lst)
+            {
+                if (!buf.allocated)
+                    continue;
+                FieldBlock &Udst = fld_->field(fid_dst, buf.this_block);
+
+                if (h)
+                    h(Udst, fld_, buf, src, dst, tag);
+                else
+                    DefaultCouplingCopy(Udst, fld_, buf, src, dst, tag);
+            }
+        };
+
+        // apply_list(bs.inner_face[cid]);
+        // apply_list(bs.parallel_face[cid]);
+        // apply_list(bs.inner_edge[cid]);
+        // apply_list(bs.parallel_edge[cid]);
+        apply_list(bs.inner_vertex[cid]);
+        apply_list(bs.parallel_vertex[cid]);
     }
 }
 
