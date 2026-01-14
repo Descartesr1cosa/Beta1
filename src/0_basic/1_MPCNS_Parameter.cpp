@@ -415,20 +415,20 @@ void Param::ReadFile(std::string &filename, std::map<std::string, int> keywordma
 
 void Param::Pre_Process()
 {
-    if (IntParam["ngg"] <= 2)
-    {
-        AddParam("ngg", 2);
-    }
-    else if (IntParam["ngg"] <= 3)
-    {
-        AddParam("ngg", 3);
-    }
-    else if (IntParam["ngg"] <= 5)
-    {
-        AddParam("ngg", 5);
-    }
-    else
-    {
-        AddParam("ngg", 7);
-    }
+    // if (IntParam["ngg"] <= 2)
+    // {
+    //     AddParam("ngg", 2);
+    // }
+    // else if (IntParam["ngg"] <= 3)
+    // {
+    //     AddParam("ngg", 3);
+    // }
+    // else if (IntParam["ngg"] <= 5)
+    // {
+    //     AddParam("ngg", 5);
+    // }
+    // else
+    // {
+    //     AddParam("ngg", 7);
+    // }
 }
