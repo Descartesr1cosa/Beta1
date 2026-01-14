@@ -76,6 +76,50 @@ void MercurySolver::Boundary_Condition()
         halo_->coupling_trans_1DCorner(src, dst);
         bound_.ApplyCouplingPair(src, dst);
     }
+
+    // 4) halo
+    {
+        std::string fn = "U_H";
+        halo_->data_trans_2DCorner(fn);
+        fn = "U_Na";
+        halo_->data_trans_2DCorner(fn);
+        fn = "U_b";
+        halo_->data_trans_2DCorner(fn);
+    }
+
+    // 5) coupling（填 buffer -> 写入 dst ghost）
+    {
+        std::string src = "Solid", dst = "Fluid";
+        halo_->coupling_trans_2DCorner(src, dst);
+        bound_.ApplyCouplingPair(src, dst);
+
+        src = "Fluid";
+        dst = "Solid";
+        halo_->coupling_trans_2DCorner(src, dst);
+        bound_.ApplyCouplingPair(src, dst);
+    }
+
+    // 6) halo
+    {
+        std::string fn = "U_H";
+        halo_->data_trans_3DCorner(fn);
+        fn = "U_Na";
+        halo_->data_trans_3DCorner(fn);
+        fn = "U_b";
+        halo_->data_trans_3DCorner(fn);
+    }
+
+    // 7) coupling（填 buffer -> 写入 dst ghost）
+    {
+        std::string src = "Solid", dst = "Fluid";
+        halo_->coupling_trans_3DCorner(src, dst);
+        bound_.ApplyCouplingPair(src, dst);
+
+        src = "Fluid";
+        dst = "Solid";
+        halo_->coupling_trans_3DCorner(src, dst);
+        bound_.ApplyCouplingPair(src, dst);
+    }
 }
 
 bool MercurySolver::UpdateControlAndOutput()
