@@ -2,6 +2,7 @@
 #include "0_basic/Error.h"
 #include <iostream>
 #include <cstdlib>
+#include "4_halo/detail/halo_build_boxmakers.h"
 
 // ------------------------------------------------------------
 // Setup
@@ -172,6 +173,96 @@ void BoundaryCore::ApplyPhysical(const std::vector<std::string> &field_names)
 {
     for (const auto &fn : field_names)
         ApplyPhysical(fn);
+}
+
+void BoundaryCore::ApplyPhysicalCornerDefault(const std::string &field_name)
+{
+    const int fid = fld_->field_id(field_name);
+    const FieldDescriptor &desc = fld_->descriptor(fid);
+
+    const StaggerLocation loc = desc.location;
+    const int nghost = desc.nghost;
+
+    auto dir_from_int = [](int d) -> Direction
+    {
+        switch (d)
+        {
+        case -1:
+            return Direction::XMinus;
+        case 1:
+            return Direction::XPlus;
+        case -2:
+            return Direction::YMinus;
+        case 2:
+            return Direction::YPlus;
+        case -3:
+            return Direction::ZMinus;
+        case 3:
+            return Direction::ZPlus;
+        default:
+            ERROR::Abort("[BoundaryCore] ApplyPhysicalCornerDefault: invalid direction.");
+            return Direction::XMinus;
+        }
+    };
+
+    auto clamp_index = [](int v, int lo, int hi) -> int
+    {
+        return std::max(lo, std::min(v, hi - 1));
+    };
+
+    auto fill_ghost = [&](FieldBlock &U, const Block &blk, const Box3 &g)
+    {
+        if (!U.is_allocated())
+            return;
+
+        const Int3 hi_in = LocInnerHi(blk, loc);
+        const int ncomp = U.descriptor().ncomp;
+
+        for (int i = g.lo.i; i < g.hi.i; ++i)
+            for (int j = g.lo.j; j < g.hi.j; ++j)
+                for (int k = g.lo.k; k < g.hi.k; ++k)
+                {
+                    const int ii = clamp_index(i, 0, hi_in.i);
+                    const int jj = clamp_index(j, 0, hi_in.j);
+                    const int kk = clamp_index(k, 0, hi_in.k);
+
+                    for (int m = 0; m < ncomp; ++m)
+                        U(i, j, k, m) = U(ii, jj, kk, m);
+                }
+    };
+
+    for (const auto &ep : topo_->physical_edge_patches)
+    {
+        FieldBlock &U = fld_->field(fid, ep.this_block);
+        const Block &blk = grd_->grids(ep.this_block);
+        const Box3 g = HALO_BOX::make_2DCorner_ghost_box(
+            loc,
+            ep.this_box_node,
+            dir_from_int(ep.dir1),
+            dir_from_int(ep.dir2),
+            nghost);
+        fill_ghost(U, blk, g);
+    }
+
+    for (const auto &vp : topo_->physical_vertex_patches)
+    {
+        FieldBlock &U = fld_->field(fid, vp.this_block);
+        const Block &blk = grd_->grids(vp.this_block);
+        const Box3 g = HALO_BOX::make_3DCorner_ghost_box(
+            loc,
+            vp.this_box_node,
+            dir_from_int(vp.dir1),
+            dir_from_int(vp.dir2),
+            dir_from_int(vp.dir3),
+            nghost);
+        fill_ghost(U, blk, g);
+    }
+}
+
+void BoundaryCore::ApplyPhysicalCornerDefault(const std::vector<std::string> &field_names)
+{
+    for (const auto &fn : field_names)
+        ApplyPhysicalCornerDefault(fn);
 }
 
 // ------------------------------------------------------------

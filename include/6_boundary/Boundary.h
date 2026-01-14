@@ -50,6 +50,9 @@ public:
     // 施加边界条件
     void ApplyPhysical(const std::string &field_name);
     void ApplyPhysical(const std::vector<std::string> &field_names);
+    // 物理角区（edge/vertex）默认拷贝处理
+    void ApplyPhysicalCornerDefault(const std::string &field_name);
+    void ApplyPhysicalCornerDefault(const std::vector<std::string> &field_names);
 
     // 提供默认的拷贝边界条件
     static void DefaultPhysicalCopy(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int nghost);

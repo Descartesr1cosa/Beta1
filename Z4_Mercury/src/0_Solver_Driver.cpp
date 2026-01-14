@@ -54,6 +54,7 @@ void MercurySolver::Boundary_Condition()
 {
     // 1) 物理边界
     bound_.ApplyPhysical(std::vector<std::string>{"U_H", "U_Na", "U_b"});
+    bound_.ApplyPhysicalCornerDefault(std::vector<std::string>{"U_H", "U_Na", "U_b"});
 
     // 2) halo
     {
