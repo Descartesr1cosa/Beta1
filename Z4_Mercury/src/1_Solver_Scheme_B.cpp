@@ -491,9 +491,9 @@ void MercurySolver::AddSourceToRHS_B()
 
     // mu_mag should be μ0 (physical). yitamax: max resistivity in SI (Ohm·m) in the legacy code convention.
     const double mu0 = cst.at("mu_mag");
-    const double yitamax = (cst.count("eta_max_mercury") ? cst.at("eta_max_mercury") : 1.25e7); // default matches legacy
-    const double L_ref = ref.at("L_ref");                                                       // meters
-    const double U_ref = ref.at("U");                                                           // m/s
+    const double yitamax = par_->GetDou("eta_max_mercury"); // default matches legacy 1.25e7
+    const double L_ref = ref.at("L_ref");                   // meters
+    const double U_ref = ref.at("U");                       // m/s
 
     // Rem8 = L_ref * U_ref * mu0 / yitamax  => 1/Rem8 = yitamax / (mu0*L_ref*U_ref)
     const double invRem8 = yitamax / (mu0 * L_ref * U_ref);
