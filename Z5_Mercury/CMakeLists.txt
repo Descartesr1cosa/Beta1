@@ -16,7 +16,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 # include files directory
 include_directories(${MPI_INCLUDE_PATH})
 include_directories(../include)
-include_directories(../Z4_Mercury/include)
+include_directories(../Z5_Mercury/include)
 include_directories(.)
 
 # source files directiory
@@ -31,17 +31,18 @@ aux_source_directory(../src/6_boundary  DIRSRCS6)
 
 # Mercury Solver Files
 aux_source_directory(./src  SRC)
-# aux_source_directory(./src/1_boundary  SRC0)
-# aux_source_directory(./src/2_operators  SRC1)
+aux_source_directory(./src/boundary  SRC_BOUND)
+aux_source_directory(./src/operators  SRC_OPERATOR)
+aux_source_directory(./src/physics  SRC_PHY)
 # aux_source_directory(./src/3_io  SRC2)
 # aux_source_directory(./src/4_solver  SRC3)
-# aux_source_directory(./src/physic  SRC4)
-# aux_source_directory(./src/tools  SRC5)
+aux_source_directory(./src/tools  SRC_TOOL)
 
 # build the executable program
 add_executable(Mercury main.cpp 
 ${DIRSRCS0} ${DIRSRCS1} ${DIRSRCS2} ${DIRSRCS3}
- ${DIRSRCS4} ${DIRSRCS5} ${DIRSRCS6} ${SRC})
+ ${DIRSRCS4} ${DIRSRCS5} ${DIRSRCS6} ${SRC}
+ ${SRC_OPERATOR} ${SRC_BOUND} ${SRC_PHY} ${SRC_TOOL})
 #  ${SRC0} ${SRC1} ${SRC2} ${SRC3} ${SRC4} ${SRC5} ${SRC6})
 
 # add the mpi linkings

@@ -29,67 +29,100 @@ int main(int arg, char **argv)
 
     //=============================================================================================
     //--------------------------------------------------------------------------
-    // 读入控制参数
+    // Read control parameters
     Param *par = new Param;
     par->ReadParam(myid);
     //--------------------------------------------------------------------------
-    // 读入网格并作预处理
+    // Read Grid and Preprocess the Grid related info
     Grid *grd = new Grid;
     grd->Grid_Preprocess(par);
     //--------------------------------------------------------------------------
-    // 建立topology
+    // Build topology
     TOPO::Topology topology = TOPO::build_topology(*grd, myid, par->GetInt("dimension"));
     //--------------------------------------------------------------------------
     int ngg = par->GetInt("ngg");
-    // 建立Field
+    // Build Field
     Field *fld = new Field(grd, par, ngg);
     //-------------------------------------
-    // 加入求解物理场
-    // 守恒变量、独立变量
-    fld->register_field({"U_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+
-    fld->register_field({"U_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+
-    fld->register_field({"U_b", StaggerLocation::Cell, 3, ngg});           // induced magnetic fields
+    // Add physical fields for solver
+    // Conservative variables, independent
+    fld->register_field({"U_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+  (rho rho.u rho.v rho.w rho.e)_H+
+    fld->register_field({"U_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+ (rho rho.u rho.v rho.w rho.e)_Na+
+    fld->register_field({"B_xi", StaggerLocation::FaceXi, 1, ngg});        // induced magnetic flux for Face Xi
+    fld->register_field({"B_eta", StaggerLocation::FaceEt, 1, ngg});       // induced magnetic flux for Face Eta
+    fld->register_field({"B_zeta", StaggerLocation::FaceZe, 1, ngg});      // induced magnetic flux for Face Zeta
 
-    // 辅助物理场
+    // Auxiliary physical fields
+    fld->register_field({"E_xi", StaggerLocation::EdgeXi, 1, ngg});   // Integration of electric field along Edge Xi
+    fld->register_field({"E_eta", StaggerLocation::EdgeEt, 1, ngg});  // Integration of electric field along Edge Eta
+    fld->register_field({"E_zeta", StaggerLocation::EdgeZe, 1, ngg}); // Integration of electric field along Edge Zeta
+
+    fld->register_field({"J_xi", StaggerLocation::EdgeXi, 1, ngg});   // Integration of electric current along Edge Xi
+    fld->register_field({"J_eta", StaggerLocation::EdgeEt, 1, ngg});  // Integration of electric current along Edge Eta
+    fld->register_field({"J_zeta", StaggerLocation::EdgeZe, 1, ngg}); // Integration of electric current along Edge Zeta
+
+    fld->register_field({"Badd_xi", StaggerLocation::FaceXi, 1, ngg});   // initial applied/added magnetic flux for Face Xi
+    fld->register_field({"Badd_eta", StaggerLocation::FaceEt, 1, ngg});  // initial applied/added magnetic flux for Face Eta
+    fld->register_field({"Badd_zeta", StaggerLocation::FaceZe, 1, ngg}); // initial applied/added magnetic flux for Face Zeta
+    fld->register_field({"B_cell", StaggerLocation::Cell, 3, ngg});      // Total magnetic fields
+
     fld->register_field({"Na", StaggerLocation::Cell, 1, ngg, "Fluid"});         // Na neutral atom
     fld->register_field({"Photo_rate", StaggerLocation::Cell, 1, ngg, "Fluid"}); // Photoionization rate
-    fld->register_field({"Badd", StaggerLocation::Cell, 3, ngg});                // initial applied magnetic fields
-    fld->register_field({"B_cell", StaggerLocation::Cell, 3, ngg});              // 总磁场
-    fld->register_field({"U_plus", StaggerLocation::Cell, 3, ngg, "Fluid"});     // 按电荷密度加权的平均速度
+    fld->register_field({"U_plus", StaggerLocation::Cell, 3, ngg, "Fluid"});     // Averaged Velocity (electric density weighted), used in induction Eqs
 
-    fld->register_field(FieldDescriptor{"PV_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+的原始变量 u v w p T
-    fld->register_field(FieldDescriptor{"PV_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+的原始变量 u v w p T
+    fld->register_field(FieldDescriptor{"PV_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+  primitive variables: u v w p T
+    fld->register_field(FieldDescriptor{"PV_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+ primitive variables: u v w p T
 
-    // 辅助通量场
-    fld->register_field({"F_xi", StaggerLocation::FaceXi, 5, 0, "Fluid"});   // 仅临存流体方程通量，无需虚网格
-    fld->register_field({"F_eta", StaggerLocation::FaceEt, 5, 0, "Fluid"});  // 仅临存流体方程通量，无需虚网格
-    fld->register_field({"F_zeta", StaggerLocation::FaceZe, 5, 0, "Fluid"}); // 仅临存流体方程通量，无需虚网格
+    // Auxiliary flux fields, for Solver
+    fld->register_field({"F_xi", StaggerLocation::FaceXi, 5, 0, "Fluid"});   // Only stores flux of Fluid Equations, ghost grid is not required
+    fld->register_field({"F_eta", StaggerLocation::FaceEt, 5, 0, "Fluid"});  // Only stores flux of Fluid Equations, ghost grid is not required
+    fld->register_field({"F_zeta", StaggerLocation::FaceZe, 5, 0, "Fluid"}); // Only stores flux of Fluid Equations, ghost grid is not required
 
-    // 计算辅助场
-    // fld->register_field(FieldDescriptor{"old_U_", StaggerLocation::Cell, 5, 0});
-    // fld->register_field(FieldDescriptor{"divB", StaggerLocation::Cell, 1, 1}); // 输出存在插值到node的需要，增加一层虚网格
+    // Auxiliary fields, for Solver
+    fld->register_field(FieldDescriptor{"divB", StaggerLocation::Cell, 1, 1}); // 1 layer of ghost grid for interpolation of Cell to Node (output and visualization)
     fld->register_field(FieldDescriptor{"RHS_H", StaggerLocation::Cell, 5, 0, "Fluid"});
     fld->register_field(FieldDescriptor{"RHS_Na", StaggerLocation::Cell, 5, 0, "Fluid"});
-    fld->register_field(FieldDescriptor{"RHS_B", StaggerLocation::Cell, 3, 0});
     //--------------------------------------------------------------------------
-    // 注册耦合定义（CouplingPairDesc）
-    fld->register_coupling_channel("Solid", "Fluid", "U_b", StaggerLocation::Cell, 3, ngg); // Solid -> Fluid
-    fld->register_coupling_channel("Fluid", "Solid", "U_b", StaggerLocation::Cell, 3, ngg); // Fluid -> Solid
-    // 构建 coupling buffers（一次）
+    // Register Coupling Pair Description（CouplingPairDesc）
+    //   register_coupling_channel("A", "B", "A_field",**):
+    //   Let A_field in Block A transfer to coresponding coupling buffer area of Block B
+    fld->register_coupling_channel("Solid", "Fluid", "B_xi", StaggerLocation::FaceXi, 1, ngg);   // Solid -> Fluid
+    fld->register_coupling_channel("Solid", "Fluid", "B_eta", StaggerLocation::FaceEt, 1, ngg);  // Solid -> Fluid
+    fld->register_coupling_channel("Solid", "Fluid", "B_zeta", StaggerLocation::FaceZe, 1, ngg); // Solid -> Fluid
+    fld->register_coupling_channel("Fluid", "Solid", "B_xi", StaggerLocation::FaceXi, 1, ngg);   // Fluid -> Solid
+    fld->register_coupling_channel("Fluid", "Solid", "B_eta", StaggerLocation::FaceEt, 1, ngg);  // Solid -> Fluid
+    fld->register_coupling_channel("Fluid", "Solid", "B_zeta", StaggerLocation::FaceZe, 1, ngg); // Solid -> Fluid
+    // Build coupling buffers (YOU CAN ONLY USE it ONCE!)
     fld->build_coupling_buffers(topology, par->GetInt("dimension"));
     //--------------------------------------------------------------------------
-    // 建立Halo通信
+    // Build Halo Communicator
     Halo *hal = new Halo(fld, &topology);
 
-    // 注册同物理场之间的halo通信
+    // Register halo communicator between blocks with same fields
     std::string fieldname;
     fieldname = "U_H";
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
     fieldname = "U_Na";
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
-    fieldname = "U_b";
+    fieldname = "B_xi";
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
-    // 建立同物理场以及多物理场耦合通信的特征
+    fieldname = "B_eta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "B_zeta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "E_xi";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "E_eta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "E_zeta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "J_xi";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "J_eta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "J_zeta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    // Build halo communicator patterns between blocks with same fields and coupling fields
     hal->build_registered_patterns();
     //=============================================================================================
 
@@ -103,10 +136,10 @@ int main(int arg, char **argv)
 
     //=============================================================================================
     //--------------------------------------------------------------------------
-    // MPI终止
+    // MPI finalization
     PARALLEL::mpi_finalize();
     //--------------------------------------------------------------------------
-    // 释放所分配的空间，建议按照创建顺序逆序释放
+    // Release the allocated memory, recommend to release with inverse order of building
     delete hal;
     delete fld;
     delete par;
