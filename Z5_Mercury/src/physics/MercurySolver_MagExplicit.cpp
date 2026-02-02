@@ -6,6 +6,8 @@ void MercurySolver::Build_E_explicit_edge_()
     for (int iblk = 0; iblk < fld_->num_blocks(); iblk++)
     {
         auto &Uplus = fld_->field(fid_.fid_U_plus, iblk);
+        if (!Uplus.is_allocated())
+            continue;
         auto &Bcell = fld_->field(fid_.fid_Bcell, iblk);
         //  三方向：通量 + ideal face EMF
         for (int dir = 0; dir < 3; ++dir)
