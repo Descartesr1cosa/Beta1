@@ -4,9 +4,9 @@
 void Field::build_geometry(int geomtry_ghost_)
 {
     register_field(FieldDescriptor{"Jac", StaggerLocation::Cell, 1, geomtry_ghost_ - 1});
-    register_field(FieldDescriptor{"JDxi", StaggerLocation::FaceXi, 3, geomtry_ghost_ - 1});
-    register_field(FieldDescriptor{"JDet", StaggerLocation::FaceEt, 3, geomtry_ghost_ - 1});
-    register_field(FieldDescriptor{"JDze", StaggerLocation::FaceZe, 3, geomtry_ghost_ - 1});
+    register_field(FieldDescriptor{"JDxi", StaggerLocation::FaceXi, 3, geomtry_ghost_});
+    register_field(FieldDescriptor{"JDet", StaggerLocation::FaceEt, 3, geomtry_ghost_});
+    register_field(FieldDescriptor{"JDze", StaggerLocation::FaceZe, 3, geomtry_ghost_});
 
     // --- NEW: covariant basis vectors at cell centers ---
     register_field(FieldDescriptor{"a_xi", StaggerLocation::Cell, 3, 0});
