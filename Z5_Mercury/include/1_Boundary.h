@@ -114,7 +114,7 @@ private:
     void Sync_(const BoundGroup &g);
 
     // -------------------------------  handlers -------------------------------
-    void BC_UH_Farfield_H_(FieldBlock &, Field *, const BOUND::PhysicalRegion &, int ngh) {};
-    void BC_UH_Farfield_Na_(FieldBlock &, Field *, const BOUND::PhysicalRegion &, int ngh) {};
-    void BC_Solid_Surface_(FieldBlock &, Field *, const BOUND::PhysicalRegion &, int ngh) {};
+    void BC_UH_Farfield_H_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_UH_Farfield_Na_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_Solid_Surface_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
 };

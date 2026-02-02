@@ -124,7 +124,7 @@ void MercuryBoundary::Build(bool strict_check)
 void MercuryBoundary::InitBCStateFromParam_()
 {
     // ---- Constants ----
-    double gamma = par_->GetDou_List("constant").data["gamma"];
+    bc_state_.gamma = par_->GetDou_List("constant").data["gamma"];
     double NA = par_->GetDou_List("constant").data["NA"];
     double R_uni = par_->GetDou_List("constant").data["R_uni"];
     double q_e = par_->GetDou_List("constant").data["q_e"];
@@ -181,7 +181,7 @@ void MercuryBoundary::InitBCStateFromParam_()
     bc_state_.qinf[2] = rho0 * v0;
     bc_state_.qinf[3] = rho0 * w0;
     bc_state_.qinf[4] = 0.5 * rho0 * (u0 * u0 + v0 * v0 + w0 * w0) // Kinetic energy
-                        + p0 / (gamma - 1.0);                      // Inertial energy
+                        + p0 / (bc_state_.gamma - 1.0);            // Inertial energy
 
     // IMF
     bc_state_.B_imf[0] = Bx;
@@ -200,5 +200,5 @@ void MercuryBoundary::InitBCStateFromParam_()
     bc_state_.qinfs[1] = 0.0;
     bc_state_.qinfs[2] = 0.0;
     bc_state_.qinfs[3] = 0.0;
-    bc_state_.qinfs[4] = bc_state_.q_pv_infs[3] / (gamma - 1.0) + 0.5 * bc_state_.qinfs[0] * (bc_state_.q_pv_infs[0] * bc_state_.q_pv_infs[0] + bc_state_.q_pv_infs[1] * bc_state_.q_pv_infs[1] + bc_state_.q_pv_infs[2] * bc_state_.q_pv_infs[2]);
+    bc_state_.qinfs[4] = bc_state_.q_pv_infs[3] / (bc_state_.gamma - 1.0) + 0.5 * bc_state_.qinfs[0] * (bc_state_.q_pv_infs[0] * bc_state_.q_pv_infs[0] + bc_state_.q_pv_infs[1] * bc_state_.q_pv_infs[1] + bc_state_.q_pv_infs[2] * bc_state_.q_pv_infs[2]);
 }
