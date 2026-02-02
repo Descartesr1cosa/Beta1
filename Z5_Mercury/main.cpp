@@ -53,9 +53,12 @@ int main(int arg, char **argv)
     fld->register_field({"B_zeta", StaggerLocation::FaceZe, 1, ngg});      // induced magnetic flux for Face Zeta
 
     // Auxiliary physical fields
-    fld->register_field({"E_xi", StaggerLocation::EdgeXi, 1, ngg});   // Integration of electric field along Edge Xi
-    fld->register_field({"E_eta", StaggerLocation::EdgeEt, 1, ngg});  // Integration of electric field along Edge Eta
-    fld->register_field({"E_zeta", StaggerLocation::EdgeZe, 1, ngg}); // Integration of electric field along Edge Zeta
+    fld->register_field({"E_xi", StaggerLocation::EdgeXi, 1, ngg});       // Integration of electric field along Edge Xi
+    fld->register_field({"E_eta", StaggerLocation::EdgeEt, 1, ngg});      // Integration of electric field along Edge Eta
+    fld->register_field({"E_zeta", StaggerLocation::EdgeZe, 1, ngg});     // Integration of electric field along Edge Zeta
+    fld->register_field({"Eface_xi", StaggerLocation::FaceXi, 3, ngg});   // Integration of electric field on Face Xi For CT
+    fld->register_field({"Eface_eta", StaggerLocation::FaceEt, 3, ngg});  // Integration of electric field on Face Eta For CT
+    fld->register_field({"Eface_zeta", StaggerLocation::FaceZe, 3, ngg}); // Integration of electric field on Face Zeta For CT
 
     fld->register_field({"J_xi", StaggerLocation::EdgeXi, 1, ngg});   // Integration of electric current along Edge Xi
     fld->register_field({"J_eta", StaggerLocation::EdgeEt, 1, ngg});  // Integration of electric current along Edge Eta
@@ -82,6 +85,9 @@ int main(int arg, char **argv)
     fld->register_field(FieldDescriptor{"divB", StaggerLocation::Cell, 1, 1}); // 1 layer of ghost grid for interpolation of Cell to Node (output and visualization)
     fld->register_field(FieldDescriptor{"RHS_H", StaggerLocation::Cell, 5, 0, "Fluid"});
     fld->register_field(FieldDescriptor{"RHS_Na", StaggerLocation::Cell, 5, 0, "Fluid"});
+    fld->register_field(FieldDescriptor{"RHS_B_xi", StaggerLocation::FaceXi, 1, 0});
+    fld->register_field(FieldDescriptor{"RHS_B_eta", StaggerLocation::FaceEt, 1, 0});
+    fld->register_field(FieldDescriptor{"RHS_B_zeta", StaggerLocation::FaceZe, 1, 0});
     //--------------------------------------------------------------------------
     // Register Coupling Pair Description（CouplingPairDesc）
     //   register_coupling_channel("A", "B", "A_field",**):

@@ -77,14 +77,14 @@ void MercuryBoundary::InstallDefaultGroups()
     gU.halo_level = HaloLevel::Vertex;
     AddGroup(gU);
 
-    // BoundGroup gBadd;
-    // gBadd.name = "Baddface";
-    // gBadd.fields = {"Badd_xi", "Badd_eta", "Badd_zeta"};
-    // gBadd.do_coupling = false;
-    // gBadd.do_physical = true;
-    // gBadd.do_halo = true;
-    // gBadd.halo_level = HaloLevel::Vertex;
-    // AddGroup(gBadd);
+    // BoundGroup gE;
+    // gE.name = "Eedge";
+    // gE.fields = {"E_xi", "E_eta", "E_zeta"};
+    // gE.do_coupling = false;
+    // gE.do_physical = true;
+    // gE.do_halo = true;
+    // gE.halo_level = HaloLevel::Vertex;
+    // AddGroup(gE);
 
     BoundGroup gB;
     gB.name = "Bface";

@@ -68,9 +68,33 @@ private:
     bool StepOnce();
     //---------------------------------------------------------------
     void Compute_Timestep();
-    // void Time_Advance();
     bool UpdateControlAndOutput();
-    // //=========================================================================
+    //=========================================================================
+
+    //=========================================================================
+    void Time_Advance();
+    //---------------------------------------------------------------
+    void ZeroRHS_();
+    void AssembleRHS_Fluid_();
+    void AssembleRHS_Induction_CT_();
+    void ApplyUpdate_Euler_();
+    //---------------------------------------------------------------
+    // For Fluid
+    void Scheme_U_();
+    void AddSourceToRHS_Fluid();
+    //---------------------------------------------------------------
+    // For Magnetic
+    void Build_E_explicit_edge_();
+    //--------------------------------
+    void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus);
+    void AssembleEdgeEMF_FromFaceE_Ideal_();
+    //--------------------------------
+    void ReconstructionEMF_(double *metric, int32_t direction,
+                            FieldBlock &Uplus, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
+                            double *out_flux);
+    //---------------------------------------------------------------
+
+    //=========================================================================
 
 private:
     // //=========================================================================

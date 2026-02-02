@@ -28,7 +28,7 @@ bool MercurySolver::StepOnce()
     Compute_Timestep();
 
     // Time Advance
-    // Time_Advance();
+    Time_Advance();
 
     // Record and Update Runtime DATA
     {
