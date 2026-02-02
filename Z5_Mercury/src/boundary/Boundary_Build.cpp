@@ -58,10 +58,12 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceXi, "B_xi", "B_xi", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceEt, "B_eta", "B_eta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceZe, "B_zeta", "B_zeta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
 
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "B_xi", "B_xi", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "B_eta", "B_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "B_zeta", "B_zeta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
 }
 
 void MercuryBoundary::InstallDefaultGroups()
