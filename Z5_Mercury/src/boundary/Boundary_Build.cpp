@@ -61,6 +61,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeXi, "J_xi", "J_xi", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeEt, "J_eta", "J_eta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeZe, "J_zeta", "J_zeta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeXi, "E_xi", "E_xi", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeEt, "E_eta", "E_eta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeZe, "E_zeta", "E_zeta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
 
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "B_xi", "B_xi", ccopy);
@@ -69,6 +72,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeXi, "J_xi", "J_xi", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeEt, "J_eta", "J_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeZe, "J_zeta", "J_zeta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeXi, "E_xi", "E_xi", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeEt, "E_eta", "E_eta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeZe, "E_zeta", "E_zeta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
 }
 
@@ -92,14 +98,14 @@ void MercuryBoundary::InstallDefaultGroups()
     gJ.halo_level = HaloLevel::Vertex;
     AddGroup(gJ);
 
-    // BoundGroup gE;
-    // gE.name = "Eedge";
-    // gE.fields = {"E_xi", "E_eta", "E_zeta"};
-    // gE.do_coupling = false;
-    // gE.do_physical = true;
-    // gE.do_halo = true;
-    // gE.halo_level = HaloLevel::Vertex;
-    // AddGroup(gE);
+    BoundGroup gE;
+    gE.name = "Eedge";
+    gE.fields = {"E_xi", "E_eta", "E_zeta"};
+    gE.do_coupling = true;
+    gE.do_physical = true;
+    gE.do_halo = true;
+    gE.halo_level = HaloLevel::Vertex;
+    AddGroup(gE);
 
     BoundGroup gB;
     gB.name = "Bface";
