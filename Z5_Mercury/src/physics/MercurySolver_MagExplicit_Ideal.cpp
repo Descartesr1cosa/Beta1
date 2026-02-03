@@ -178,7 +178,7 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
         // Alfvén speed square
         double vA2 = inver_MA2 * BB2 / rho;
         // vAn^2:  (B·n)^2，where n = k/|k|，so (B·n)^2 = (B·k)^2/|k|^2
-        double Bdotk = B[3]; // 与 calc_Jac_Flux_GCL 一致：face 的 B·k
+        double Bdotk = B[3]; // consistent with calc_Jac_Flux_GCL：face  B·k
         double vAn2 = (kk > 0.0) ? (inver_MA2 * (Bdotk * Bdotk) / (rho * kk)) : 0.0;
         // fast magnetosonic
         double term = cs2 + vA2;
