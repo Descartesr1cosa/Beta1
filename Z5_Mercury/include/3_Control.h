@@ -53,6 +53,7 @@ public:
         if (maximum_time_ > 0.0 && run_data.time >= maximum_time_)
             if_stop = true;
         if_outfile = if_outfile || if_stop;
+        if_outres = if_outres || if_stop;
     }
 
 public:
