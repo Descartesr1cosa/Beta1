@@ -164,7 +164,7 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
                         dr.vec[1] = y(i + 1, j, k) - y(i, j, k);
                         dr.vec[2] = z(i + 1, j, k) - z(i, j, k);
 
-                        E_xi(i, j, k, 0) = Evec * dr; // line integral
+                        E_xi(i, j, k, 0) += Evec * dr; // line integral
                     }
         }
 
@@ -219,7 +219,7 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
                         dr.vec[1] = y(i, j + 1, k) - y(i, j, k);
                         dr.vec[2] = z(i, j + 1, k) - z(i, j, k);
 
-                        E_eta(i, j, k, 0) = Evec * dr;
+                        E_eta(i, j, k, 0) += Evec * dr;
                     }
         }
 
@@ -274,7 +274,7 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
                         dr.vec[1] = y(i, j, k + 1) - y(i, j, k);
                         dr.vec[2] = z(i, j, k + 1) - z(i, j, k);
 
-                        E_zeta(i, j, k, 0) = Evec * dr;
+                        E_zeta(i, j, k, 0) += Evec * dr;
                     }
         }
     }
