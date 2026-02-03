@@ -43,6 +43,9 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
         auto &UH = fld_->field(fid_.fid_U_H, iblk);
         auto &UNa = fld_->field(fid_.fid_U_Na, iblk);
 
+        if (!UH.is_allocated() || !UNa.is_allocated())
+            continue;
+
         auto &Bind_xi = fld_->field(fid_.fid_B.xi, iblk);
         auto &Bind_eta = fld_->field(fid_.fid_B.eta, iblk);
         auto &Bind_zeta = fld_->field(fid_.fid_B.zeta, iblk);
