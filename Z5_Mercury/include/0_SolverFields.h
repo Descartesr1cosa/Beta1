@@ -51,6 +51,8 @@ struct SolverFields
     // ---- geometry ----
     int fid_Jac = -1;
     IdTriplet fid_metric; // (xi,eta,zeta) <- (JDxi,JDet,JDze)
+    IdTriplet fid_pinvGT; // (pinvGT_xi, pinvGT_eta, pinvGT_zeta)  ncomp=9
+    IdTriplet fid_pinvAT; // (pinvAT_xi, pinvAT_eta, pinvAT_zeta)  ncomp=9
 
     // ---- field ids ----
     int fid_U_H = -1;
@@ -99,6 +101,12 @@ struct SolverFields
         fid_metric.xi = fld->field_id("JDxi");
         fid_metric.eta = fld->field_id("JDet");
         fid_metric.zeta = fld->field_id("JDze");
+        fid_pinvGT.xi = fld->field_id("pinvGT_xi");
+        fid_pinvGT.eta = fld->field_id("pinvGT_eta");
+        fid_pinvGT.zeta = fld->field_id("pinvGT_zeta");
+        fid_pinvAT.xi = fld->field_id("pinvAT_xi");
+        fid_pinvAT.eta = fld->field_id("pinvAT_eta");
+        fid_pinvAT.zeta = fld->field_id("pinvAT_zeta");
 
         // ---- field ids ----
         fid_U_H = fld->field_id("U_H");
@@ -175,6 +183,8 @@ struct SolverFields
         // ---- geometry ----
         require_id(fid_Jac, "Jac");
         fid_metric.require_all("metric(JDxi/JDet/JDze)");
+        fid_pinvGT.require_all("pinvGT(edge)");
+        fid_pinvAT.require_all("pinvAT(edge)");
 
         // ---- field ids ----
         require_id(fid_U_H, "U_H");
