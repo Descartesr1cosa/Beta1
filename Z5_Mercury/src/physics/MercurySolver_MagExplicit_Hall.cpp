@@ -4,6 +4,7 @@ void MercurySolver::AddHallEdgeEMF_()
 {
     ComputeJ_AtEdges_Inner_();
     // ApplyBC_EdgeJ_();
+    mercury_bound_.Sync("Jedge");
     AddHallE_AtEdges_EnergyPreserving_(); // 只填 Ehall_xi/eta/zeta（线积分量）加入E
 }
 

@@ -57,9 +57,20 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     // ---- Boundary ----
     {
         // 0) 需要添加边界的物理场
-        std::vector<std::string> bnd_fields = {"U_H", "U_Na",
-                                               "B_xi", "B_eta", "B_zeta",
-                                               "Badd_xi", "Badd_eta", "Badd_zeta", "B_cell"};
+        std::vector<std::string> bnd_fields = {
+            "U_H",
+            "U_Na",
+            "B_xi",
+            "B_eta",
+            "B_zeta",
+            "Badd_xi",
+            "Badd_eta",
+            "Badd_zeta",
+            "B_cell",
+            "J_xi",
+            "J_eta",
+            "J_zeta",
+        };
 
         // 1) 初始化 Mercury Boundary
         mercury_bound_.Setup(grd_, fld_, topo_, halo_, par_, bnd_fields);
