@@ -17,7 +17,7 @@ void MercurySolver::AddIdealEdgeEMF_()
             auto &B_face_add = fld_->field(fid_.fid_Badd.at(dir), iblk);
             auto &metric = fld_->field(fid_.fid_metric.at(dir), iblk); // Xi_[iblk]/Eta_[iblk]/Zeta_[iblk]
 
-            AssembleOneDirectionEMF_(iblk, dir, E_face, B_face, B_face_add, metric, Uplus, Bcell);
+            AssembleOneDirectionEMF_(iblk, dir, E_face, B_face, B_face_add, Bcell, metric, Uplus);
         }
     }
 
