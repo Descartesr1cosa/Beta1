@@ -126,7 +126,7 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
                     {
                         if (!cache_is_valid(pinvGT_xi, i, j, k) || !cache_is_valid(pinvAT_xi, i, j, k))
                         {
-                            E_xi(i, j, k, 0) = 0.0;
+                            E_xi(i, j, k, 0) += 0.0;
                             continue;
                         }
 
@@ -182,7 +182,7 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
                     {
                         if (!cache_is_valid(pinvGT_eta, i, j, k) || !cache_is_valid(pinvAT_eta, i, j, k))
                         {
-                            E_eta(i, j, k, 0) = 0.0;
+                            E_eta(i, j, k, 0) += 0.0;
                             continue;
                         }
 
@@ -237,7 +237,7 @@ void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
                     {
                         if (!cache_is_valid(pinvGT_zeta, i, j, k) || !cache_is_valid(pinvAT_zeta, i, j, k))
                         {
-                            E_zeta(i, j, k, 0) = 0.0;
+                            E_zeta(i, j, k, 0) += 0.0;
                             continue;
                         }
 
