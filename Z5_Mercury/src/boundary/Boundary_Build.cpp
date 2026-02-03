@@ -58,6 +58,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceXi, "B_xi", "B_xi", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceEt, "B_eta", "B_eta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceZe, "B_zeta", "B_zeta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceXi, "Eface_xi", "Eface_xi", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceEt, "Eface_eta", "Eface_eta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceZe, "Eface_zeta", "Eface_zeta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeXi, "J_xi", "J_xi", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeEt, "J_eta", "J_eta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeZe, "J_zeta", "J_zeta", ccopy);
@@ -69,6 +72,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "B_xi", "B_xi", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "B_eta", "B_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "B_zeta", "B_zeta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "Eface_xi", "Eface_xi", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "Eface_eta", "Eface_eta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "Eface_zeta", "Eface_zeta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeXi, "J_xi", "J_xi", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeEt, "J_eta", "J_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeZe, "J_zeta", "J_zeta", ccopy);
@@ -116,6 +122,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gB.halo_level = HaloLevel::Vertex;
     gB.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gB);
+
+    BoundGroup EfaceB;
+    EfaceB.name = "Eface";
+    EfaceB.fields = {"Eface_xi", "Eface_eta", "Eface_zeta"};
+    EfaceB.do_coupling = true;
+    EfaceB.do_physical = true;
+    EfaceB.do_halo = true;
+    EfaceB.halo_level = HaloLevel::Vertex;
+    EfaceB.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(EfaceB);
 
     BoundGroup gBc;
     gBc.name = "B_cell";

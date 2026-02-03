@@ -21,6 +21,8 @@ void MercurySolver::AddIdealEdgeEMF_()
         }
     }
 
+    mercury_bound_.Sync("Eface");
+
     AssembleEdgeEMF_FromFaceE_Ideal_();
 }
 
