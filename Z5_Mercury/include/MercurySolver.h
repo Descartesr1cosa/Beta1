@@ -94,10 +94,10 @@ private:
     void AddAmbipolarEdgeEMF_();
     //--------------------------------
     //  For Ideal
-    void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus);
+    void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN);
     void AssembleEdgeEMF_FromFaceE_Ideal_();
     void ReconstructionEMF_(double *metric, int32_t direction,
-                            FieldBlock &Uplus, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
+                            FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
                             double *out_flux);
     //--------------------------------
     //  For Hall

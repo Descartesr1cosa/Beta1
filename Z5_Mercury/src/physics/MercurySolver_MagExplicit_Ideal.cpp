@@ -6,7 +6,9 @@ void MercurySolver::AddIdealEdgeEMF_()
     for (int iblk = 0; iblk < fld_->num_blocks(); iblk++)
     {
         auto &Uplus = fld_->field(fid_.fid_U_plus, iblk);
-        if (!Uplus.is_allocated())
+        auto &UH = fld_->field(fid_.fid_U_H, iblk);
+        auto &UN = fld_->field(fid_.fid_U_Na, iblk);
+        if (!Uplus.is_allocated() || !UH.is_allocated() || !UN.is_allocated())
             continue;
         auto &Bcell = fld_->field(fid_.fid_Bcell, iblk);
         //  三方向：通量 + ideal face EMF
@@ -17,7 +19,7 @@ void MercurySolver::AddIdealEdgeEMF_()
             auto &B_face_add = fld_->field(fid_.fid_Badd.at(dir), iblk);
             auto &metric = fld_->field(fid_.fid_metric.at(dir), iblk); // Xi_[iblk]/Eta_[iblk]/Zeta_[iblk]
 
-            AssembleOneDirectionEMF_(iblk, dir, E_face, B_face, B_face_add, Bcell, metric, Uplus);
+            AssembleOneDirectionEMF_(iblk, dir, E_face, B_face, B_face_add, Bcell, metric, Uplus, UH, UN);
         }
     }
 
@@ -115,7 +117,7 @@ void MercurySolver::AssembleOneDirectionEMF_(
     FieldBlock &B_face_add, // B_xi/eta/zeta add    (ncomp=1)
     FieldBlock &Bcell,
     FieldBlock &metricField, // Xi_/Eta_/Zeta_      (ncomp=3)
-    FieldBlock &Uplus)
+    FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN)
 {
     Int3 sub = E_face.inner_lo();
     Int3 sup = E_face.inner_hi();
@@ -131,7 +133,7 @@ void MercurySolver::AssembleOneDirectionEMF_(
                 metric[1] = metricField(i, j, k, 1);
                 metric[2] = metricField(i, j, k, 2);
 
-                ReconstructionEMF_(metric, dir, Uplus, Bcell,
+                ReconstructionEMF_(metric, dir, Uplus, UH, UN, Bcell,
                                    B_face(i, j, k, 0) + B_face_add(i, j, k, 0), iblk, i, j, k, flux3);
 
                 // 2) Ideal MHD electric field on face
@@ -142,7 +144,7 @@ void MercurySolver::AssembleOneDirectionEMF_(
 }
 
 void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
-                                       FieldBlock &Uplus, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
+                                       FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
                                        double *out_flux)
 {
     auto calc_Jac_radius_GCL = [&](double &out, double *pv, double *B, double *metric)
@@ -150,6 +152,8 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
         double u, v, w;
         double BB2, Bx, By, Bz;
         double K1, K2, K3;
+        double rho = pv[3];
+        double p = pv[4];
         u = pv[0];
         v = pv[1];
         w = pv[2];
@@ -164,13 +168,31 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
         K2 = metric[1];
         K3 = metric[2];
 
+        double kk = K1 * K1 + K2 * K2 + K3 * K3;
+        double kn = std::sqrt(kk);
+
         double uvw = K1 * u + K2 * v + K3 * w;
+
+        // sound speed square
+        double cs2 = gamma_ * p / rho;
+        // Alfvén speed square
+        double vA2 = inver_MA2 * BB2 / rho;
+        // vAn^2:  (B·n)^2，where n = k/|k|，so (B·n)^2 = (B·k)^2/|k|^2
+        double Bdotk = Bx * K1 + By * K2 + Bz * K3;
+        double vAn2 = (kk > 0.0) ? (inver_MA2 * (Bdotk * Bdotk) / (rho * kk)) : 0.0;
+        // fast magnetosonic
+        double term = cs2 + vA2;
+        double disc = term * term - 4.0 * cs2 * vAn2;
+        if (disc < 0.0)
+            disc = 0.0;
+        double cf = std::sqrt(0.5 * (term + std::sqrt(disc)));
+
         // double cc1 = sqrt((gamma_ * p / rho) * (K1 * K1 + K2 * K2 + K3 * K3));
         // double cc = sqrt((gamma_ * p / rho + BB2 / rho * inver_MA2) * (K1 * K1 + K2 * K2 + K3 * K3));
         // constexpr double C_hall_safe = 1.5;
         // double c_hall = C_hall_safe * ion_inertial_len * sqrt(BB2 / rho * inver_MA2 * (K1 * K1 + K2 * K2 + K3 * K3)); // ≈ Jac * v_A * d_i * |k|
         // out = fabs(uvw) + cc + c_hall;
-        out = 1.5 * fabs(uvw); //+ cc;
+        out = 1.1 * (fabs(uvw) + cf * kn);
         return;
     };
 
@@ -204,7 +226,8 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
     int j = index_j;
     int k = index_k;
 
-    double ppvvL[3], ppvvR[3], BL[4], BR[4];
+    double ppvvL[5], ppvvR[5], BL[4], BR[4];
+    // ppvv u v w rho p;
     double radius[2];
 
     auto fill_state = [&](int ic, int jc, int kc, double *pv, double *B)
@@ -212,6 +235,10 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
         double u = Uplus(ic, jc, kc, 0);
         double v = Uplus(ic, jc, kc, 1);
         double w = Uplus(ic, jc, kc, 2);
+
+        double rho = UH(ic, jc, kc, 0) + UN(ic, jc, kc, 0);
+        double p = (UH(ic, jc, kc, 4) - 0.5 / UH(ic, jc, kc, 0) * (UH(ic, jc, kc, 1) * UH(ic, jc, kc, 1) + UH(ic, jc, kc, 2) * UH(ic, jc, kc, 2) + UH(ic, jc, kc, 3) * UH(ic, jc, kc, 3))) * (gamma_ - 1.0);
+        p += (UN(ic, jc, kc, 4) - 0.5 / UN(ic, jc, kc, 0) * (UN(ic, jc, kc, 1) * UN(ic, jc, kc, 1) + UN(ic, jc, kc, 2) * UN(ic, jc, kc, 2) + UN(ic, jc, kc, 3) * UN(ic, jc, kc, 3))) * (gamma_ - 1.0);
 
         double Bx = B_cell(ic, jc, kc, 0); // including B_add
         double By = B_cell(ic, jc, kc, 1); // including B_add
@@ -226,6 +253,8 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
         pv[0] = u;
         pv[1] = v;
         pv[2] = w;
+        pv[3] = rho;
+        pv[4] = p;
 
         B[0] = Bx;
         B[1] = By;
