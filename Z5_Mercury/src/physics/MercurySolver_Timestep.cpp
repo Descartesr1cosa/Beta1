@@ -21,6 +21,7 @@ void MercurySolver::Compute_Timestep()
         for (int ib = 0; ib < nb; ++ib)
         {
             FieldBlock &U = fld_->field(fidU, ib);
+            FieldBlock &Bcell = fld_->field(fid_.fid_Bcell, ib);
             FieldBlock &Jac = fld_->field(fid_.fid_Jac, ib);
             FieldBlock &Axi = fld_->field(fid_.fid_metric.xi, ib);
             FieldBlock &Aet = fld_->field(fid_.fid_metric.eta, ib);
@@ -51,7 +52,21 @@ void MercurySolver::Compute_Timestep()
                         double eint = E - ke;
                         double p = (gamma_ - 1.0) * eint;
 
-                        double c = std::sqrt(gamma_ * p / rho);
+                        double cs2 = gamma_ * p / rho;
+
+                        double Bx = Bcell(i, j, k, 0);
+                        double By = Bcell(i, j, k, 1);
+                        double Bz = Bcell(i, j, k, 2);
+                        double B2 = Bx * Bx + By * By + Bz * Bz;
+
+                        auto fast_cf = [&](double vA2, double vAn2) -> double
+                        {
+                            double term = cs2 + vA2;
+                            double disc = term * term - 4.0 * cs2 * vAn2;
+                            if (disc < 0.0)
+                                disc = 0.0; // 数值保护
+                            return std::sqrt(0.5 * (term + std::sqrt(disc)));
+                        };
 
                         auto face_term = [&](double ax, double ay, double az, bool outward_plus)
                         {
@@ -66,7 +81,11 @@ void MercurySolver::Compute_Timestep()
                                 nz = -nz;
                             } // outward to minus side
                             double un = ux * nx + uy * ny + uz * nz;
-                            return (std::abs(un) + c) * A;
+                            double Bn = Bx * nx + By * ny + Bz * nz;
+                            double vA2 = inver_MA2 * B2 / rho;
+                            double vAn2 = inver_MA2 * (Bn * Bn) / rho;
+                            double cf = fast_cf(vA2, vAn2);
+                            return (std::abs(un) + cf) * A;
                         };
 
                         double denom = 0.0;

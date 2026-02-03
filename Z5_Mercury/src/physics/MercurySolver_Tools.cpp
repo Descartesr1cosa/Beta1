@@ -26,6 +26,8 @@ void MercurySolver::calc_physical_constant(Param *par)
     rho_ref = M_H * ref.data["n"];
 
     ambi_coef = M_H * U_ref / (cst.data["q_e"] * ref.data["L_ref"] * ref.data["B_ref"]);
+
+    inver_MA2 = ref.data["B_ref"] * ref.data["B_ref"] / (U_ref * U_ref * cst.data["mu_mag"] * rho_ref);
 }
 
 void MercurySolver::calc_PV()

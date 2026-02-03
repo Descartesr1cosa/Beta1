@@ -55,6 +55,7 @@ private:
     double hall_coef{0.0};
     double rho_ref{0.0};
     double ambi_coef{0.0};
+    double inver_MA2{0.0};
 
 private:
     //=========================================================================
