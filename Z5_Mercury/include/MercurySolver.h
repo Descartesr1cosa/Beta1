@@ -56,6 +56,7 @@ private:
     double rho_ref{0.0};
     double ambi_coef{0.0};
     double inver_MA2{0.0};
+    double inver_Rem{0.0};
 
 private:
     //=========================================================================
@@ -89,6 +90,7 @@ private:
     //---------------------------------------------------------------
     // For Magnetic
     void Build_E_explicit_edge_();
+    void AddResistiveEdgeEMF_();
     void AddIdealEdgeEMF_();
     void AddHallEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
