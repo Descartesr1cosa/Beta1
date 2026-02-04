@@ -12,14 +12,16 @@ void MercuryBoundary::InstallHandlers()
         BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     };
 
+    auto nop = [](FieldBlock &, Field *, const BOUND::PhysicalRegion &, int) {};
+
     // 1) 先给 boundary_fields_ 全部注册通用 handler（保证 CheckPhysicalHandlers 能过）
     for (auto &fn : boundary_fields_)
     {
         RegisterPhysical_(fn, "Outflow", copy);
         RegisterPhysical_(fn, "Pole", copy);
         RegisterPhysical_(fn, "Farfield", copy);
-        RegisterPhysical_(fn, "Coupled-Solid", copy);
-        RegisterPhysical_(fn, "Coupled-Fluid", copy);
+        RegisterPhysical_(fn, "Coupled-Solid", nop);
+        RegisterPhysical_(fn, "Coupled-Fluid", nop);
     }
 
     // 2) 覆盖真正需要特殊处理的：
