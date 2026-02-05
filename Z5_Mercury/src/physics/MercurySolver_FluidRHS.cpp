@@ -409,9 +409,13 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         pe_p_k = PVH(i, j, k + 1, 3) + PVN(i, j, k + 1, 3);
                         pe_m_k = PVH(i, j, k - 1, 3) + PVN(i, j, k - 1, 3);
 
-                        dpex = dd(ax, bx, cx, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
-                        dpey = dd(ay, by, cy, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
-                        dpez = dd(az, bz, cz, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                        // dpex = dd(ax, bx, cx, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                        // dpey = dd(ay, by, cy, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                        // dpez = dd(az, bz, cz, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+
+                        dpex = 0.0;
+                        dpey = 0.0;
+                        dpez = 0.0;
                     }
 
                     // ---------- ionization source sss (cm^-3 s^-1), only for Na+ ----------
