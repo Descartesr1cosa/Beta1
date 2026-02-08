@@ -2,35 +2,7 @@
 
 void MercurySolver::AddHallEdgeEMF_()
 {
-    ComputeJ_AtEdges_Inner_();
-    // ApplyBC_EdgeJ_();
-    mercury_bound_.Sync("Jedge");
-    AddHallE_AtEdges_EnergyPreserving_(); // 只填 Ehall_xi/eta/zeta（线积分量）加入E
-}
-
-void MercurySolver::ComputeJ_AtEdges_Inner_()
-{
-    for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
-    {
-        auto &Bxi = fld_->field(fid_.fid_B.xi, iblk);
-        auto &Beta = fld_->field(fid_.fid_B.eta, iblk);
-        auto &Bzeta = fld_->field(fid_.fid_B.zeta, iblk);
-
-        auto &Jxi = fld_->field(fid_.fid_J.xi, iblk);
-        auto &Jeta = fld_->field(fid_.fid_J.eta, iblk);
-        auto &Jzeta = fld_->field(fid_.fid_J.zeta, iblk);
-
-        // compute J (edge 1-form) from face B (2-form)
-        // multiper 用 +1.0 J =curl B。
-        CTOperators::CurlAdjFaceToEdge(iblk,
-                                       Bxi, Beta, Bzeta,
-                                       Jxi, Jeta, Jzeta,
-                                       /*multiper=*/1.0);
-    }
-}
-
-void MercurySolver::AddHallE_AtEdges_EnergyPreserving_()
-{
+    // Add Ehall_xi/eta/zeta（integration along Edge）to E
     // ------------------------------------------------------------
     // Hall coefficient:
     //   E_hall = alpha * (J x B)

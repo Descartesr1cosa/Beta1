@@ -31,13 +31,10 @@ void MercurySolver::AssembleRHS_Induction_CT_()
         // 1) Calculate the E fields
         Build_E_explicit_edge_();
 
-        // 2) Add magnetic diffusion in solid (and optionally fluid)
-        AddResistiveEdgeEMF_();
-
-        // 3) E_edge 也要进边界/halo（否则 curl 更新 B_face 时边界附近会乱）
+        // 2) E_edge 也要进边界/halo（否则 curl 更新 B_face 时边界附近会乱）
         mercury_bound_.Sync("Eedge"); // 你需要加一个 group：fields={E_xi,E_eta,E_zeta}
 
-        // 4) curl(E_edge) -> RHS_Bface，然后 Bface += dt*RHS
+        // 3) curl(E_edge) -> RHS_Bface，然后 Bface += dt*RHS
         for (int ib = 0; ib < nb; ++ib)
         {
             auto &Exi = fld_->field(fid_.fid_E.xi, ib);

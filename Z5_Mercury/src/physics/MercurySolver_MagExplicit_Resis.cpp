@@ -17,27 +17,7 @@ void MercurySolver::AddResistiveEdgeEMF_()
         return 0.5 * (std::tanh((r - r0) / w) - std::tanh((r - r1) / w));
     };
 
-    // ---- (1) compute Jedge = curlAdj(Bface_induced) (inner) ----
-    for (int ib = 0; ib < nb; ++ib)
-    {
-        auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
-        auto &Beta = fld_->field(fid_.fid_B.eta, ib);
-        auto &Bzeta = fld_->field(fid_.fid_B.zeta, ib);
-
-        auto &Jxi = fld_->field(fid_.fid_J.xi, ib);
-        auto &Jeta = fld_->field(fid_.fid_J.eta, ib);
-        auto &Jzeta = fld_->field(fid_.fid_J.zeta, ib);
-
-        if (!Bxi.is_allocated())
-            continue;
-
-        CTOperators::CurlAdjFaceToEdge(ib, Bxi, Beta, Bzeta, Jxi, Jeta, Jzeta, /*multiper=*/1.0);
-    }
-
-    // halo/coupling for J if later stencils need ghost; if you only add diffusion on strict inner, halo is enough.
-    mercury_bound_.Sync("Jedge");
-
-    // ---- (2) add resistive E on solid blocks: E += invRem8 * yita0_edge * J ----
+    // ----  add resistive E on solid blocks: E += invRem8 * yita0_edge * J ----
     for (int ib = 0; ib < nb; ++ib)
     {
         Block &blk = fld_->grd->grids(ib);

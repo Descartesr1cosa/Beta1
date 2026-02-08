@@ -94,6 +94,7 @@ private:
     void AddIdealEdgeEMF_();
     void AddHallEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
+    void Calc_J_Edge();
     //--------------------------------
     //  For Ideal
     void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN);
@@ -101,10 +102,6 @@ private:
     void ReconstructionEMF_(double *metric, int32_t direction,
                             FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
                             double *out_flux);
-    //--------------------------------
-    //  For Hall
-    void ComputeJ_AtEdges_Inner_();
-    void AddHallE_AtEdges_EnergyPreserving_();
     //---------------------------------------------------------------
 
     //=========================================================================
