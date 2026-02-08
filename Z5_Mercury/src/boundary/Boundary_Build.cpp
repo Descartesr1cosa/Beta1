@@ -49,12 +49,17 @@ void MercuryBoundary::InstallHandlers()
                           this->BC_Solid_Surface_(U, fld, r, ngh);
                       });
 
-    RegisterPhysical_("Eface_xi", "Coupled-Solid", copy);
-    RegisterPhysical_("Eface_xi", "Coupled-Fluid", copy);
-    RegisterPhysical_("Eface_eta", "Coupled-Solid", copy);
-    RegisterPhysical_("Eface_eta", "Coupled-Fluid", copy);
-    RegisterPhysical_("Eface_zeta", "Coupled-Solid", copy);
-    RegisterPhysical_("Eface_zeta", "Coupled-Fluid", copy);
+    auto Eface_zero_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        BC_Solid_Surface_Eface_(U, fld, r, ngh);
+    };
+
+    RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_zero_);
+    RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_zero_);
+    RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_zero_);
+    RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_zero_);
+    RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_zero_);
+    RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_zero_);
 
     // 3) coupling：按你的耦合 channel 注册（先 DefaultCouplingCopy）
     auto ccopy = [](FieldBlock &Udst, Field *fld, CouplingBufferBlock &buf,
@@ -80,12 +85,12 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeEt, "J_eta", "J_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeZe, "J_zeta", "J_zeta", ccopy);
 
-    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceXi, "Eface_xi", "Eface_xi", cnooper);
-    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceEt, "Eface_eta", "Eface_eta", cnooper);
-    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceZe, "Eface_zeta", "Eface_zeta", cnooper);
-    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "Eface_xi", "Eface_xi", cnooper);
-    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "Eface_eta", "Eface_eta", cnooper);
-    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "Eface_zeta", "Eface_zeta", cnooper);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceXi, "Eface_xi", "Eface_xi", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceEt, "Eface_eta", "Eface_eta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceZe, "Eface_zeta", "Eface_zeta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "Eface_xi", "Eface_xi", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "Eface_eta", "Eface_eta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "Eface_zeta", "Eface_zeta", ccopy);
 
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeXi, "E_xi", "E_xi", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeEt, "E_eta", "E_eta", ccopy);
