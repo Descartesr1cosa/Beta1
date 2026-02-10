@@ -50,6 +50,14 @@ public:
         coupling_parallel_face(src, dst);
     }
 
+    // fill coupling buffer, no ghost write, only for field: field_name -> field_cids
+    // field_cids: corresponding channel ids for field_name(s)
+    void coupling_trans_1DCorner(std::string &src, std::string &dst, std::vector<int32_t> &field_cids)
+    {
+        coupling_inner_face(src, dst, field_cids);
+        coupling_parallel_face(src, dst, field_cids);
+    }
+
     // 2D棱虚网格耦合通信（fill coupling buffer, no ghost write）
     void coupling_trans_2DCorner(std::string &src, std::string &dst)
     {
@@ -57,11 +65,27 @@ public:
         coupling_parallel_edge(src, dst);
     }
 
+    // fill coupling buffer, no ghost write, only for field: field_name -> field_cids
+    // field_cids: corresponding channel ids for field_name(s)
+    void coupling_trans_2DCorner(std::string &src, std::string &dst, std::vector<int32_t> &field_cids)
+    {
+        coupling_inner_edge(src, dst, field_cids);
+        coupling_parallel_edge(src, dst, field_cids);
+    }
+
     // 3D角虚网格耦合通信（fill coupling buffer, no ghost write）
     void coupling_trans_3DCorner(std::string &src, std::string &dst)
     {
         coupling_inner_vertex(src, dst);
         coupling_parallel_vertex(src, dst);
+    }
+
+    // fill coupling buffer, no ghost write, only for field: field_name -> field_cids
+    // field_cids: corresponding channel ids for field_name(s)
+    void coupling_trans_3DCorner(std::string &src, std::string &dst, std::vector<int32_t> &field_cids)
+    {
+        coupling_inner_vertex(src, dst, field_cids);
+        coupling_parallel_vertex(src, dst, field_cids);
     }
     //=========================================================================
 
@@ -84,14 +108,20 @@ private:
     // coupling face
     void coupling_inner_face(const std::string &src, const std::string &dst);
     void coupling_parallel_face(const std::string &src, const std::string &dst);
+    void coupling_inner_face(const std::string &src, const std::string &dst, std::vector<int32_t> &field_cids);
+    void coupling_parallel_face(const std::string &src, const std::string &dst, std::vector<int32_t> &field_cids);
 
     // coupling edge
     void coupling_inner_edge(const std::string &src, const std::string &dst);
     void coupling_parallel_edge(const std::string &src, const std::string &dst);
+    void coupling_inner_edge(const std::string &src, const std::string &dst, std::vector<int32_t> &field_cids);
+    void coupling_parallel_edge(const std::string &src, const std::string &dst, std::vector<int32_t> &field_cids);
 
     // coupling vertex
     void coupling_inner_vertex(const std::string &src, const std::string &dst);
     void coupling_parallel_vertex(const std::string &src, const std::string &dst);
+    void coupling_inner_vertex(const std::string &src, const std::string &dst, std::vector<int32_t> &field_cids);
+    void coupling_parallel_vertex(const std::string &src, const std::string &dst, std::vector<int32_t> &field_cids);
     //=========================================================================
 
 private:

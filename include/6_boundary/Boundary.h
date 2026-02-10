@@ -89,8 +89,11 @@ public:
 
     // 对一个 coupling pair 执行：把 buffer 写入 dst ghost
     void ApplyCouplingPair_1DCorner(const std::string &src, const std::string &dst);
+    void ApplyCouplingPair_1DCorner(const std::string &src, const std::string &dst, const std::vector<int32_t> &cids_fields);
     void ApplyCouplingPair_2DCorner(const std::string &src, const std::string &dst);
+    void ApplyCouplingPair_2DCorner(const std::string &src, const std::string &dst, const std::vector<int32_t> &cids_fields);
     void ApplyCouplingPair_3DCorner(const std::string &src, const std::string &dst);
+    void ApplyCouplingPair_3DCorner(const std::string &src, const std::string &dst, const std::vector<int32_t> &cids_fields);
     static void DefaultCouplingCopy(FieldBlock &Udst, Field *fld,
                                     CouplingBufferBlock &buf,
                                     const std::string &src,
