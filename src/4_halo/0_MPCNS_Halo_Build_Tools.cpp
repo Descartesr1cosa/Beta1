@@ -274,21 +274,27 @@ namespace HALO_TOOLS
             (sb.hi.i - sb.lo.i) * (sb.hi.j - sb.lo.j) * (sb.hi.k - sb.lo.k) * ncomp;
         out.resize(n_total);
 
-        int loc_lo[3] = {sb.lo.i, sb.lo.j, sb.lo.k};
-        int loc_hi[3] = {sb.hi.i - 1, sb.hi.j - 1, sb.hi.k - 1}; // closed interval
+        // int loc_lo[3] = {sb.lo.i, sb.lo.j, sb.lo.k};
+        // int loc_hi[3] = {sb.hi.i - 1, sb.hi.j - 1, sb.hi.k - 1}; // closed interval
         int len_loc[3] = {sb.hi.i - sb.lo.i, sb.hi.j - sb.lo.j, sb.hi.k - sb.lo.k};
 
         int offset[3] = {T.offset.i, T.offset.j, T.offset.k};
-        int tar1[3], tar2[3], tar_ref[3];
+        // int tar1[3], tar2[3], tar_ref[3];
 
-        for (int d = 0; d < 3; ++d)
-            tar1[T.perm[d]] = T.sign[d] * loc_lo[d] + offset[d];
-        for (int d = 0; d < 3; ++d)
-            tar2[T.perm[d]] = T.sign[d] * loc_hi[d] + offset[d];
+        // for (int d = 0; d < 3; ++d)
+        //     tar1[T.perm[d]] = T.sign[d] * loc_lo[d] + offset[d];
+        // for (int d = 0; d < 3; ++d)
+        //     tar2[T.perm[d]] = T.sign[d] * loc_hi[d] + offset[d];
 
-        tar_ref[0] = (tar1[0] <= tar2[0]) ? tar1[0] : tar2[0];
-        tar_ref[1] = (tar1[1] <= tar2[1]) ? tar1[1] : tar2[1];
-        tar_ref[2] = (tar1[2] <= tar2[2]) ? tar1[2] : tar2[2];
+        // tar_ref[0] = (tar1[0] <= tar2[0]) ? tar1[0] : tar2[0];
+        // tar_ref[1] = (tar1[1] <= tar2[1]) ? tar1[1] : tar2[1];
+        // tar_ref[2] = (tar1[2] <= tar2[2]) ? tar1[2] : tar2[2];
+        int tar_ref[3] = {0, 0, 0}; // nb box 的“最小角”锚点：用 sb.lo 映射得到
+        {
+            int loc0[3] = {sb.lo.i, sb.lo.j, sb.lo.k};
+            for (int a = 0; a < 3; ++a)
+                tar_ref[T.perm[a]] = T.sign[a] * loc0[a] + offset[a];
+        }
 
         int len_nb[3] = {0, 0, 0};
         for (int d = 0; d < 3; ++d)

@@ -6,43 +6,125 @@ namespace HALO_BOX
 {
     namespace detail
     {
-        static void switch_range_inner(Box3 &box, Direction dir, int nghost)
+        static inline int delta_on_axis(StaggerLocation loc, int ax) // ax:0=i,1=j,2=k
+        {
+            // delta=1: cell-like; delta=0: node-like
+            switch (loc)
+            {
+            case StaggerLocation::Cell:
+                return 1;
+            case StaggerLocation::Node:
+                return 0;
+            case StaggerLocation::FaceXi:
+                return (ax == 0 ? 0 : 1);
+            case StaggerLocation::FaceEt:
+                return (ax == 1 ? 0 : 1);
+            case StaggerLocation::FaceZe:
+                return (ax == 2 ? 0 : 1);
+            case StaggerLocation::EdgeXi:
+                return (ax == 0 ? 1 : 0);
+            case StaggerLocation::EdgeEt:
+                return (ax == 1 ? 1 : 0);
+            case StaggerLocation::EdgeZe:
+                return (ax == 2 ? 1 : 0);
+            default:
+                return 1;
+            }
+        }
+
+        static inline int axis_from_dir(Direction dir) // 0/1/2
         {
             switch (dir)
             {
             case Direction::XMinus:
-                // 左 inner：i ∈ [0 .. g-1] = [0,g)
-                box.lo.i = 0;
-                box.hi.i = nghost;
-                break;
-
             case Direction::XPlus:
-                // 右 inner strip：i ∈ [Ni-g .. Ni) = [hi_int-g, hi_int)
-                box.lo.i = box.hi.i - nghost;
-                box.hi.i = box.hi.i;
-                break;
-
+                return 0;
             case Direction::YMinus:
-                box.lo.j = 0;
-                box.hi.j = nghost;
-                break;
-
             case Direction::YPlus:
-                box.lo.j = box.hi.j - nghost;
-                box.hi.j = box.hi.j;
-                break;
-
+                return 1;
             case Direction::ZMinus:
-                box.lo.k = 0;
-                box.hi.k = nghost;
-                break;
-
             case Direction::ZPlus:
-                box.lo.k = box.hi.k - nghost;
-                box.hi.k = box.hi.k;
+                return 2;
+            }
+            return 0;
+        }
+
+        static void switch_range_inner(Box3 &box, StaggerLocation loc, Direction dir, int nghost)
+        {
+            const int ax = axis_from_dir(dir);
+            const int delta = delta_on_axis(loc, ax);
+            const int exclude = (delta == 0) ? 1 : 0; // node-like 法向：排除接口层；cell-like：不排除
+
+            auto apply_minus = [&](int &lo, int &hi)
+            {
+                lo = lo + exclude;
+                hi = lo + nghost;
+            };
+            auto apply_plus = [&](int &lo, int &hi)
+            {
+                hi = hi - exclude;
+                lo = hi - nghost;
+            };
+
+            switch (dir)
+            {
+            case Direction::XMinus:
+                apply_minus(box.lo.i, box.hi.i);
+                break;
+            case Direction::XPlus:
+                apply_plus(box.lo.i, box.hi.i);
+                break;
+            case Direction::YMinus:
+                apply_minus(box.lo.j, box.hi.j);
+                break;
+            case Direction::YPlus:
+                apply_plus(box.lo.j, box.hi.j);
+                break;
+            case Direction::ZMinus:
+                apply_minus(box.lo.k, box.hi.k);
+                break;
+            case Direction::ZPlus:
+                apply_plus(box.lo.k, box.hi.k);
                 break;
             }
         }
+        // static void switch_range_inner(Box3 &box, Direction dir, int nghost)
+        // {
+        //     switch (dir)
+        //     {
+        //     case Direction::XMinus:
+        //         // 左 inner：i ∈ [0 .. g-1] = [0,g)
+        //         box.lo.i = 0;
+        //         box.hi.i = nghost;
+        //         break;
+
+        //     case Direction::XPlus:
+        //         // 右 inner strip：i ∈ [Ni-g .. Ni) = [hi_int-g, hi_int)
+        //         box.lo.i = box.hi.i - nghost;
+        //         box.hi.i = box.hi.i;
+        //         break;
+
+        //     case Direction::YMinus:
+        //         box.lo.j = 0;
+        //         box.hi.j = nghost;
+        //         break;
+
+        //     case Direction::YPlus:
+        //         box.lo.j = box.hi.j - nghost;
+        //         box.hi.j = box.hi.j;
+        //         break;
+
+        //     case Direction::ZMinus:
+        //         box.lo.k = 0;
+        //         box.hi.k = nghost;
+        //         break;
+
+        //     case Direction::ZPlus:
+        //         box.lo.k = box.hi.k - nghost;
+        //         box.hi.k = box.hi.k;
+        //         break;
+        //     }
+        // }
 
         static void switch_range_ghost(Box3 &box, Direction dir, int nghost)
         {
@@ -153,7 +235,7 @@ namespace HALO_BOX
     Box3 make_1DCorner_inner_box(StaggerLocation loc, const Box3 &face_node, Direction dir, int nghost)
     {
         Box3 box = detail::make_base_dof_box_from_node(loc, face_node);
-        detail::switch_range_inner(box, dir, nghost);
+        detail::switch_range_inner(box, loc, dir, nghost);
         return box;
     }
 
@@ -190,7 +272,7 @@ namespace HALO_BOX
         Box3 box = detail::make_base_dof_box_from_node(loc, edge_node);
 
         // 先在第一个方向取 inner strip，再在第二个方向取 ghost strip
-        detail::switch_range_inner(box, dir1, nghost);
+        detail::switch_range_inner(box, loc, dir1, nghost);
         detail::switch_range_ghost(box, dir2, nghost);
         return box;
     }
@@ -221,7 +303,7 @@ namespace HALO_BOX
 
         // 三个方向依次裁剪为 inner strip：
         // 例如 XMinus+YMinus+ZMinus -> i∈[0,g), j∈[0,g), k∈[0,g)
-        detail::switch_range_inner(box, dir1, nghost); // 约定 dir1 是 inner
+        detail::switch_range_inner(box, loc, dir1, nghost); // 约定 dir1 是 inner
         detail::switch_range_ghost(box, dir2, nghost);
         detail::switch_range_ghost(box, dir3, nghost);
         return box;
