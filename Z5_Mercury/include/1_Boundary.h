@@ -53,6 +53,7 @@ private:
     {
         std::string name;
         std::vector<std::string> fields;
+        std::map<std::pair<std::string, std::string>, std::vector<int32_t>> fields_cids;
 
         bool do_coupling = false; // whether to apply coupling before physical BC
         bool do_physical = true;  // whether to apply physical BC

@@ -24,8 +24,9 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
         {
             field_name_temp = pr.first;
             field_name_temp2 = pr.second;
-            halo_->coupling_trans_1DCorner(field_name_temp, field_name_temp2);
-            bound_.ApplyCouplingPair_1DCorner(field_name_temp, field_name_temp2);
+            std::vector<int32_t> tmp_cids = g.fields_cids.at(pr);
+            halo_->coupling_trans_1DCorner(field_name_temp, field_name_temp2, tmp_cids);
+            bound_.ApplyCouplingPair_1DCorner(field_name_temp, field_name_temp2, tmp_cids);
         }
     }
 
@@ -53,8 +54,9 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
             {
                 field_name_temp = pr.first;
                 field_name_temp2 = pr.second;
-                halo_->coupling_trans_2DCorner(field_name_temp, field_name_temp2);
-                bound_.ApplyCouplingPair_2DCorner(field_name_temp, field_name_temp2);
+                std::vector<int32_t> tmp_cids = g.fields_cids.at(pr);
+                halo_->coupling_trans_2DCorner(field_name_temp, field_name_temp2, tmp_cids);
+                bound_.ApplyCouplingPair_2DCorner(field_name_temp, field_name_temp2, tmp_cids);
             }
         }
 
@@ -83,8 +85,9 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
             {
                 field_name_temp = pr.first;
                 field_name_temp2 = pr.second;
-                halo_->coupling_trans_3DCorner(field_name_temp, field_name_temp2);
-                bound_.ApplyCouplingPair_3DCorner(field_name_temp, field_name_temp2);
+                std::vector<int32_t> tmp_cids = g.fields_cids.at(pr);
+                halo_->coupling_trans_3DCorner(field_name_temp, field_name_temp2, tmp_cids);
+                bound_.ApplyCouplingPair_3DCorner(field_name_temp, field_name_temp2, tmp_cids);
             }
         }
 
