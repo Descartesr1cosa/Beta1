@@ -5,9 +5,9 @@ void MercurySolver::AddResistiveEdgeEMF_()
     const int nb = fld_->num_blocks();
 
     const double r_cut_in = 0.8;
-    const double r_cut_out = 1.0;
+    const double r_cut_out = 0.98;
     const double r0 = 0.8;
-    const double r1 = 1.0;
+    const double r1 = 0.98;
     const double w = 0.01;
 
     auto yita0_of_r = [&](double r) -> double
