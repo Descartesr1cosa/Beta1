@@ -49,17 +49,28 @@ void MercuryBoundary::InstallHandlers()
                           this->BC_Solid_Surface_(U, fld, r, ngh);
                       });
 
-    auto Eface_zero_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    auto Eface_zero_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
-        BC_Solid_Surface_Eface_(U, fld, r, ngh);
+        if (abs(r.direction) == 1)
+            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+    };
+    auto Eface_zero_eta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) == 2)
+            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+    };
+    auto Eface_zero_zeta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) == 3)
+            BC_Solid_Surface_Eface_(U, fld, r, ngh);
     };
 
-    RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_zero_);
-    RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_zero_);
-    RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_zero_);
-    RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_zero_);
-    RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_zero_);
-    RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_zero_);
+    RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_zero_xi_);
+    RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_zero_xi_);
+    RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_zero_eta_);
+    RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_zero_eta_);
+    RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_zero_zeta_);
+    RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_zero_zeta_);
 
     // 3) coupling：按你的耦合 channel 注册（先 DefaultCouplingCopy）
     auto ccopy = [](FieldBlock &Udst, Field *fld, CouplingBufferBlock &buf,
