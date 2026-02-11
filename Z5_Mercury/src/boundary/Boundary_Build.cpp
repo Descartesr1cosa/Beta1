@@ -132,6 +132,7 @@ void MercuryBoundary::InstallDefaultGroups()
     gJ.do_physical = true;
     gJ.do_halo = true;
     gJ.halo_level = HaloLevel::Vertex;
+    gJ.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gJ);
 
     BoundGroup gE;
@@ -141,6 +142,7 @@ void MercuryBoundary::InstallDefaultGroups()
     gE.do_physical = true;
     gE.do_halo = true;
     gE.halo_level = HaloLevel::Vertex;
+    gE.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gE);
 
     BoundGroup gB;
