@@ -60,6 +60,7 @@ struct SolverFields
     IdTriplet fid_B;     // (xi,eta,zeta) <- (B_xi,B_eta,B_zeta)
     IdTriplet fid_E;     // (xi,eta,zeta) <- (E_xi,E_eta,E_zeta)
     IdTriplet fid_Eface; // (xi,eta,zeta) <- (E_xi,E_eta,E_zeta)
+    IdTriplet fid_Ehall; // (xi,eta,zeta) <- (E_xi,E_eta,E_zeta)
     IdTriplet fid_J;     // (xi,eta,zeta) <- (J_xi,J_eta,J_zeta)
 
     // ---- auxiliary ----
@@ -118,6 +119,10 @@ struct SolverFields
         fid_E.xi = fld->field_id("E_xi");
         fid_E.eta = fld->field_id("E_eta");
         fid_E.zeta = fld->field_id("E_zeta");
+
+        fid_Ehall.xi = fld->field_id("Ehall_xi");
+        fid_Ehall.eta = fld->field_id("Ehall_eta");
+        fid_Ehall.zeta = fld->field_id("Ehall_zeta");
 
         fid_Eface.xi = fld->field_id("Eface_xi");
         fid_Eface.eta = fld->field_id("Eface_eta");
@@ -191,6 +196,7 @@ struct SolverFields
         require_id(fid_U_Na, "U_Na");
         fid_B.require_all("B_xi/B_eta/B_zeta");
         fid_E.require_all("E_xi/E_eta/E_zeta");
+        fid_Ehall.require_all("Ehall_xi/Ehall_eta/Ehall_zeta");
         fid_Eface.require_all("Eface_xi/Eface_eta/Eface_zeta");
         fid_J.require_all("J_xi/J_eta/J_zeta");
 

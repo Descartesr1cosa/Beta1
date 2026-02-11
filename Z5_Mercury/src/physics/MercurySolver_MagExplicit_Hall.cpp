@@ -13,6 +13,43 @@ void MercurySolver::AddHallEdgeEMF_()
 
     for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
     {
+        auto &Ehall_xi = fld_->field(fid_.fid_Ehall.xi, iblk);
+        auto &Ehall_et = fld_->field(fid_.fid_Ehall.eta, iblk);
+        auto &Ehall_ze = fld_->field(fid_.fid_Ehall.zeta, iblk);
+        if (!Ehall_xi.is_allocated() || !Ehall_et.is_allocated() || !Ehall_ze.is_allocated())
+            continue;
+
+        {
+            Int3 lo = Ehall_xi.inner_lo();
+            Int3 hi = Ehall_xi.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ehall_xi(i, j, k, 0) = 0.0;
+        }
+        {
+            Int3 lo = Ehall_et.inner_lo();
+            Int3 hi = Ehall_et.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ehall_et(i, j, k, 0) = 0.0;
+        }
+        {
+            Int3 lo = Ehall_ze.inner_lo();
+            Int3 hi = Ehall_ze.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ehall_ze(i, j, k, 0) = 0.0;
+        }
+    }
+
+    for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
+    {
         auto &UH = fld_->field(fid_.fid_U_H, iblk);
         auto &UNa = fld_->field(fid_.fid_U_Na, iblk);
 
@@ -31,9 +68,9 @@ void MercurySolver::AddHallEdgeEMF_()
         auto &Jeta = fld_->field(fid_.fid_J.eta, iblk);
         auto &Jzeta = fld_->field(fid_.fid_J.zeta, iblk);
 
-        auto &E_xi = fld_->field(fid_.fid_E.xi, iblk);
-        auto &E_eta = fld_->field(fid_.fid_E.eta, iblk);
-        auto &E_zeta = fld_->field(fid_.fid_E.zeta, iblk);
+        auto &Ehall_xi = fld_->field(fid_.fid_Ehall.xi, iblk);
+        auto &Ehall_eta = fld_->field(fid_.fid_Ehall.eta, iblk);
+        auto &Ehall_zeta = fld_->field(fid_.fid_Ehall.zeta, iblk);
 
         // edge cache: 9 comps (row-major 3x3)
         auto &pinvGT_xi = fld_->field(fid_.fid_pinvGT.xi, iblk);
@@ -89,8 +126,8 @@ void MercurySolver::AddHallEdgeEMF_()
         // 1) EdgeXi : Ehall_xi(i,j,k) = (alpha * (J x B)) · dr_xi
         // ============================================================
         {
-            Int3 lo = E_xi.inner_lo();
-            Int3 hi = E_xi.inner_hi();
+            Int3 lo = Ehall_xi.inner_lo();
+            Int3 hi = Ehall_xi.inner_hi();
 
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
@@ -98,7 +135,7 @@ void MercurySolver::AddHallEdgeEMF_()
                     {
                         if (!cache_is_valid(pinvGT_xi, i, j, k) || !cache_is_valid(pinvAT_xi, i, j, k))
                         {
-                            E_xi(i, j, k, 0) += 0.0;
+                            Ehall_xi(i, j, k, 0) = 0.0;
                             continue;
                         }
 
@@ -137,7 +174,7 @@ void MercurySolver::AddHallEdgeEMF_()
                         dr.vec[1] = y(i + 1, j, k) - y(i, j, k);
                         dr.vec[2] = z(i + 1, j, k) - z(i, j, k);
 
-                        E_xi(i, j, k, 0) += Evec * dr; // line integral
+                        Ehall_xi(i, j, k, 0) = Evec * dr; // line integral
                     }
         }
 
@@ -145,8 +182,8 @@ void MercurySolver::AddHallEdgeEMF_()
         // 2) EdgeEt
         // ============================================================
         {
-            Int3 lo = E_eta.inner_lo();
-            Int3 hi = E_eta.inner_hi();
+            Int3 lo = Ehall_eta.inner_lo();
+            Int3 hi = Ehall_eta.inner_hi();
 
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
@@ -154,7 +191,7 @@ void MercurySolver::AddHallEdgeEMF_()
                     {
                         if (!cache_is_valid(pinvGT_eta, i, j, k) || !cache_is_valid(pinvAT_eta, i, j, k))
                         {
-                            E_eta(i, j, k, 0) += 0.0;
+                            Ehall_eta(i, j, k, 0) = 0.0;
                             continue;
                         }
 
@@ -192,7 +229,7 @@ void MercurySolver::AddHallEdgeEMF_()
                         dr.vec[1] = y(i, j + 1, k) - y(i, j, k);
                         dr.vec[2] = z(i, j + 1, k) - z(i, j, k);
 
-                        E_eta(i, j, k, 0) += Evec * dr;
+                        Ehall_eta(i, j, k, 0) = Evec * dr;
                     }
         }
 
@@ -200,8 +237,8 @@ void MercurySolver::AddHallEdgeEMF_()
         // 3) EdgeZe
         // ============================================================
         {
-            Int3 lo = E_zeta.inner_lo();
-            Int3 hi = E_zeta.inner_hi();
+            Int3 lo = Ehall_zeta.inner_lo();
+            Int3 hi = Ehall_zeta.inner_hi();
 
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
@@ -209,7 +246,7 @@ void MercurySolver::AddHallEdgeEMF_()
                     {
                         if (!cache_is_valid(pinvGT_zeta, i, j, k) || !cache_is_valid(pinvAT_zeta, i, j, k))
                         {
-                            E_zeta(i, j, k, 0) += 0.0;
+                            Ehall_zeta(i, j, k, 0) += 0.0;
                             continue;
                         }
 
@@ -247,8 +284,65 @@ void MercurySolver::AddHallEdgeEMF_()
                         dr.vec[1] = y(i, j, k + 1) - y(i, j, k);
                         dr.vec[2] = z(i, j, k + 1) - z(i, j, k);
 
-                        E_zeta(i, j, k, 0) += Evec * dr;
+                        Ehall_zeta(i, j, k, 0) = Evec * dr;
                     }
+        }
+    }
+
+    mercury_bound_.Sync("Ehall");
+
+    for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
+    {
+        auto &Ehall_xi = fld_->field(fid_.fid_Ehall.xi, iblk);
+        auto &Ehall_eta = fld_->field(fid_.fid_Ehall.eta, iblk);
+        auto &Ehall_zeta = fld_->field(fid_.fid_Ehall.zeta, iblk);
+        if (!Ehall_xi.is_allocated() || !Ehall_eta.is_allocated() || !Ehall_zeta.is_allocated())
+            continue;
+
+        auto &E_xi = fld_->field(fid_.fid_E.xi, iblk);
+        auto &E_eta = fld_->field(fid_.fid_E.eta, iblk);
+        auto &E_zeta = fld_->field(fid_.fid_E.zeta, iblk);
+
+        if (!E_xi.is_allocated() || !E_eta.is_allocated() || !E_zeta.is_allocated())
+            continue;
+
+        // ============================================================
+        // 1) EdgeXi : Ehall_xi(i,j,k) = (alpha * (J x B)) · dr_xi
+        // ============================================================
+        {
+            Int3 lo = E_xi.inner_lo();
+            Int3 hi = E_xi.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        E_xi(i, j, k, 0) += Ehall_xi(i, j, k, 0);
+        }
+
+        // ============================================================
+        // 2) EdgeEt
+        // ============================================================
+        {
+            Int3 lo = E_eta.inner_lo();
+            Int3 hi = E_eta.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        E_eta(i, j, k, 0) += Ehall_eta(i, j, k, 0);
+        }
+
+        // ============================================================
+        // 3) EdgeZe
+        // ============================================================
+        {
+            Int3 lo = E_zeta.inner_lo();
+            Int3 hi = E_zeta.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        E_zeta(i, j, k, 0) += Ehall_zeta(i, j, k, 0);
         }
     }
 }

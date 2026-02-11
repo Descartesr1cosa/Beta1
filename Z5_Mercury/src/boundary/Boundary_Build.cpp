@@ -65,12 +65,35 @@ void MercuryBoundary::InstallHandlers()
             BC_Solid_Surface_Eface_(U, fld, r, ngh);
     };
 
+    auto Eedge_zero_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) != 1)
+            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+    };
+    auto Eedge_zero_eta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) != 2)
+            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+    };
+    auto Eedge_zero_zeta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) != 3)
+            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+    };
+
     RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_zero_xi_);
     RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_zero_xi_);
     RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_zero_eta_);
     RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_zero_eta_);
     RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_zero_zeta_);
     RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_zero_zeta_);
+
+    RegisterPhysical_("Ehall_xi", "Coupled-Solid", Eedge_zero_xi_);
+    RegisterPhysical_("Ehall_xi", "Coupled-Fluid", Eedge_zero_xi_);
+    RegisterPhysical_("Ehall_eta", "Coupled-Solid", Eedge_zero_eta_);
+    RegisterPhysical_("Ehall_eta", "Coupled-Fluid", Eedge_zero_eta_);
+    RegisterPhysical_("Ehall_zeta", "Coupled-Solid", Eedge_zero_zeta_);
+    RegisterPhysical_("Ehall_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
 
     // 3) coupling：按你的耦合 channel 注册（先 DefaultCouplingCopy）
     auto ccopy = [](FieldBlock &Udst, Field *fld, CouplingBufferBlock &buf,
@@ -110,6 +133,13 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeEt, "E_eta", "E_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeZe, "E_zeta", "E_zeta", ccopy);
 
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeXi, "Ehall_xi", "Ehall_xi", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeEt, "Ehall_eta", "Ehall_eta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeZe, "Ehall_zeta", "Ehall_zeta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeXi, "Ehall_xi", "Ehall_xi", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeEt, "Ehall_eta", "Ehall_eta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::EdgeZe, "Ehall_zeta", "Ehall_zeta", ccopy);
+
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
 }
@@ -144,6 +174,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gE.halo_level = HaloLevel::Vertex;
     gE.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gE);
+
+    BoundGroup gEhall;
+    gEhall.name = "Ehall";
+    gEhall.fields = {"Ehall_xi", "Ehall_eta", "Ehall_zeta"};
+    gEhall.do_coupling = false;
+    gEhall.do_physical = true;
+    gEhall.do_halo = false;
+    gEhall.halo_level = HaloLevel::Vertex;
+    gEhall.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gEhall);
 
     BoundGroup gB;
     gB.name = "Bface";
