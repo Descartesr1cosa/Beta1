@@ -68,17 +68,17 @@ void MercuryBoundary::InstallHandlers()
     auto Eedge_zero_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) != 1)
-            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+            BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
     auto Eedge_zero_eta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) != 2)
-            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+            BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
     auto Eedge_zero_zeta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) != 3)
-            BC_Solid_Surface_Eface_(U, fld, r, ngh);
+            BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
 
     RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_zero_xi_);

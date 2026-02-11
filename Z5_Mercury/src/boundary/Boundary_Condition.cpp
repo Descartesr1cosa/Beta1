@@ -129,3 +129,17 @@ void MercuryBoundary::BC_Solid_Surface_Eface_(FieldBlock &U, Field *fld, const B
                 U(i, j, k, 2) = 0.0;
             }
 }
+
+void MercuryBoundary::BC_Solid_Surface_Eedge_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+
+    // const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
+    const Box3 &g = r.inner_slab;
+
+    for (int i = g.lo.i; i < g.hi.i; ++i)
+        for (int j = g.lo.j; j < g.hi.j; ++j)
+            for (int k = g.lo.k; k < g.hi.k; ++k)
+            {
+                U(i, j, k, 0) = 0.0;
+            }
+}
