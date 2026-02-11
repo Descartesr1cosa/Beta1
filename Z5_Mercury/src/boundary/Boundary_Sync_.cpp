@@ -9,6 +9,12 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
     std::string field_name_temp2;
 
     // ---------------- Stage 1: FaceOnly (1D) ----------------
+    if (g.do_physical)
+    {
+        bound_.ApplyPhysical(g.fields);
+        bound_.ApplyPhysicalCornerDefault(g.fields); // 先补角区，保证 Edge halo 的输入一致
+    }
+
     if (g.do_halo)
     {
         for (auto &fn : g.fields)
@@ -30,15 +36,15 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
         }
     }
 
-    if (g.do_physical)
-    {
-        bound_.ApplyPhysical(g.fields);
-        bound_.ApplyPhysicalCornerDefault(g.fields); // 先补角区，保证 Edge halo 的输入一致
-    }
-
     // ---------------- Stage 2: Edge (2D) ----------------
     if (g.halo_level >= HaloLevel::Edge)
     {
+        if (g.do_physical)
+        {
+            // Security：Edge run corner default again
+            bound_.ApplyPhysicalCornerDefault(g.fields);
+        }
+
         if (g.do_halo)
         {
             for (auto &fn : g.fields)
@@ -59,17 +65,17 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
                 bound_.ApplyCouplingPair_2DCorner(field_name_temp, field_name_temp2, tmp_cids);
             }
         }
-
-        if (g.do_physical)
-        {
-            // Security：Edge run corner default again
-            bound_.ApplyPhysicalCornerDefault(g.fields);
-        }
     }
 
     // ---------------- Stage 3: Vertex (3D) ----------------
     if (g.halo_level >= HaloLevel::Vertex)
     {
+        // if (g.do_physical)
+        // {
+        //     // 最后再补一次角区，保证输出/算子读到的是最终一致状态
+        //     bound_.ApplyPhysicalCornerDefault(g.fields);
+        // }
+
         if (g.do_halo)
         {
             for (auto &fn : g.fields)
@@ -90,11 +96,5 @@ void MercuryBoundary::Sync_(const BoundGroup &g)
                 bound_.ApplyCouplingPair_3DCorner(field_name_temp, field_name_temp2, tmp_cids);
             }
         }
-
-        // if (g.do_physical)
-        // {
-        //     // 最后再补一次角区，保证输出/算子读到的是最终一致状态
-        //     bound_.ApplyPhysicalCornerDefault(g.fields);
-        // }
     }
 }
