@@ -31,40 +31,60 @@ void MercurySolver::ZeroRHS_()
         FieldBlock &RHSB_et = fld_->field(fid_.fid_RHS_b.eta, ib);
         FieldBlock &RHSB_ze = fld_->field(fid_.fid_RHS_b.zeta, ib);
 
-        Int3 lo = Jac.inner_lo();
-        Int3 hi = Jac.inner_hi();
+        Int3 lo; // = Jac.inner_lo();
+        Int3 hi; // = Jac.inner_hi();
 
         if (RHSH.is_allocated())
+        {
+            lo = RHSH.inner_lo();
+            hi = RHSH.inner_hi();
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                         for (int m = 0; m < 5; ++m)
                             RHSH(i, j, k, m) = 0.0;
+        }
 
         if (RHSN.is_allocated())
+        {
+            lo = RHSN.inner_lo();
+            hi = RHSN.inner_hi();
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                         for (int m = 0; m < 5; ++m)
                             RHSN(i, j, k, m) = 0.0;
+        }
 
         if (RHSB_xi.is_allocated())
+        {
+            lo = RHSB_xi.inner_lo();
+            hi = RHSB_xi.inner_hi();
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                         RHSB_xi(i, j, k, 0) = 0.0;
+        }
 
         if (RHSB_et.is_allocated())
+        {
+            lo = RHSB_et.inner_lo();
+            hi = RHSB_et.inner_hi();
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                         RHSB_et(i, j, k, 0) = 0.0;
+        }
 
         if (RHSB_ze.is_allocated())
+        {
+            lo = RHSB_ze.inner_lo();
+            hi = RHSB_ze.inner_hi();
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                         RHSB_ze(i, j, k, 0) = 0.0;
+        }
     }
 }
 
