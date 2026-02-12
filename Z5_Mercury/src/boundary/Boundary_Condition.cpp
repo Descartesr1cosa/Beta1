@@ -144,14 +144,15 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
 
                     // diode: block outflow from surface to fluid (vn>0)
                     std::array<double, 3> v_g = v;
-                    if (vn > 0.0)
-                    {
-                        // remove only the outward-normal component; tangential unchanged
-                        v_g = sub(v, scal(n_hat, vn)); // vn_g = 0
-                        // If you want a *stronger sink* like some papers do, uncomment:
-                        // rho_r = rho_floor;
-                        // p_r   = p_floor;
-                    }
+                    // if (vn > 0.0)
+                    // {
+                    //     // remove only the outward-normal component; tangential unchanged
+                    //     v_g = sub(v, scal(n_hat, vn)); // vn_g = 0
+                    //     // If you want a *stronger sink* like some papers do, uncomment:
+                    //     // rho_r = rho_floor;
+                    //     // p_r   = p_floor;
+                    // }
+                    v_g = sub(v, scal(n_hat, 2.0 * vn));
 
                     int ig = ii + ng * cyc.i;
                     int jg = jj + ng * cyc.j;
