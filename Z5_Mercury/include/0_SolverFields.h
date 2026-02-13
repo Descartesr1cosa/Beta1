@@ -50,9 +50,10 @@ struct SolverFields
 
     // ---- geometry ----
     int fid_Jac = -1;
-    IdTriplet fid_metric; // (xi,eta,zeta) <- (JDxi,JDet,JDze)
-    IdTriplet fid_pinvGT; // (pinvGT_xi, pinvGT_eta, pinvGT_zeta)  ncomp=9
-    IdTriplet fid_pinvAT; // (pinvAT_xi, pinvAT_eta, pinvAT_zeta)  ncomp=9
+    int fid_pinvGT_Cell = -1; // Cell ncomp=9
+    IdTriplet fid_metric;     // (xi,eta,zeta) <- (JDxi,JDet,JDze)
+    IdTriplet fid_pinvGT;     // (pinvGT_xi, pinvGT_eta, pinvGT_zeta)  ncomp=9
+    IdTriplet fid_pinvAT;     // (pinvAT_xi, pinvAT_eta, pinvAT_zeta)  ncomp=9
 
     // Face metrics:
     IdTriplet Face_Area;   // Face: |S_xi|  |S_eta| |S_ze| ncomp = 1
@@ -118,6 +119,8 @@ struct SolverFields
         fid_pinvAT.xi = fld->field_id("pinvAT_xi");
         fid_pinvAT.eta = fld->field_id("pinvAT_eta");
         fid_pinvAT.zeta = fld->field_id("pinvAT_zeta");
+
+        fid_pinvGT_Cell = fld->field_id("pinvGT_cell");
 
         Face_Area.xi = fld->field_id("Area_xi");
         Face_Area.eta = fld->field_id("Area_eta");
@@ -219,6 +222,7 @@ struct SolverFields
 
         // ---- geometry ----
         require_id(fid_Jac, "Jac");
+        require_id(fid_pinvGT_Cell, "pinvGT_Cell");
         fid_metric.require_all("metric(JDxi/JDet/JDze)");
         fid_pinvGT.require_all("pinvGT(edge)");
         fid_pinvAT.require_all("pinvAT(edge)");

@@ -20,6 +20,10 @@ void Field::build_geometry(int geomtry_ghost_)
     register_field(FieldDescriptor{"pinvGT_zeta", StaggerLocation::EdgeZe, 9, 0});
     register_field(FieldDescriptor{"pinvAT_zeta", StaggerLocation::EdgeZe, 9, 0});
 
+    // Cell: pseudo-inverse of G^T (G=[a_xi a_eta a_zeta]) to reconstruct physical vectors
+    // from covariant 1-form components at cell centers: v = pinvGT_cell * w
+    register_field(FieldDescriptor{"pinvGT_cell", StaggerLocation::Cell, 9, 0});
+
     // Face metrics: |S| (primal face area magnitude), dual-edge length |l*|, beta = |l*|/|S|
     register_field(FieldDescriptor{"Area_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // |S_xi|  (primal face area magnitude)
     register_field(FieldDescriptor{"Area_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // |S_eta|
@@ -295,7 +299,7 @@ void Field::build_geometry(int geomtry_ghost_)
     }
 
     {
-        constexpr double eps = 1e-300;
+        constexpr double eps = 1e-25;
 
         // Pull fields
         auto &JDxi_ = field("JDxi");
@@ -397,7 +401,7 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Lstar = norm3(minus(cR, cL));
                             dlst(i, j, k, 0) = Lstar; // |l*|
 
-                            beta(i, j, k, 0) = Lstar / fmax(Smag, eps); // beta = |l*|/|S|
+                            beta(i, j, k, 0) = (Smag < eps) ? 0.0 : Lstar / Smag; // beta = |l*|/|S|
                         }
             }
 
@@ -425,7 +429,7 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Lstar = norm3(minus(cR, cL));
                             dlst(i, j, k, 0) = Lstar;
 
-                            beta(i, j, k, 0) = Lstar / std::max(Smag, eps);
+                            beta(i, j, k, 0) = (Smag < eps) ? 0.0 : Lstar / Smag;
                         }
             }
 
@@ -453,7 +457,7 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Lstar = norm3(minus(cR, cL));
                             dlst(i, j, k, 0) = Lstar;
 
-                            beta(i, j, k, 0) = Lstar / std::max(Smag, eps);
+                            beta(i, j, k, 0) = (Smag < eps) ? 0.0 : Lstar / Smag;
                         }
             }
 
@@ -496,7 +500,7 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Amag = norm3(Avec);
                             Astar(i, j, k, 0) = Amag;
 
-                            alpha(i, j, k, 0) = L / std::max(Amag, eps); // alpha = |e|/|S*|
+                            alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag; // alpha = |e|/|S*|
                         }
             }
 
@@ -533,7 +537,7 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Amag = norm3(Avec);
                             Astar(i, j, k, 0) = Amag;
 
-                            alpha(i, j, k, 0) = L / std::max(Amag, eps);
+                            alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag;
                         }
             }
 
@@ -570,7 +574,7 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Amag = norm3(Avec);
                             Astar(i, j, k, 0) = Amag;
 
-                            alpha(i, j, k, 0) = L / std::max(Amag, eps);
+                            alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag;
                         }
             }
         }
@@ -647,6 +651,141 @@ void Field::build_geometry(int geomtry_ghost_)
                         azeta(i, j, k, 0) = 0.25 * ezs[0];
                         azeta(i, j, k, 1) = 0.25 * ezs[1];
                         azeta(i, j, k, 2) = 0.25 * ezs[2];
+                    }
+        }
+    }
+
+    {
+        // ===== Build cell cache: pinvGT_cell =====
+        // pinvGT_cell approximates (G^T)^(-1) with Tikhonov regularization:
+        //   pinv = (G G^T + reg I)^(-1) G
+        // so that for covariant components w = [v·g_xi, v·g_eta, v·g_zeta],
+        // the physical vector v is reconstructed by: v = pinvGT_cell * w.
+
+        // invert 3x3 matrix (row-major). return false if singular.
+        auto inv3x3 = [&](const double M[9], double invM[9]) -> bool
+        {
+            const double a00 = M[0], a01 = M[1], a02 = M[2];
+            const double a10 = M[3], a11 = M[4], a12 = M[5];
+            const double a20 = M[6], a21 = M[7], a22 = M[8];
+
+            const double c00 = a11 * a22 - a12 * a21;
+            const double c01 = a02 * a21 - a01 * a22;
+            const double c02 = a01 * a12 - a02 * a11;
+
+            const double c10 = a12 * a20 - a10 * a22;
+            const double c11 = a00 * a22 - a02 * a20;
+            const double c12 = a02 * a10 - a00 * a12;
+
+            const double c20 = a10 * a21 - a11 * a20;
+            const double c21 = a01 * a20 - a00 * a21;
+            const double c22 = a00 * a11 - a01 * a10;
+
+            const double det = a00 * c00 + a01 * c10 + a02 * c20;
+            if (std::fabs(det) < 1e-300)
+                return false;
+
+            const double invdet = 1.0 / det;
+
+            invM[0] = c00 * invdet;
+            invM[1] = c01 * invdet;
+            invM[2] = c02 * invdet;
+            invM[3] = c10 * invdet;
+            invM[4] = c11 * invdet;
+            invM[5] = c12 * invdet;
+            invM[6] = c20 * invdet;
+            invM[7] = c21 * invdet;
+            invM[8] = c22 * invdet;
+            return true;
+        };
+
+        // pinv(X^T) with Tikhonov: (X X^T + reg I)^-1 X
+        auto build_pinv_transpose = [&](const double X[9], double pinv[9])
+        {
+            // S = X X^T (3x3)
+            double S[9] = {0.0};
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c)
+                {
+                    double s = 0.0;
+                    for (int kk = 0; kk < 3; ++kk)
+                        s += X[r * 3 + kk] * X[c * 3 + kk];
+                    S[r * 3 + c] = s;
+                }
+
+            const double tr = S[0] + S[4] + S[8];
+            double reg = 1e-14 * (tr + 1e-300); // scale-aware regularization
+
+            double Sinv[9];
+            bool ok = false;
+
+            for (int it = 0; it < 8; ++it)
+            {
+                double Stmp[9] = {
+                    S[0] + reg, S[1], S[2],
+                    S[3], S[4] + reg, S[5],
+                    S[6], S[7], S[8] + reg};
+
+                if (inv3x3(Stmp, Sinv))
+                {
+                    ok = true;
+                    break;
+                }
+                reg *= 10.0;
+            }
+
+            if (!ok)
+            {
+                for (int i = 0; i < 9; ++i)
+                    pinv[i] = 0.0;
+                return;
+            }
+
+            // pinv = Sinv * X
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c)
+                {
+                    double s = 0.0;
+                    for (int kk = 0; kk < 3; ++kk)
+                        s += Sinv[r * 3 + kk] * X[kk * 3 + c];
+                    pinv[r * 3 + c] = s;
+                }
+        };
+
+        auto &pinvGTc_ = field("pinvGT_cell");
+        auto &axi_ = field("a_xi");
+        auto &aeta_ = field("a_eta");
+        auto &azeta_ = field("a_zeta");
+
+        for (int ib = 0; ib < grd->nblock; ++ib)
+        {
+            auto &pinvGTc = pinvGTc_[ib];
+            auto &axi = axi_[ib];
+            auto &aeta = aeta_[ib];
+            auto &azeta = azeta_[ib];
+
+            Int3 lo = pinvGTc.inner_lo();
+            Int3 hi = pinvGTc.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        std::array<double, 3> g_xi = {axi(i, j, k, 0), axi(i, j, k, 1), axi(i, j, k, 2)};
+                        std::array<double, 3> g_eta = {aeta(i, j, k, 0), aeta(i, j, k, 1), aeta(i, j, k, 2)};
+                        std::array<double, 3> g_ze = {azeta(i, j, k, 0), azeta(i, j, k, 1), azeta(i, j, k, 2)};
+
+                        // G columns: g_xi, g_eta, g_zeta
+                        double Gm[9] = {
+                            g_xi[0], g_eta[0], g_ze[0],
+                            g_xi[1], g_eta[1], g_ze[1],
+                            g_xi[2], g_eta[2], g_ze[2]};
+
+                        double pinvG[9];
+                        build_pinv_transpose(Gm, pinvG);
+
+                        for (int m = 0; m < 9; ++m)
+                            pinvGTc(i, j, k, m) = pinvG[m];
                     }
         }
     }
