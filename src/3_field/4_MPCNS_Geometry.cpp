@@ -25,34 +25,34 @@ void Field::build_geometry(int geomtry_ghost_)
     register_field(FieldDescriptor{"pinvGT_cell", StaggerLocation::Cell, 9, 0});
 
     // Face metrics: |S| (primal face area magnitude), dual-edge length |l*|, beta = |l*|/|S|
-    register_field(FieldDescriptor{"Area_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // |S_xi|  (primal face area magnitude)
-    register_field(FieldDescriptor{"Area_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // |S_eta|
-    register_field(FieldDescriptor{"Area_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_}); // |S_ze|
+    register_field(FieldDescriptor{"Area_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_ - 1});   // |S_xi|  (primal face area magnitude)
+    register_field(FieldDescriptor{"Area_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_ - 1});  // |S_eta|
+    register_field(FieldDescriptor{"Area_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_ - 1}); // |S_ze|
 
-    register_field(FieldDescriptor{"dlstar_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // |l*_xi|  (dual edge length across a xi-face)
-    register_field(FieldDescriptor{"dlstar_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // |l*_eta|
-    register_field(FieldDescriptor{"dlstar_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_}); // |l*_ze|
+    register_field(FieldDescriptor{"dlstar_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_ - 1});   // |l*_xi|  (dual edge length across a xi-face)
+    register_field(FieldDescriptor{"dlstar_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_ - 1});  // |l*_eta|
+    register_field(FieldDescriptor{"dlstar_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_ - 1}); // |l*_ze|
 
-    register_field(FieldDescriptor{"beta_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // beta_xi  = |l*_xi|/|S_xi|  (Hodge star *_2 scale)
-    register_field(FieldDescriptor{"beta_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // beta_eta = |l*_eta|/|S_eta|
-    register_field(FieldDescriptor{"beta_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_}); // beta_ze  = |l*_ze|/|S_ze|
+    register_field(FieldDescriptor{"beta_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_ - 1});   // beta_xi  = |l*_xi|/|S_xi|  (Hodge star *_2 scale)
+    register_field(FieldDescriptor{"beta_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_ - 1});  // beta_eta = |l*_eta|/|S_eta|
+    register_field(FieldDescriptor{"beta_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_ - 1}); // beta_ze  = |l*_ze|/|S_ze|
 
     // Edge metrics: primal edge length |e|, dual face area vector S* and magnitude |S*|, alpha = |e|/|S*|
-    register_field(FieldDescriptor{"dl_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_});   // |e_xi|   (primal edge length along xi)
-    register_field(FieldDescriptor{"dl_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_});  // |e_eta|
-    register_field(FieldDescriptor{"dl_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_}); // |e_ze|
+    register_field(FieldDescriptor{"dl_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_ - 1});   // |e_xi|   (primal edge length along xi)
+    register_field(FieldDescriptor{"dl_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_ - 1});  // |e_eta|
+    register_field(FieldDescriptor{"dl_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_ - 1}); // |e_ze|
 
-    register_field(FieldDescriptor{"Sstar_xi", StaggerLocation::EdgeXi, 3, geomtry_ghost_});   // S*_xi  (dual face area vector normal to xi-edge)
-    register_field(FieldDescriptor{"Sstar_eta", StaggerLocation::EdgeEt, 3, geomtry_ghost_});  // S*_eta
-    register_field(FieldDescriptor{"Sstar_zeta", StaggerLocation::EdgeZe, 3, geomtry_ghost_}); // S*_ze
+    register_field(FieldDescriptor{"Sstar_xi", StaggerLocation::EdgeXi, 3, geomtry_ghost_ - 1});   // S*_xi  (dual face area vector normal to xi-edge)
+    register_field(FieldDescriptor{"Sstar_eta", StaggerLocation::EdgeEt, 3, geomtry_ghost_ - 1});  // S*_eta
+    register_field(FieldDescriptor{"Sstar_zeta", StaggerLocation::EdgeZe, 3, geomtry_ghost_ - 1}); // S*_ze
 
-    register_field(FieldDescriptor{"Astar_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_});   // |S*_xi| (dual face area magnitude)
-    register_field(FieldDescriptor{"Astar_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_});  // |S*_eta|
-    register_field(FieldDescriptor{"Astar_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_}); // |S*_ze|
+    register_field(FieldDescriptor{"Astar_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_ - 1});   // |S*_xi| (dual face area magnitude)
+    register_field(FieldDescriptor{"Astar_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_ - 1});  // |S*_eta|
+    register_field(FieldDescriptor{"Astar_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_ - 1}); // |S*_ze|
 
-    register_field(FieldDescriptor{"alpha_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_});   // alpha_xi  = |e_xi|/|S*_xi|  (inverse Hodge *_1^{-1} scale)
-    register_field(FieldDescriptor{"alpha_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_});  // alpha_eta = |e_eta|/|S*_eta|
-    register_field(FieldDescriptor{"alpha_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_}); // alpha_ze  = |e_ze|/|S*_ze|
+    register_field(FieldDescriptor{"alpha_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_ - 1});   // alpha_xi  = |e_xi|/|S*_xi|  (inverse Hodge *_1^{-1} scale)
+    register_field(FieldDescriptor{"alpha_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_ - 1});  // alpha_eta = |e_eta|/|S*_eta|
+    register_field(FieldDescriptor{"alpha_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_ - 1}); // alpha_ze  = |e_ze|/|S*_ze|
 
     auto dot = [&](const std::array<double, 3> &a, const std::array<double, 3> &b)
     {
