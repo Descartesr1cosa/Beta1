@@ -20,6 +20,36 @@ void Field::build_geometry(int geomtry_ghost_)
     register_field(FieldDescriptor{"pinvGT_zeta", StaggerLocation::EdgeZe, 9, 0});
     register_field(FieldDescriptor{"pinvAT_zeta", StaggerLocation::EdgeZe, 9, 0});
 
+    // Face metrics: |S| (primal face area magnitude), dual-edge length |l*|, beta = |l*|/|S|
+    register_field(FieldDescriptor{"Area_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // |S_xi|  (primal face area magnitude)
+    register_field(FieldDescriptor{"Area_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // |S_eta|
+    register_field(FieldDescriptor{"Area_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_}); // |S_ze|
+
+    register_field(FieldDescriptor{"dlstar_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // |l*_xi|  (dual edge length across a xi-face)
+    register_field(FieldDescriptor{"dlstar_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // |l*_eta|
+    register_field(FieldDescriptor{"dlstar_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_}); // |l*_ze|
+
+    register_field(FieldDescriptor{"beta_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_});   // beta_xi  = |l*_xi|/|S_xi|  (Hodge star *_2 scale)
+    register_field(FieldDescriptor{"beta_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_});  // beta_eta = |l*_eta|/|S_eta|
+    register_field(FieldDescriptor{"beta_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_}); // beta_ze  = |l*_ze|/|S_ze|
+
+    // Edge metrics: primal edge length |e|, dual face area vector S* and magnitude |S*|, alpha = |e|/|S*|
+    register_field(FieldDescriptor{"dl_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_});   // |e_xi|   (primal edge length along xi)
+    register_field(FieldDescriptor{"dl_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_});  // |e_eta|
+    register_field(FieldDescriptor{"dl_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_}); // |e_ze|
+
+    register_field(FieldDescriptor{"Sstar_xi", StaggerLocation::EdgeXi, 3, geomtry_ghost_});   // S*_xi  (dual face area vector normal to xi-edge)
+    register_field(FieldDescriptor{"Sstar_eta", StaggerLocation::EdgeEt, 3, geomtry_ghost_});  // S*_eta
+    register_field(FieldDescriptor{"Sstar_zeta", StaggerLocation::EdgeZe, 3, geomtry_ghost_}); // S*_ze
+
+    register_field(FieldDescriptor{"Astar_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_});   // |S*_xi| (dual face area magnitude)
+    register_field(FieldDescriptor{"Astar_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_});  // |S*_eta|
+    register_field(FieldDescriptor{"Astar_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_}); // |S*_ze|
+
+    register_field(FieldDescriptor{"alpha_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_});   // alpha_xi  = |e_xi|/|S*_xi|  (inverse Hodge *_1^{-1} scale)
+    register_field(FieldDescriptor{"alpha_eta", StaggerLocation::EdgeEt, 1, geomtry_ghost_});  // alpha_eta = |e_eta|/|S*_eta|
+    register_field(FieldDescriptor{"alpha_zeta", StaggerLocation::EdgeZe, 1, geomtry_ghost_}); // alpha_ze  = |e_ze|/|S*_ze|
+
     auto dot = [&](const std::array<double, 3> &a, const std::array<double, 3> &b)
     {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -37,6 +67,14 @@ void Field::build_geometry(int geomtry_ghost_)
     auto plus = [&](const std::array<double, 3> &a, const std::array<double, 3> &b) -> std::array<double, 3>
     {
         return {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+    };
+    auto norm3 = [&](const std::array<double, 3> &a) -> double
+    {
+        return std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+    };
+    auto scale = [&](const std::array<double, 3> &a, double s) -> std::array<double, 3>
+    {
+        return {s * a[0], s * a[1], s * a[2]};
     };
 
     {
@@ -253,6 +291,288 @@ void Field::build_geometry(int geomtry_ghost_)
 
                         Jac(i, j, k, 0) = V / 3.0;
                     }
+        }
+    }
+
+    {
+        constexpr double eps = 1e-300;
+
+        // Pull fields
+        auto &JDxi_ = field("JDxi");
+        auto &JDet_ = field("JDet");
+        auto &JDze_ = field("JDze");
+
+        auto &Area_xi_ = field("Area_xi");
+        auto &Area_eta_ = field("Area_eta");
+        auto &Area_ze_ = field("Area_zeta");
+
+        auto &dlstar_xi_ = field("dlstar_xi");
+        auto &dlstar_eta_ = field("dlstar_eta");
+        auto &dlstar_ze_ = field("dlstar_zeta");
+
+        auto &beta_xi_ = field("beta_xi");
+        auto &beta_eta_ = field("beta_eta");
+        auto &beta_ze_ = field("beta_zeta");
+
+        auto &dl_xi_ = field("dl_xi");
+        auto &dl_eta_ = field("dl_eta");
+        auto &dl_ze_ = field("dl_zeta");
+
+        auto &Sstar_xi_ = field("Sstar_xi");
+        auto &Sstar_eta_ = field("Sstar_eta");
+        auto &Sstar_ze_ = field("Sstar_zeta");
+
+        auto &Astar_xi_ = field("Astar_xi");
+        auto &Astar_eta_ = field("Astar_eta");
+        auto &Astar_ze_ = field("Astar_zeta");
+
+        auto &alpha_xi_ = field("alpha_xi");
+        auto &alpha_eta_ = field("alpha_eta");
+        auto &alpha_ze_ = field("alpha_zeta");
+
+        auto get_cellc = [&](double3D &cx, double3D &cy, double3D &cz, int ii, int jj, int kk) -> std::array<double, 3>
+        {
+            return {cx(ii, jj, kk), cy(ii, jj, kk), cz(ii, jj, kk)};
+        };
+
+        auto get_node = [&](double3D &x, double3D &y, double3D &z, int i, int j, int k) -> std::array<double, 3>
+        {
+            return {x(i, j, k), y(i, j, k), z(i, j, k)};
+        };
+
+        // Quad area vector via two triangles (same style as your face Area computation)
+        // p00--p10
+        //  |    |
+        // p01--p11
+        auto quad_area_vec = [&](const std::array<double, 3> &p00,
+                                 const std::array<double, 3> &p10,
+                                 const std::array<double, 3> &p01,
+                                 const std::array<double, 3> &p11) -> std::array<double, 3>
+        {
+            // area = 0.5*( (p10-p00)x(p01-p00) + (p01-p11)x(p10-p11) )
+            auto a0 = cross(minus(p10, p00), minus(p01, p00));
+            auto a1 = cross(minus(p01, p11), minus(p10, p11));
+            return scale(plus(a0, a1), 0.5);
+        };
+
+        for (int ib = 0; ib < grd->nblock; ++ib)
+        {
+            auto &x = grd->grids(ib).x;
+            auto &y = grd->grids(ib).y;
+            auto &z = grd->grids(ib).z;
+
+            auto &cx = grd->grids(ib).dual_x; // cell centers
+            auto &cy = grd->grids(ib).dual_y;
+            auto &cz = grd->grids(ib).dual_z;
+
+            // -------------------------
+            // Face: Area magnitude, dlstar, beta
+            // -------------------------
+
+            // FaceXi: face at (i,j,k) uses JDxi(i,j,k,:)
+            {
+                auto &JDxi = JDxi_[ib];
+                auto &Area = Area_xi_[ib];
+                auto &dlst = dlstar_xi_[ib];
+                auto &beta = beta_xi_[ib];
+
+                Int3 lo = Area.get_lo();
+                Int3 hi = Area.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            std::array<double, 3> S = {JDxi(i, j, k, 0), JDxi(i, j, k, 1), JDxi(i, j, k, 2)};
+                            double Smag = norm3(S);
+                            Area(i, j, k, 0) = Smag; // |S|
+
+                            // dual-edge length across this face: distance between adjacent cell centers
+                            // FaceXi(i, j, k) separates Cell(i-1,j,k) and Cell(i,j,k)
+                            // Cell(i,j,k) center is dual(i+1,j+1,k+1); so:
+                            // left  cell (i-1) => dual(i,  j+1,k+1)
+                            // right cell (i)   => dual(i+1,j+1,k+1)
+                            std::array<double, 3> cL = get_cellc(cx, cy, cz, i, j + 1, k + 1);
+                            std::array<double, 3> cR = get_cellc(cx, cy, cz, i + 1, j + 1, k + 1);
+                            double Lstar = norm3(minus(cR, cL));
+                            dlst(i, j, k, 0) = Lstar; // |l*|
+
+                            beta(i, j, k, 0) = Lstar / fmax(Smag, eps); // beta = |l*|/|S|
+                        }
+            }
+
+            // FaceEt
+            {
+                auto &JDet = JDet_[ib];
+                auto &Area = Area_eta_[ib];
+                auto &dlst = dlstar_eta_[ib];
+                auto &beta = beta_eta_[ib];
+
+                Int3 lo = Area.get_lo();
+                Int3 hi = Area.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            std::array<double, 3> S = {JDet(i, j, k, 0), JDet(i, j, k, 1), JDet(i, j, k, 2)};
+                            double Smag = norm3(S);
+                            Area(i, j, k, 0) = Smag;
+
+                            // FaceEt(i,j,k) separates Cell(i,j-1,k) and Cell(i,j,k)
+                            std::array<double, 3> cL = get_cellc(cx, cy, cz, i + 1, j, k + 1);
+                            std::array<double, 3> cR = get_cellc(cx, cy, cz, i + 1, j + 1, k + 1);
+                            double Lstar = norm3(minus(cR, cL));
+                            dlst(i, j, k, 0) = Lstar;
+
+                            beta(i, j, k, 0) = Lstar / std::max(Smag, eps);
+                        }
+            }
+
+            // FaceZe
+            {
+                auto &JDze = JDze_[ib];
+                auto &Area = Area_ze_[ib];
+                auto &dlst = dlstar_ze_[ib];
+                auto &beta = beta_ze_[ib];
+
+                Int3 lo = Area.get_lo();
+                Int3 hi = Area.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            std::array<double, 3> S = {JDze(i, j, k, 0), JDze(i, j, k, 1), JDze(i, j, k, 2)};
+                            double Smag = norm3(S);
+                            Area(i, j, k, 0) = Smag;
+
+                            // FaceZe(i,j,k) separates Cell(i,j,k-1) and Cell(i,j,k)
+                            std::array<double, 3> cL = get_cellc(cx, cy, cz, i + 1, j + 1, k);
+                            std::array<double, 3> cR = get_cellc(cx, cy, cz, i + 1, j + 1, k + 1);
+                            double Lstar = norm3(minus(cR, cL));
+                            dlst(i, j, k, 0) = Lstar;
+
+                            beta(i, j, k, 0) = Lstar / std::max(Smag, eps);
+                        }
+            }
+
+            // -------------------------
+            // Edge: dl, Sstar, Astar, alpha
+            // -------------------------
+
+            // EdgeXi: edge from node(i,j,k) to node(i+1,j,k)
+            {
+                auto &dl = dl_xi_[ib];
+                auto &Sstar = Sstar_xi_[ib];
+                auto &Astar = Astar_xi_[ib];
+                auto &alpha = alpha_xi_[ib];
+
+                Int3 lo = dl.get_lo();
+                Int3 hi = dl.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            auto r0 = get_node(x, y, z, i, j, k);
+                            auto r1 = get_node(x, y, z, i + 1, j, k);
+                            double L = norm3(minus(r1, r0));
+                            dl(i, j, k, 0) = L; // |e|
+
+                            // Dual face around this xi-edge uses 4 surrounding cell centers:
+                            // cells: (i, j-1, k-1), (i, j, k-1), (i, j-1, k), (i, j, k)
+                            // mapping to dual indices: cell(i,j,k) -> dual(i+1,j+1,k+1)
+                            auto p00 = get_cellc(cx, cy, cz, i + 1, j, k);
+                            auto p10 = get_cellc(cx, cy, cz, i + 1, j + 1, k);
+                            auto p01 = get_cellc(cx, cy, cz, i + 1, j, k + 1);
+                            auto p11 = get_cellc(cx, cy, cz, i + 1, j + 1, k + 1);
+
+                            auto Avec = quad_area_vec(p00, p10, p01, p11);
+                            Sstar(i, j, k, 0) = Avec[0];
+                            Sstar(i, j, k, 1) = Avec[1];
+                            Sstar(i, j, k, 2) = Avec[2];
+
+                            double Amag = norm3(Avec);
+                            Astar(i, j, k, 0) = Amag;
+
+                            alpha(i, j, k, 0) = L / std::max(Amag, eps); // alpha = |e|/|S*|
+                        }
+            }
+
+            // EdgeEt: edge from node(i,j,k) to node(i,j+1,k)
+            {
+                auto &dl = dl_eta_[ib];
+                auto &Sstar = Sstar_eta_[ib];
+                auto &Astar = Astar_eta_[ib];
+                auto &alpha = alpha_eta_[ib];
+
+                Int3 lo = dl.get_lo();
+                Int3 hi = dl.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            auto r0 = get_node(x, y, z, i, j, k);
+                            auto r1 = get_node(x, y, z, i, j + 1, k);
+                            double L = norm3(minus(r1, r0));
+                            dl(i, j, k, 0) = L;
+
+                            // surrounding cells: (i-1,j,k-1),(i,j,k-1),(i-1,j,k),(i,j,k)
+                            auto p00 = get_cellc(cx, cy, cz, i, j + 1, k);
+                            auto p10 = get_cellc(cx, cy, cz, i + 1, j + 1, k);
+                            auto p01 = get_cellc(cx, cy, cz, i, j + 1, k + 1);
+                            auto p11 = get_cellc(cx, cy, cz, i + 1, j + 1, k + 1);
+
+                            auto Avec = quad_area_vec(p00, p10, p01, p11);
+                            Sstar(i, j, k, 0) = Avec[0];
+                            Sstar(i, j, k, 1) = Avec[1];
+                            Sstar(i, j, k, 2) = Avec[2];
+
+                            double Amag = norm3(Avec);
+                            Astar(i, j, k, 0) = Amag;
+
+                            alpha(i, j, k, 0) = L / std::max(Amag, eps);
+                        }
+            }
+
+            // EdgeZe: edge from node(i,j,k) to node(i,j,k+1)
+            {
+                auto &dl = dl_ze_[ib];
+                auto &Sstar = Sstar_ze_[ib];
+                auto &Astar = Astar_ze_[ib];
+                auto &alpha = alpha_ze_[ib];
+
+                Int3 lo = dl.get_lo();
+                Int3 hi = dl.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            auto r0 = get_node(x, y, z, i, j, k);
+                            auto r1 = get_node(x, y, z, i, j, k + 1);
+                            double L = norm3(minus(r1, r0));
+                            dl(i, j, k, 0) = L;
+
+                            // surrounding cells: (i-1,j-1,k),(i,j-1,k),(i-1,j,k),(i,j,k)
+                            auto p00 = get_cellc(cx, cy, cz, i, j, k + 1);
+                            auto p10 = get_cellc(cx, cy, cz, i + 1, j, k + 1);
+                            auto p01 = get_cellc(cx, cy, cz, i, j + 1, k + 1);
+                            auto p11 = get_cellc(cx, cy, cz, i + 1, j + 1, k + 1);
+
+                            auto Avec = quad_area_vec(p00, p10, p01, p11);
+                            Sstar(i, j, k, 0) = Avec[0];
+                            Sstar(i, j, k, 1) = Avec[1];
+                            Sstar(i, j, k, 2) = Avec[2];
+
+                            double Amag = norm3(Avec);
+                            Astar(i, j, k, 0) = Amag;
+
+                            alpha(i, j, k, 0) = L / std::max(Amag, eps);
+                        }
+            }
         }
     }
 

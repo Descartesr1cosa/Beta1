@@ -54,6 +54,16 @@ struct SolverFields
     IdTriplet fid_pinvGT; // (pinvGT_xi, pinvGT_eta, pinvGT_zeta)  ncomp=9
     IdTriplet fid_pinvAT; // (pinvAT_xi, pinvAT_eta, pinvAT_zeta)  ncomp=9
 
+    // Face metrics:
+    IdTriplet Face_Area;   // Face: |S_xi|  |S_eta| |S_ze| ncomp = 1
+    IdTriplet Face_dlstar; // Face: |l*_xi|  |l*_eta| |l*_ze| ncomp = 1
+    IdTriplet Face_beta;   // Face: beta=  |l*_|/|S_| ncomp = 1
+    // Edge metrics:
+    IdTriplet Edge_metric; // Edge: S*_xi  S*_eta S*_ze ncomp = 3
+    IdTriplet Edge_Astar;  // Edge: |S*_xi|  |S*_eta| |S*_ze| ncomp = 1
+    IdTriplet Edge_dl;     // Edge: |e_xi|  |e_eta| |e_ze| ncomp = 1
+    IdTriplet Edge_alpha;  // Edge: beta=  |l*_|/|S_| ncomp = 1
+
     // ---- field ids ----
     int fid_U_H = -1;
     int fid_U_Na = -1;
@@ -108,6 +118,28 @@ struct SolverFields
         fid_pinvAT.xi = fld->field_id("pinvAT_xi");
         fid_pinvAT.eta = fld->field_id("pinvAT_eta");
         fid_pinvAT.zeta = fld->field_id("pinvAT_zeta");
+
+        Face_Area.xi = fld->field_id("Area_xi");
+        Face_Area.eta = fld->field_id("Area_eta");
+        Face_Area.zeta = fld->field_id("Area_zeta");
+        Face_dlstar.xi = fld->field_id("dlstar_xi");
+        Face_dlstar.eta = fld->field_id("dlstar_eta");
+        Face_dlstar.zeta = fld->field_id("dlstar_zeta");
+        Face_beta.xi = fld->field_id("beta_xi");
+        Face_beta.eta = fld->field_id("beta_eta");
+        Face_beta.zeta = fld->field_id("beta_zeta");
+        Edge_metric.xi = fld->field_id("Sstar_xi");
+        Edge_metric.eta = fld->field_id("Sstar_eta");
+        Edge_metric.zeta = fld->field_id("Sstar_zeta");
+        Edge_Astar.xi = fld->field_id("Astar_xi");
+        Edge_Astar.eta = fld->field_id("Astar_eta");
+        Edge_Astar.zeta = fld->field_id("Astar_zeta");
+        Edge_dl.xi = fld->field_id("dl_xi");
+        Edge_dl.eta = fld->field_id("dl_eta");
+        Edge_dl.zeta = fld->field_id("dl_zeta");
+        Edge_alpha.xi = fld->field_id("alpha_xi");
+        Edge_alpha.eta = fld->field_id("alpha_eta");
+        Edge_alpha.zeta = fld->field_id("alpha_zeta");
 
         // ---- field ids ----
         fid_U_H = fld->field_id("U_H");
@@ -190,6 +222,15 @@ struct SolverFields
         fid_metric.require_all("metric(JDxi/JDet/JDze)");
         fid_pinvGT.require_all("pinvGT(edge)");
         fid_pinvAT.require_all("pinvAT(edge)");
+
+        Face_Area.require_all("Face_Area");
+        Face_dlstar.require_all("Face_dlstar");
+        Face_beta.require_all("Face_beta");
+
+        Edge_metric.require_all("Edge_metric");
+        Edge_Astar.require_all("Edge_Astar");
+        Edge_dl.require_all("Edge_dl");
+        Edge_alpha.require_all("Edge_alpha");
 
         // ---- field ids ----
         require_id(fid_U_H, "U_H");

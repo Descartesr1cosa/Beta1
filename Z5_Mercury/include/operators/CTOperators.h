@@ -14,5 +14,6 @@ namespace CTOperators
     // face F (scalar) -> edge E (scalars per edge) = curl F * multiper
     void CurlAdjFaceToEdge(int iblk,
                            FieldBlock &Face_xi, FieldBlock &Face_eta, FieldBlock &Face_zeta,
+                           FieldBlock &beta_xi, FieldBlock &beta_eta, FieldBlock &beta_zeta,
                            FieldBlock &Edge_xi, FieldBlock &Edge_eta, FieldBlock &Edge_zeta, double multiper);
 }
