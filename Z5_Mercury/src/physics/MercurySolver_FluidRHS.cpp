@@ -301,8 +301,13 @@ void MercurySolver::AddSourceToRHS_Fluid()
         FieldBlock &PVN = fld_->field(fid_.fid_PV_Na, ib);
 
         FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib);
-        FieldBlock &Ub = fld_->field(fid_.fid_Bcell, ib);
         FieldBlock &Bt = fld_->field(fid_.fid_Bcell, ib);
+
+        FieldBlock &Jxi = fld_->field(fid_.fid_J.xi, ib);
+        FieldBlock &Jet = fld_->field(fid_.fid_J.eta, ib);
+        FieldBlock &Jze = fld_->field(fid_.fid_J.zeta, ib);
+
+        FieldBlock &pinvGTc = fld_->field(fid_.fid_pinvGT_Cell, ib);
 
         FieldBlock &NaNeu = fld_->field(fld_->field_id("Na"), ib);
         FieldBlock &Photo = fld_->field(fld_->field_id("Photo_rate"), ib);
@@ -318,11 +323,13 @@ void MercurySolver::AddSourceToRHS_Fluid()
             continue;
         if (!PVH.is_allocated() || !PVN.is_allocated())
             continue;
-        if (!Up.is_allocated() || !Ub.is_allocated() || !Bt.is_allocated())
+        if (!Up.is_allocated() || !Bt.is_allocated())
             continue;
         if (!RHS_H.is_allocated() || !RHS_Na.is_allocated())
             continue;
         if (!NaNeu.is_allocated() || !Photo.is_allocated())
+            continue;
+        if (!Jxi.is_allocated() || !Jet.is_allocated() || !Jze.is_allocated())
             continue;
 
         Int3 lo = Jac.inner_lo();
@@ -354,40 +361,23 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                     // ---------- J and JxB ----------
                     double J[3];
+
                     {
-                        const double Bx_p_i = Ub(i + 1, j, k, 0), Bx_m_i = Ub(i - 1, j, k, 0);
-                        const double By_p_i = Ub(i + 1, j, k, 1), By_m_i = Ub(i - 1, j, k, 1);
-                        const double Bz_p_i = Ub(i + 1, j, k, 2), Bz_m_i = Ub(i - 1, j, k, 2);
+                        // 1) Edge -> cell (4-pt symmetric average, same spirit as your Hall co-location)
+                        const double Jxi_int = 0.25 * (Jxi(i, j, k, 0) + Jxi(i, j + 1, k, 0) +
+                                                       Jxi(i, j, k + 1, 0) + Jxi(i, j + 1, k + 1, 0));
 
-                        double Bx_p_j = 0, Bx_m_j = 0, By_p_j = 0, By_m_j = 0, Bz_p_j = 0, Bz_m_j = 0;
-                        double Bx_p_k = 0, Bx_m_k = 0, By_p_k = 0, By_m_k = 0, Bz_p_k = 0, Bz_m_k = 0;
+                        const double Jeta_int = 0.25 * (Jet(i, j, k, 0) + Jet(i + 1, j, k, 0) +
+                                                        Jet(i, j, k + 1, 0) + Jet(i + 1, j, k + 1, 0));
 
-                        Bx_p_j = Ub(i, j + 1, k, 0);
-                        Bx_m_j = Ub(i, j - 1, k, 0);
-                        By_p_j = Ub(i, j + 1, k, 1);
-                        By_m_j = Ub(i, j - 1, k, 1);
-                        Bz_p_j = Ub(i, j + 1, k, 2);
-                        Bz_m_j = Ub(i, j - 1, k, 2);
+                        const double Jzeta_int = 0.25 * (Jze(i, j, k, 0) + Jze(i + 1, j, k, 0) +
+                                                         Jze(i, j + 1, k, 0) + Jze(i + 1, j + 1, k, 0));
 
-                        Bx_p_k = Ub(i, j, k + 1, 0);
-                        Bx_m_k = Ub(i, j, k - 1, 0);
-                        By_p_k = Ub(i, j, k + 1, 1);
-                        By_m_k = Ub(i, j, k - 1, 1);
-                        Bz_p_k = Ub(i, j, k + 1, 2);
-                        Bz_m_k = Ub(i, j, k - 1, 2);
-
-                        const double Bzy = dd(ay, by, cy, Bz_p_i, Bz_m_i, Bz_p_j, Bz_m_j, Bz_p_k, Bz_m_k);
-                        const double Byz = dd(az, bz, cz, By_p_i, By_m_i, By_p_j, By_m_j, By_p_k, By_m_k);
-
-                        const double Bxz = dd(az, bz, cz, Bx_p_i, Bx_m_i, Bx_p_j, Bx_m_j, Bx_p_k, Bx_m_k);
-                        const double Bzx = dd(ax, bx, cx, Bz_p_i, Bz_m_i, Bz_p_j, Bz_m_j, Bz_p_k, Bz_m_k);
-
-                        const double Byx = dd(ax, bx, cx, By_p_i, By_m_i, By_p_j, By_m_j, By_p_k, By_m_k);
-                        const double Bxy = dd(ay, by, cy, Bx_p_i, Bx_m_i, Bx_p_j, Bx_m_j, Bx_p_k, Bx_m_k);
-
-                        J[0] = Bzy - Byz;
-                        J[1] = Bxz - Bzx;
-                        J[2] = Byx - Bxy;
+                        // Reconstruct physical vector J(x,y,z) by: J = pinvGT_cell * w
+                        // pinvGT_cell is row-major: [0..2; 3..5; 6..8]
+                        J[0] = pinvGTc(i, j, k, 0) * Jxi_int + pinvGTc(i, j, k, 1) * Jeta_int + pinvGTc(i, j, k, 2) * Jzeta_int;
+                        J[1] = pinvGTc(i, j, k, 3) * Jxi_int + pinvGTc(i, j, k, 4) * Jeta_int + pinvGTc(i, j, k, 5) * Jzeta_int;
+                        J[2] = pinvGTc(i, j, k, 6) * Jxi_int + pinvGTc(i, j, k, 7) * Jeta_int + pinvGTc(i, j, k, 8) * Jzeta_int;
                     }
 
                     // JxB (对应 Fortran sjb)
@@ -456,13 +446,19 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         const double us2 = uH * uH + vH * vH + wH * wH;
                         const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
 
-                        RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoH_nd * uH * vst;
-                        RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoH_nd * vH * vst;
-                        RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoH_nd * wH * vst;
-                        RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoH_nd * us2 * b2;
+                        // RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
+                        // RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoH_nd * uH * vst;
+                        // RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoH_nd * vH * vst;
+                        // RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoH_nd * wH * vst;
+                        // RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoH_nd * us2 * b2;
 
-                        RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
+                        // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
+
+                        RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
+                        RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - a4 * rhoH_nd * uH * vst;
+                        RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - a4 * rhoH_nd * vH * vst;
+                        RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - a4 * rhoH_nd * wH * vst;
+                        RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) + a4 * rhoH_nd * us2 * b2; // work term for species energy
                     }
 
                     // =====================
@@ -483,17 +479,23 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         const double us2 = uN * uN + vN * vN + wN * wN;
                         const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
 
-                        RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoNa_nd * uN * vst;
-                        RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoNa_nd * vN * vst;
-                        RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoNa_nd * wN * vst;
-                        RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) - a4 * rhoNa_nd * us2 * vst;
+                        // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
+                        // RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoNa_nd * uN * vst;
+                        // RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoNa_nd * vN * vst;
+                        // RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoNa_nd * wN * vst;
+                        // RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoNa_nd * us2 * vst;
 
-                        RHS_Na(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm + a6 * sss * Tn0;
+                        // RHS_Na(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm + a6 * sss * Tn0;
 
                         // RHS_Na(i, j, k, 1) += -a1_Na * sss * uN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
                         // RHS_Na(i, j, k, 2) += -a1_Na * sss * vN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
                         // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
+
+                        // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
+                        RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - a4 * rhoNa_nd * uN * vst;
+                        RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - a4 * rhoNa_nd * vN * vst;
+                        RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - a4 * rhoNa_nd * wN * vst;
+                        RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) + a4 * rhoNa_nd * us2 * vst;
                     }
                 }
     }
