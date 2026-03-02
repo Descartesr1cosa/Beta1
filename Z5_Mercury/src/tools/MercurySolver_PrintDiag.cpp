@@ -90,6 +90,38 @@ void MercurySolver::PrintMinMaxDiagnostics_()
     const int myid = par_->GetInt("myid");
     if (myid == 0)
     {
+        // -----------------------------
+        // NEW: compute |B|_max from Bmag_max (=0.5|B|^2)
+        // -----------------------------
+        const double Bmag_max = maxs_g[7]; // 0.5|B|^2
+        const double Babs_max = std::sqrt(std::max(0.0, 2.0 * Bmag_max));
+
+        // -----------------------------
+        // NEW: Omega0_s and dt*Omega_max
+        // Omega0_s = (q_e * B_ref * L_ref) / (m_s * U_ref)
+        // (dimensionless w.r.t. t' = t * U_ref/L_ref)
+        // -----------------------------
+        const auto &C = par_->GetDou_List("constant").data;
+        const auto &R = par_->GetDou_List("REF").data;
+
+        const double NA = C.at("NA");
+        const double q_e = C.at("q_e");
+        const double Lref = R.at("L_ref");
+        const double Uref = R.at("U");
+        const double Bref = R.at("B_ref");
+
+        const double mH = par_->GetDou("mole_mass1") / NA;  // kg/particle
+        const double mNa = par_->GetDou("mole_mass2") / NA; // kg/particle
+
+        const double Omega0_H = (q_e * Bref * Lref) / (mH * Uref);
+        const double Omega0_Na = (q_e * Bref * Lref) / (mNa * Uref);
+
+        const double OmegaH_max = Omega0_H * Babs_max;
+        const double OmegaNa_max = Omega0_Na * Babs_max;
+        const double Omega_max = std::max(OmegaH_max, OmegaNa_max);
+
+        const double dtOmega = dt * Omega_max;
+
         // 与输出对齐："[  Diag  ] " 长度是 11，所以这里用 11 个空格缩进
         // std::printf("           rhoH=[%.3e, %.3e]  pH=[%.3e, %.3e]  rhoNa=[%.3e, %.3e]  pNa=[%.3e, %.3e]\n",
         //             mins_g[0], maxs_g[0], mins_g[1], maxs_g[1], mins_g[2], maxs_g[2], mins_g[3], maxs_g[3]);
@@ -102,6 +134,14 @@ void MercurySolver::PrintMinMaxDiagnostics_()
                     mins_g[4], maxs_g[4], mins_g[5], maxs_g[5], mins_g[6], maxs_g[6]);
         std::printf("           Bmag=[%.3e, %.3e]\n\n\n",
                     mins_g[7], maxs_g[7]);
+
+        // -----------------------------
+        // NEW: stiffness diagnostics
+        // -----------------------------
+        std::printf("           |B|max=%.3e  Omega0_H=%.3e  Omega0_Na=%.3e\n",
+                    Babs_max, Omega0_H, Omega0_Na);
+        std::printf("           OmegaH_max=%.3e  OmegaNa_max=%.3e  dt*Omega_max=%.3e\n\n",
+                    OmegaH_max, OmegaNa_max, dtOmega);
 
         std::fflush(stdout);
     }

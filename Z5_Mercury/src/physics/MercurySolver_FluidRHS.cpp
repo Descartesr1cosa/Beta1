@@ -454,11 +454,11 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
 
-                        RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - a4 * rhoH_nd * uH * vst;
-                        RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - a4 * rhoH_nd * vH * vst;
-                        RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - a4 * rhoH_nd * wH * vst;
-                        RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) + a4 * rhoH_nd * us2 * b2; // work term for species energy
+                        RHS_H(i, j, k, 0) += 0.0;                                           // H+ has no mass creation in Fortran here
+                        RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm); //- a4 * rhoH_nd * uH * vst;
+                        RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm); //- a4 * rhoH_nd * vH * vst;
+                        RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm); // - a4 * rhoH_nd * wH * vst;
+                        RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm); // + a4 * rhoH_nd * us2 * b2; // work term for species energy
                     }
 
                     // =====================
@@ -492,10 +492,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
 
                         // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - a4 * rhoNa_nd * uN * vst;
-                        RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - a4 * rhoNa_nd * vN * vst;
-                        RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - a4 * rhoNa_nd * wN * vst;
-                        RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) + a4 * rhoNa_nd * us2 * vst;
+                        RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm); // - a4 * rhoNa_nd * uN * vst;
+                        RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm); // - a4 * rhoNa_nd * vN * vst;
+                        RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm); // - a4 * rhoNa_nd * wN * vst;
+                        RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm); // + a4 * rhoNa_nd * us2 * vst;
                     }
                 }
     }
