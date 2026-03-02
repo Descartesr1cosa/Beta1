@@ -3,6 +3,20 @@
 
 void MercurySolver::Time_Advance()
 {
+
+    // ---------- Hall 子循环数 ----------
+    const double safety = 0.8;
+    int nsub = 1;
+    if (dt_hall > 0.0)
+        nsub = std::max(1, (int)std::ceil(dt / (safety * dt_hall)));
+    nsub = std::min(nsub, 200);
+    const double dt_sub = dt / nsub;
+    if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
+    {
+        std::printf("[HallSub] step=%d dt=%.3e dt_hall=%.3e nsub=%d dt_sub=%.3e\n\n",
+                    run_data_->step, dt, dt_hall, nsub, dt / double(nsub));
+    }
+
     // 1) dq/db set to ZERO
     ZeroRHS_();
 
@@ -17,6 +31,286 @@ void MercurySolver::Time_Advance()
 
     // 5) 低密度/负压修复（尽量按 Fortran：邻域平均 + 重建 E）
     // RepairNonPhysical_();
+
+    // 2) Hall 子步：只更新 Bface
+    mercury_bound_.Sync("Ucell");
+    mercury_bound_.Sync("Bface");
+
+    auto rk4_hall_bface_only = [&](double dt_step)
+    {
+        struct Buf
+        {
+            bool ok{false};
+            Int3 lo, hi;
+            std::vector<double> v; // inner only
+        };
+
+        auto make_buf_like = [&](FieldBlock &F) -> Buf
+        {
+            Buf b;
+            if (!F.is_allocated())
+                return b;
+            b.ok = true;
+            b.lo = F.inner_lo();
+            b.hi = F.inner_hi();
+            const int ni = b.hi.i - b.lo.i;
+            const int nj = b.hi.j - b.lo.j;
+            const int nk = b.hi.k - b.lo.k;
+            b.v.assign((size_t)ni * (size_t)nj * (size_t)nk, 0.0);
+            return b;
+        };
+
+        auto pack0 = [&](FieldBlock &F, Buf &b)
+        {
+            if (!b.ok)
+                return;
+            size_t idx = 0;
+            for (int i = b.lo.i; i < b.hi.i; ++i)
+                for (int j = b.lo.j; j < b.hi.j; ++j)
+                    for (int k = b.lo.k; k < b.hi.k; ++k, ++idx)
+                        b.v[idx] = F(i, j, k, 0);
+        };
+
+        auto pack_rhs = [&](FieldBlock &RHS, Buf &b)
+        {
+            if (!b.ok)
+                return;
+            size_t idx = 0;
+            for (int i = b.lo.i; i < b.hi.i; ++i)
+                for (int j = b.lo.j; j < b.hi.j; ++j)
+                    for (int k = b.lo.k; k < b.hi.k; ++k, ++idx)
+                        b.v[idx] = RHS(i, j, k, 0);
+        };
+
+        // B = B0 + fac * dt_step * K
+        auto write_B = [&](FieldBlock &B, const Buf &B0, const Buf &K, double fac)
+        {
+            if (!B0.ok)
+                return;
+            const double a = fac * dt_step;
+            size_t idx = 0;
+            for (int i = B0.lo.i; i < B0.hi.i; ++i)
+                for (int j = B0.lo.j; j < B0.hi.j; ++j)
+                    for (int k = B0.lo.k; k < B0.hi.k; ++k, ++idx)
+                        B(i, j, k, 0) = B0.v[idx] + a * K.v[idx];
+        };
+
+        // S += w * K
+        auto axpy = [&](Buf &S, const Buf &K, double w)
+        {
+            if (!S.ok)
+                return;
+            for (size_t t = 0; t < S.v.size(); ++t)
+                S.v[t] += w * K.v[t];
+        };
+
+        const int nb = fld_->num_blocks();
+
+        std::vector<Buf> B0_xi(nb), B0_eta(nb), B0_ze(nb);
+        std::vector<Buf> K_xi(nb), K_eta(nb), K_ze(nb);
+        std::vector<Buf> S_xi(nb), S_eta(nb), S_ze(nb);
+
+        // ---------- snapshot B0 and allocate buffers ----------
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+            auto &Beta = fld_->field(fid_.fid_B.eta, ib);
+            auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+            B0_xi[ib] = make_buf_like(Bxi);
+            B0_eta[ib] = make_buf_like(Beta);
+            B0_ze[ib] = make_buf_like(Bze);
+
+            K_xi[ib] = make_buf_like(Bxi);
+            K_eta[ib] = make_buf_like(Beta);
+            K_ze[ib] = make_buf_like(Bze);
+
+            S_xi[ib] = make_buf_like(Bxi);
+            S_eta[ib] = make_buf_like(Beta);
+            S_ze[ib] = make_buf_like(Bze);
+
+            pack0(Bxi, B0_xi[ib]);
+            pack0(Beta, B0_eta[ib]);
+            pack0(Bze, B0_ze[ib]);
+        }
+
+        // ---------- Stage 1: K = f(B0), S = K ----------
+        AssembleRHS_Induction_CT_HallOnly_();
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+            auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+            auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+            if (K_xi[ib].ok)
+            {
+                pack_rhs(RHSBxi, K_xi[ib]);
+                S_xi[ib].v = K_xi[ib].v;
+            }
+            if (K_eta[ib].ok)
+            {
+                pack_rhs(RHSBeta, K_eta[ib]);
+                S_eta[ib].v = K_eta[ib].v;
+            }
+            if (K_ze[ib].ok)
+            {
+                pack_rhs(RHSBze, K_ze[ib]);
+                S_ze[ib].v = K_ze[ib].v;
+            }
+        }
+
+        // B = B0 + 0.5 dt K1
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+            auto &Beta = fld_->field(fid_.fid_B.eta, ib);
+            auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+            if (B0_xi[ib].ok)
+                write_B(Bxi, B0_xi[ib], K_xi[ib], 0.5);
+            if (B0_eta[ib].ok)
+                write_B(Beta, B0_eta[ib], K_eta[ib], 0.5);
+            if (B0_ze[ib].ok)
+                write_B(Bze, B0_ze[ib], K_ze[ib], 0.5);
+        }
+
+        // ---------- Stage 2: K = f(B0+0.5dtK1), S += 2K ----------
+        AssembleRHS_Induction_CT_HallOnly_();
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+            auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+            auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+            if (K_xi[ib].ok)
+            {
+                pack_rhs(RHSBxi, K_xi[ib]);
+                axpy(S_xi[ib], K_xi[ib], 2.0);
+            }
+            if (K_eta[ib].ok)
+            {
+                pack_rhs(RHSBeta, K_eta[ib]);
+                axpy(S_eta[ib], K_eta[ib], 2.0);
+            }
+            if (K_ze[ib].ok)
+            {
+                pack_rhs(RHSBze, K_ze[ib]);
+                axpy(S_ze[ib], K_ze[ib], 2.0);
+            }
+        }
+
+        // B = B0 + 0.5 dt K2
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+            auto &Beta = fld_->field(fid_.fid_B.eta, ib);
+            auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+            if (B0_xi[ib].ok)
+                write_B(Bxi, B0_xi[ib], K_xi[ib], 0.5);
+            if (B0_eta[ib].ok)
+                write_B(Beta, B0_eta[ib], K_eta[ib], 0.5);
+            if (B0_ze[ib].ok)
+                write_B(Bze, B0_ze[ib], K_ze[ib], 0.5);
+        }
+
+        // ---------- Stage 3: K = f(B0+0.5dtK2), S += 2K ----------
+        AssembleRHS_Induction_CT_HallOnly_();
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+            auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+            auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+            if (K_xi[ib].ok)
+            {
+                pack_rhs(RHSBxi, K_xi[ib]);
+                axpy(S_xi[ib], K_xi[ib], 2.0);
+            }
+            if (K_eta[ib].ok)
+            {
+                pack_rhs(RHSBeta, K_eta[ib]);
+                axpy(S_eta[ib], K_eta[ib], 2.0);
+            }
+            if (K_ze[ib].ok)
+            {
+                pack_rhs(RHSBze, K_ze[ib]);
+                axpy(S_ze[ib], K_ze[ib], 2.0);
+            }
+        }
+
+        // B = B0 + 1.0 dt K3
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+            auto &Beta = fld_->field(fid_.fid_B.eta, ib);
+            auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+            if (B0_xi[ib].ok)
+                write_B(Bxi, B0_xi[ib], K_xi[ib], 1.0);
+            if (B0_eta[ib].ok)
+                write_B(Beta, B0_eta[ib], K_eta[ib], 1.0);
+            if (B0_ze[ib].ok)
+                write_B(Bze, B0_ze[ib], K_ze[ib], 1.0);
+        }
+
+        // ---------- Stage 4: K = f(B0+dtK3), S += K ----------
+        AssembleRHS_Induction_CT_HallOnly_();
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+            auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+            auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+            if (K_xi[ib].ok)
+            {
+                pack_rhs(RHSBxi, K_xi[ib]);
+                axpy(S_xi[ib], K_xi[ib], 1.0);
+            }
+            if (K_eta[ib].ok)
+            {
+                pack_rhs(RHSBeta, K_eta[ib]);
+                axpy(S_eta[ib], K_eta[ib], 1.0);
+            }
+            if (K_ze[ib].ok)
+            {
+                pack_rhs(RHSBze, K_ze[ib]);
+                axpy(S_ze[ib], K_ze[ib], 1.0);
+            }
+        }
+
+        // ---------- Final: B = B0 + (dt/6) * S ----------
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+            auto &Beta = fld_->field(fid_.fid_B.eta, ib);
+            auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+            if (B0_xi[ib].ok)
+                write_B(Bxi, B0_xi[ib], S_xi[ib], 1.0 / 6.0);
+            if (B0_eta[ib].ok)
+                write_B(Beta, B0_eta[ib], S_eta[ib], 1.0 / 6.0);
+            if (B0_ze[ib].ok)
+                write_B(Bze, B0_ze[ib], S_ze[ib], 1.0 / 6.0);
+        }
+    };
+
+    for (int s = 0; s < nsub; ++s)
+    {
+        rk4_hall_bface_only(dt_sub);
+        mercury_bound_.Sync("Bface"); // 保留
+    }
+
+    // for (int s = 0; s < nsub; ++s)
+    // {
+    //     // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
+    //     AssembleRHS_Induction_CT_HallOnly_();
+
+    //     // 只更新 Bface: Bface += dt_sub * RHS_b
+    //     ApplyUpdate_Euler_BfaceOnly_(dt_sub);
+
+    //     mercury_bound_.Sync("Bface");
+    // }
 }
 
 void MercurySolver::ZeroRHS_()
@@ -160,6 +454,141 @@ void MercurySolver::ApplyUpdate_Euler_()
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                         Ub_zeta(i, j, k, 0) += dt * RHSB_zeta(i, j, k, 0);
+        }
+    }
+}
+
+// Hall-only CT RHS assembly: builds RHSB_* from Ehall only (E is cleared first).
+// Assumptions:
+//   - Calc_J_Edge() computes Jxi/Jeta/Jzeta from current Bface and does needed Sync("Jedge") internally.
+//   - AddHallEdgeEMF_() adds Ehall to E (so E must be zeroed first).
+//   - mercury_bound_.Sync("Eedge") exists and syncs E_xi/E_eta/E_zeta (halo + physical BC/pole if you configured it).
+//   - CTOperators::CurlEdgeToFace(..., multiper=-1.0) produces RHS consistent with B^{n+1}=B^n+dt*RHS.
+void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
+{
+    const int nb = fld_->num_blocks();
+
+    // 0) Clear E_edge
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
+        auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+        if (!Exi.is_allocated())
+            continue;
+
+        auto zero_electric = [&](FieldBlock &E)
+        {
+            Int3 lo = E.get_lo(), hi = E.get_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        E(i, j, k, 0) = 0.0;
+        };
+
+        zero_electric(Exi);
+        zero_electric(Eeta);
+        zero_electric(Eze);
+    }
+
+    // 1) Ensure Bface is ready for J = curl(B)
+    mercury_bound_.Sync("Bface");
+
+    // 2) J_edge from current Bface
+    Calc_J_Edge();
+
+    // 3) Add Hall EMF into E (E is currently zero => E = Ehall)
+    AddHallEdgeEMF_();
+
+    // 4) Sync Eedge before taking curl(E)
+    mercury_bound_.Sync("Eedge");
+
+    // 5) Clear RHSB_* (important if CurlEdgeToFace writes += instead of =)
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+        auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+        auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+        if (!RHSBxi.is_allocated())
+            continue;
+
+        auto zero_rhs = [&](FieldBlock &F)
+        {
+            Int3 lo = F.inner_lo(), hi = F.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        F(i, j, k, 0) = 0.0;
+        };
+
+        zero_rhs(RHSBxi);
+        zero_rhs(RHSBeta);
+        zero_rhs(RHSBze);
+    }
+
+    // 6) curl(Ehall) -> RHS_Bface
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
+        auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+
+        auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+        auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+        auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+        if (!Exi.is_allocated())
+            continue;
+
+        // B^{n+1} = B^n - dt * curl(E)  ==> RHS = -curl(E)
+        CTOperators::CurlEdgeToFace(ib, Exi, Eeta, Eze, RHSBxi, RHSBeta, RHSBze, /*multiper=*/-1.0);
+    }
+}
+
+// Update only Bface with a supplied dt_step (used for Hall subcycling).
+void MercurySolver::ApplyUpdate_Euler_BfaceOnly_(double dt_step)
+{
+    const int nb = fld_->num_blocks();
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        FieldBlock &Ub_xi = fld_->field(fid_.fid_B.xi, ib);
+        FieldBlock &Ub_eta = fld_->field(fid_.fid_B.eta, ib);
+        FieldBlock &Ub_zeta = fld_->field(fid_.fid_B.zeta, ib);
+
+        FieldBlock &RHSB_xi = fld_->field(fid_.fid_RHS_b.xi, ib);
+        FieldBlock &RHSB_eta = fld_->field(fid_.fid_RHS_b.eta, ib);
+        FieldBlock &RHSB_zeta = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+        Int3 lo, hi;
+
+        if (RHSB_xi.is_allocated())
+        {
+            lo = Ub_xi.inner_lo();
+            hi = Ub_xi.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ub_xi(i, j, k, 0) += dt_step * RHSB_xi(i, j, k, 0);
+        }
+
+        if (RHSB_eta.is_allocated())
+        {
+            lo = Ub_eta.inner_lo();
+            hi = Ub_eta.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ub_eta(i, j, k, 0) += dt_step * RHSB_eta(i, j, k, 0);
+        }
+
+        if (RHSB_zeta.is_allocated())
+        {
+            lo = Ub_zeta.inner_lo();
+            hi = Ub_zeta.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ub_zeta(i, j, k, 0) += dt_step * RHSB_zeta(i, j, k, 0);
         }
     }
 }

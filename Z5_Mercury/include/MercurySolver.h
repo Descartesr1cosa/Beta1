@@ -47,6 +47,8 @@ private:
     // --- constants ---
     double gamma_{0.0};
     double dt{0.0};
+    double dt_hall{0.0};
+    double ne_hall_floor{0.0};
     double M_H{0.0};
     double M_Na{0.0};
     double state_coeff_H{0.0};
@@ -95,6 +97,11 @@ private:
     void AddHallEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
     void Calc_J_Edge();
+
+    // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
+    void AssembleRHS_Induction_CT_HallOnly_();
+    // 只更新 Bface: Bface += dt_sub * RHS_b
+    void ApplyUpdate_Euler_BfaceOnly_(double dt_sub);
     //--------------------------------
     //  For Ideal
     void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN);

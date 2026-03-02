@@ -9,7 +9,7 @@ void MercurySolver::AddHallEdgeEMF_()
     //   alpha typically = +1/(n e)  (sign can be absorbed here)
     // ------------------------------------------------------------
     const double hall_coeff = hall_coef;
-    const double N_floor = 1e-300; // 防止除零
+    const double N_floor = ne_hall_floor; // 1e-300; // 防止除零
 
     for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
     {
@@ -119,7 +119,8 @@ void MercurySolver::AddHallEdgeEMF_()
 
         auto NUM = [&](int i, int j, int k, int m) -> double
         {
-            return UH(i, j, k, 0) * rho_ref / M_H + UNa(i, j, k, 0) * rho_ref / M_Na;
+            // return UH(i, j, k, 0) * rho_ref / M_H + UNa(i, j, k, 0) * rho_ref / M_Na;
+            return UH(i, j, k, 0) / M_H + UNa(i, j, k, 0) / M_Na;
         };
 
         // ============================================================

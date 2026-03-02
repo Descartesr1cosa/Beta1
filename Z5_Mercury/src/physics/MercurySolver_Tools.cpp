@@ -9,6 +9,8 @@ void MercurySolver::calc_physical_constant(Param *par)
     gamma_ = cst.data["gamma"];
     double R_uni = cst.data["R_uni"];
 
+    const double NA = cst.data["NA"];
+
     const double U_ref = ref.data.at("U");
     const double T_ref = ref.data.at("T");
     M_H = par->GetDou("mole_mass1");
@@ -21,15 +23,17 @@ void MercurySolver::calc_physical_constant(Param *par)
 
     CFL = par_->GetDou("CFL");
 
-    hall_coef = ref.data["B_ref"] / (U_ref * cst.data["q_e"] * ref.data["L_ref"] * cst.data["mu_mag"]);
+    rho_ref = M_H * ref.data["n"] / NA;
 
-    rho_ref = M_H * ref.data["n"];
+    hall_coef = 0.0; // ref.data["B_ref"] / (U_ref * cst.data["q_e"] * ref.data["L_ref"] * cst.data["mu_mag"] * rho_ref * NA);
 
-    ambi_coef = M_H * U_ref / (cst.data["q_e"] * ref.data["L_ref"] * ref.data["B_ref"]);
+    // ambi_coef = M_H * U_ref / (cst.data["q_e"] * ref.data["L_ref"] * ref.data["B_ref"]);
 
     inver_MA2 = ref.data["B_ref"] * ref.data["B_ref"] / (U_ref * U_ref * cst.data["mu_mag"] * rho_ref);
 
     inver_Rem = par->GetDou("eta_max_mercury") / (cst.data["mu_mag"] * U_ref * ref.data["L_ref"]);
+
+    ne_hall_floor = 0.05 * ref.data["n"] / (rho_ref * NA); // equals to the dimension of rho_H(non_dimensional) / M_H : mol/kg
 }
 
 void MercurySolver::calc_PV()
