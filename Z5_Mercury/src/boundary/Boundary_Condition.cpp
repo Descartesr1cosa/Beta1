@@ -152,7 +152,8 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
                     //     // rho_r = rho_floor;
                     //     // p_r   = p_floor;
                     // }
-                    v_g = sub(v, scal(n_hat, 2.0 * vn));
+                    // v_g = sub(v, scal(n_hat, 2.0 * vn));
+                    v_g = {0.0, 0.0, 0.0};
 
                     int ig = ii + ng * cyc.i;
                     int jg = jj + ng * cyc.j;
