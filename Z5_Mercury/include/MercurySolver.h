@@ -46,17 +46,38 @@ private:
 
     // --- constants ---
     double gamma_{0.0};
+    double NA{0.0};
+    double R_uni{0.0};
+    double k_Boltz{0.0};
+    double q_e{0.0};
+    double mu0{0.0};
     double dt{0.0};
     double dt_hall{0.0};
     double ne_hall_floor{0.0};
+    double ne_hall_floor_dimensional{0.0};
+    double ne_hall_cut{0.0};
+    double ne_hall_cut_dimensional{0.0};
+
+    double U_ref{0.0};
+    double L_ref{0.0};
+    double B_ref{0.0};
+    double T_ref{0.0};
+    double n_ref{0.0};
+    double rho_ref{0.0};
+    double M_ref{0.0};
     double M_H{0.0};
     double M_Na{0.0};
+    double m_H{0.0};
+    double m_Na{0.0};
     double state_coeff_H{0.0};
     double state_coeff_Na{0.0};
     double CFL{0.0};
     double hall_coef{0.0};
-    double rho_ref{0.0};
     double ambi_coef{0.0};
+
+    double momentum_induce_coeff{0.0};
+    double momentum_hall_coeff{0.0};
+
     double inver_MA2{0.0};
     double inver_Rem{0.0};
 

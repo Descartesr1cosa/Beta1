@@ -7,14 +7,23 @@ void MercurySolver::calc_physical_constant(Param *par)
     auto ref = par_->GetDou_List("REF");
 
     gamma_ = cst.data["gamma"];
-    double R_uni = cst.data["R_uni"];
+    R_uni = cst.data["R_uni"];
 
-    const double NA = cst.data["NA"];
-
-    const double U_ref = ref.data.at("U");
-    const double T_ref = ref.data.at("T");
-    M_H = par->GetDou("mole_mass1");
-    M_Na = par->GetDou("mole_mass2");
+    NA = cst.data["NA"];
+    q_e = cst.data["q_e"]; // e (Coulomb)
+    k_Boltz = R_uni / NA;
+    mu0 = cst.data["mu_mag"];           // μ0
+    U_ref = ref.data.at("U");           // m/s
+    L_ref = ref.data.at("L_ref");       // m
+    B_ref = ref.data.at("B_ref");       // Telsa
+    T_ref = ref.data.at("T");           // K
+    n_ref = ref.data["n"];              // 1/m^3
+    M_ref = ref.data["Molecular_mass"]; // kg/mol (molar mass)
+    rho_ref = M_ref * n_ref / NA;       // kg/m^3
+    M_H = par->GetDou("mole_mass1");    // kg/mol
+    M_Na = par->GetDou("mole_mass2");   // kg/mol
+    m_H = M_H / NA;                     // kg/particle
+    m_Na = M_Na / NA;                   // kg/particle
 
     // 无量纲状态方程系数：p = rho * T * coeff
     // coeff = (R_uni * T_ref) / (M * U_ref^2)
@@ -23,17 +32,22 @@ void MercurySolver::calc_physical_constant(Param *par)
 
     CFL = par_->GetDou("CFL");
 
-    rho_ref = M_H * ref.data["n"] / NA;
-
-    hall_coef = 0.0; // ref.data["B_ref"] / (U_ref * cst.data["q_e"] * ref.data["L_ref"] * cst.data["mu_mag"] * rho_ref * NA);
+    hall_coef = B_ref / (U_ref * q_e * L_ref * mu0 * rho_ref * NA);
 
     // ambi_coef = M_H * U_ref / (cst.data["q_e"] * ref.data["L_ref"] * ref.data["B_ref"]);
+
+    momentum_induce_coeff = (q_e * L_ref * B_ref) / (rho_ref * U_ref);       // incude_coeff * n_ns * (u_ns - u_+) \times B  = momentum eqs source, n_ns: m^-3
+    momentum_hall_coeff = (B_ref * B_ref) / (mu0 * rho_ref * U_ref * U_ref); // momentum_hall_coeff * n_ns / n_e * \nabla\times B\times B = momentum eqs source
 
     inver_MA2 = ref.data["B_ref"] * ref.data["B_ref"] / (U_ref * U_ref * cst.data["mu_mag"] * rho_ref);
 
     inver_Rem = par->GetDou("eta_max_mercury") / (cst.data["mu_mag"] * U_ref * ref.data["L_ref"]);
 
-    ne_hall_floor = 0.05 * ref.data["n"] / (rho_ref * NA); // equals to the dimension of rho_H(non_dimensional) / M_H : mol/kg
+    double range = 0.1, cut = 0.05;
+    ne_hall_floor = range * ref.data["n"] / (rho_ref * NA); // equals to the dimension of rho_H(non_dimensional) / M_H : mol/kg
+    ne_hall_floor_dimensional = range * n_ref;
+    ne_hall_cut = cut * ref.data["n"] / (rho_ref * NA);
+    ne_hall_cut_dimensional = cut * n_ref;
 }
 
 void MercurySolver::calc_PV()
@@ -94,7 +108,7 @@ void MercurySolver::calc_PV()
 
 void MercurySolver::calc_Uplus()
 {
-    const double rho_floor = 1e-20;
+    const double rho_eps = 1e-20;
     const double inv23 = M_H / M_Na; // 与 Fortran sm2≈23*sm1 对齐
 
     const int nb = fld_->num_blocks();
@@ -114,26 +128,22 @@ void MercurySolver::calc_Uplus()
             for (int j = lo.j; j < hi.j; ++j)
                 for (int k = lo.k; k < hi.k; ++k)
                 {
-                    const double rhoH = std::max(UH(i, j, k, 0), rho_floor);
-                    const double rhoNa = std::max(UN(i, j, k, 0), 0.0);
+                    const double rhoH0 = std::max(UH(i, j, k, 0), 0.0);
+                    const double rhoNa0 = std::max(UN(i, j, k, 0), 0.0);
 
-                    const double uH = UH(i, j, k, 1) / rhoH;
-                    const double vH = UH(i, j, k, 2) / rhoH;
-                    const double wH = UH(i, j, k, 3) / rhoH;
+                    const double uH = (rhoH0 > rho_eps) ? UH(i, j, k, 1) / rhoH0 : 0.0;
+                    const double vH = (rhoH0 > rho_eps) ? UH(i, j, k, 2) / rhoH0 : 0.0;
+                    const double wH = (rhoH0 > rho_eps) ? UH(i, j, k, 3) / rhoH0 : 0.0;
 
-                    double uNa = 0, vNa = 0, wNa = 0;
-                    if (rhoNa > rho_floor)
-                    {
-                        uNa = UN(i, j, k, 1) / rhoNa;
-                        vNa = UN(i, j, k, 2) / rhoNa;
-                        wNa = UN(i, j, k, 3) / rhoNa;
-                    }
+                    const double uNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 1) / rhoNa0 : 0.0;
+                    const double vNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 2) / rhoNa0 : 0.0;
+                    const double wNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 3) / rhoNa0 : 0.0;
 
-                    const double nH = rhoH;
-                    const double nNa = rhoNa * inv23;
+                    const double nH = rhoH0;
+                    const double nNa = rhoNa0 * inv23;
                     const double nt = nH + nNa;
 
-                    if (nt <= rho_floor)
+                    if (nt <= 0.0)
                     {
                         Up(i, j, k, 0) = 0.0;
                         Up(i, j, k, 1) = 0.0;
