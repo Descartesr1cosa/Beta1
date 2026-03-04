@@ -9,7 +9,7 @@ void MercurySolver::AddHallEdgeEMF_()
     //   alpha typically = +1/(n e)  (sign can be absorbed here)
     // ------------------------------------------------------------
     const double hall_coeff = hall_coef;
-    const double N_floor = ne_hall_floor; // 1e-300; // 防止除零
+    // const double N_floor = ne_hall_floor; // 1e-300; // 防止除零
 
     for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
     {
@@ -145,7 +145,22 @@ void MercurySolver::AddHallEdgeEMF_()
                                              NUM(i, j - 1, k, 0) +
                                              NUM(i, j, k - 1, 0) +
                                              NUM(i, j - 1, k - 1, 0));
-                        double alpha = hall_coeff / (Num + N_floor);
+                        // if (Num < ne_cut_hall)
+                        // {
+                        //     Ehall_xi(i, j, k, 0) = 0.0;
+                        //     continue;
+                        // } // EdgeXi
+
+                        const double ne_true = Num;
+                        // 1) 平滑 floor（避免 max 的硬拐点）
+                        const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
+                        // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
+                        const double s = ne_true / (ne_true + ne_hall_cut);
+                        // 3) 统一有效 alpha（Hall 强度）
+                        double alpha = hall_coeff * s / ne_eff;
+
+                        // // 可选：如果你仍想“极低密度完全关掉”，把 s 再乘一个 smoothstep 或者加个很小阈值
+                        // double alpha = hall_coeff / (Num + N_floor);
 
                         // Phi (2-form) co-located at xi-edge center
                         double Phi_xi = 0.0;
@@ -169,6 +184,14 @@ void MercurySolver::AddHallEdgeEMF_()
 
                         Vec3 Evec = (Jvec ^ Bvec);
                         Evec *= alpha;
+
+                        // NEW: Hall stabilization (Ohmic / hyper-resistive in spirit)
+                        const double Babs = std::sqrt(Bvec.vec[0] * Bvec.vec[0] + Bvec.vec[1] * Bvec.vec[1] + Bvec.vec[2] * Bvec.vec[2]);
+                        constexpr double C_eta = 0.5;
+                        const double eta_h = C_eta * std::abs(alpha) * Babs; // C_eta ~ 0.05 ~ 0.5
+                        Evec.vec[0] += eta_h * Jvec.vec[0];
+                        Evec.vec[1] += eta_h * Jvec.vec[1];
+                        Evec.vec[2] += eta_h * Jvec.vec[2];
 
                         Vec3 dr;
                         dr.vec[0] = x(i + 1, j, k) - x(i, j, k);
@@ -197,11 +220,24 @@ void MercurySolver::AddHallEdgeEMF_()
                         }
 
                         // rho at eta-edge: average 4 surrounding cells (i- and k- directions)
-                        double rho = 0.25 * (NUM(i, j, k, 0) +
+                        double Num = 0.25 * (NUM(i, j, k, 0) +
                                              NUM(i - 1, j, k, 0) +
                                              NUM(i, j, k - 1, 0) +
                                              NUM(i - 1, j, k - 1, 0));
-                        double alpha = hall_coeff / (rho + N_floor);
+                        // if (Num < ne_cut_hall)
+                        // {
+                        //     Ehall_eta(i, j, k, 0) = 0.0;
+                        //     continue;
+                        // } // EdgeEt
+                        // double alpha = hall_coeff / (Num + N_floor);
+
+                        const double ne_true = Num;
+                        // 1) 平滑 floor（避免 max 的硬拐点）
+                        const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
+                        // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
+                        const double s = ne_true / (ne_true + ne_hall_cut);
+                        // 3) 统一有效 alpha（Hall 强度）
+                        double alpha = hall_coeff * s / ne_eff;
 
                         // Phi co-located at eta-edge center
                         double Phi_eta = 0.0;
@@ -224,6 +260,14 @@ void MercurySolver::AddHallEdgeEMF_()
 
                         Vec3 Evec = (Jvec ^ Bvec);
                         Evec *= alpha;
+
+                        // NEW: Hall stabilization (Ohmic / hyper-resistive in spirit)
+                        const double Babs = std::sqrt(Bvec.vec[0] * Bvec.vec[0] + Bvec.vec[1] * Bvec.vec[1] + Bvec.vec[2] * Bvec.vec[2]);
+                        constexpr double C_eta = 0.5;
+                        const double eta_h = C_eta * std::abs(alpha) * Babs; // C_eta ~ 0.05 ~ 0.5
+                        Evec.vec[0] += eta_h * Jvec.vec[0];
+                        Evec.vec[1] += eta_h * Jvec.vec[1];
+                        Evec.vec[2] += eta_h * Jvec.vec[2];
 
                         Vec3 dr;
                         dr.vec[0] = x(i, j + 1, k) - x(i, j, k);
@@ -252,11 +296,24 @@ void MercurySolver::AddHallEdgeEMF_()
                         }
 
                         // rho at zeta-edge: average 4 surrounding cells (i- and j- directions)
-                        double rho = 0.25 * (NUM(i, j, k, 0) +
+                        double Num = 0.25 * (NUM(i, j, k, 0) +
                                              NUM(i - 1, j, k, 0) +
                                              NUM(i, j - 1, k, 0) +
                                              NUM(i - 1, j - 1, k, 0));
-                        double alpha = hall_coeff / (rho + N_floor);
+                        // if (Num < ne_cut_hall)
+                        // {
+                        //     Ehall_zeta(i, j, k, 0) = 0.0;
+                        //     continue;
+                        // } // EdgeZe
+                        // double alpha = hall_coeff / (Num + N_floor);
+
+                        const double ne_true = Num;
+                        // 1) 平滑 floor（避免 max 的硬拐点）
+                        const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
+                        // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
+                        const double s = ne_true / (ne_true + ne_hall_cut);
+                        // 3) 统一有效 alpha（Hall 强度）
+                        double alpha = hall_coeff * s / ne_eff;
 
                         // Phi co-located at zeta-edge center
                         double Phi_zeta = 0.0;
@@ -279,6 +336,14 @@ void MercurySolver::AddHallEdgeEMF_()
 
                         Vec3 Evec = (Jvec ^ Bvec);
                         Evec *= alpha;
+
+                        // NEW: Hall stabilization (Ohmic / hyper-resistive in spirit)
+                        const double Babs = std::sqrt(Bvec.vec[0] * Bvec.vec[0] + Bvec.vec[1] * Bvec.vec[1] + Bvec.vec[2] * Bvec.vec[2]);
+                        constexpr double C_eta = 0.5;
+                        const double eta_h = C_eta * std::abs(alpha) * Babs; // C_eta ~ 0.05 ~ 0.5
+                        Evec.vec[0] += eta_h * Jvec.vec[0];
+                        Evec.vec[1] += eta_h * Jvec.vec[1];
+                        Evec.vec[2] += eta_h * Jvec.vec[2];
 
                         Vec3 dr;
                         dr.vec[0] = x(i, j, k + 1) - x(i, j, k);
