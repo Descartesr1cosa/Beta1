@@ -31,7 +31,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
         std::vector<std::string> tec_block_name = {}; // 全部物理块输出
         io_.SetTecplotBlock(tec_block_name);
 
-        std::vector<std::string> plt_name = {"PV_H", "PV_Na", "B_cell", "Na"};
+        std::vector<std::string> plt_name = {"PV_H", "PV_Na", "B_cell", "Na", "U_plus"};
         io_.SetTecplotFields(plt_name);
 
         std::string fld_name = "PV_H";
@@ -48,6 +48,10 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
 
         fld_name = "Na";
         var_name = {"n_Na"};
+        io_.SetTecplotFieldComponentNames(fld_name, var_name);
+
+        fld_name = "U_plus";
+        var_name = {"Up_u", "Up_v", "Up_w"};
         io_.SetTecplotFieldComponentNames(fld_name, var_name);
     }
 
