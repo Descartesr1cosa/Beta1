@@ -151,7 +151,7 @@ void MercurySolver::AddHallEdgeEMF_()
                         //     continue;
                         // } // EdgeXi
 
-                        const double ne_true = Num;
+                        const double ne_true = std::max(Num, 0.0);
                         // 1) 平滑 floor（避免 max 的硬拐点）
                         const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
                         // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
@@ -231,7 +231,7 @@ void MercurySolver::AddHallEdgeEMF_()
                         // } // EdgeEt
                         // double alpha = hall_coeff / (Num + N_floor);
 
-                        const double ne_true = Num;
+                        const double ne_true = std::max(Num, 0.0);
                         // 1) 平滑 floor（避免 max 的硬拐点）
                         const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
                         // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
@@ -307,7 +307,7 @@ void MercurySolver::AddHallEdgeEMF_()
                         // } // EdgeZe
                         // double alpha = hall_coeff / (Num + N_floor);
 
-                        const double ne_true = Num;
+                        const double ne_true = std::max(Num, 0.0);
                         // 1) 平滑 floor（避免 max 的硬拐点）
                         const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
                         // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
