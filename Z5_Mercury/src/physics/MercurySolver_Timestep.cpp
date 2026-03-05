@@ -327,6 +327,19 @@ void MercurySolver::Compute_Timestep()
 
     dt_hall = dt_hall_min_global;
 
+    const double dt_abort = 5e-7; // 依据你的无量纲标度调整
+    if (!std::isfinite(dt) || dt < dt_abort)
+    {
+        if (par_->GetInt("myid") == 0)
+        {
+            std::printf("[FATAL] dt too small/NaN: dt=%.3e  step=%d  t=%.6e\ndt underflow ! !\n\n",
+                        dt, run_data_->step, run_data_->time);
+        }
+        // 1) dump fields / write checkpoint
+        // 2) set a stop flag or throw
+        exit(-1);
+    }
+
     // const int myid = par_->GetInt("myid");
     // if (std::abs(dt_hall_min_l - dt_global) <= 1e-12 * (dt_global + 1e-300))
     // {
