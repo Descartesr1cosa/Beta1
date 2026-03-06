@@ -354,7 +354,7 @@ void MercurySolver::Compute_Timestep()
     //     std::fflush(stdout);
     // }
 
-    dt_hall = dt_hall_min_global * 0.25;
+    dt_hall = dt_hall_min_global;
 
     const double dt_abort = 5e-7; // 依据你的无量纲标度调整
     if (!std::isfinite(dt) || dt < dt_abort)
