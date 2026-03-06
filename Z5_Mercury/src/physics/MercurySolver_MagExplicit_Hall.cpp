@@ -10,6 +10,7 @@ void MercurySolver::AddHallEdgeEMF_()
     // ------------------------------------------------------------
     const double hall_coeff = hall_coef;
     // const double N_floor = ne_hall_floor; // 1e-300; // 防止除零
+    constexpr double C_eta = 0.5;
 
     for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
     {
@@ -187,7 +188,6 @@ void MercurySolver::AddHallEdgeEMF_()
 
                         // NEW: Hall stabilization (Ohmic / hyper-resistive in spirit)
                         const double Babs = std::sqrt(Bvec.vec[0] * Bvec.vec[0] + Bvec.vec[1] * Bvec.vec[1] + Bvec.vec[2] * Bvec.vec[2]);
-                        constexpr double C_eta = 0.5;
                         const double eta_h = C_eta * std::abs(alpha) * Babs; // C_eta ~ 0.05 ~ 0.5
                         Evec.vec[0] += eta_h * Jvec.vec[0];
                         Evec.vec[1] += eta_h * Jvec.vec[1];
@@ -263,7 +263,6 @@ void MercurySolver::AddHallEdgeEMF_()
 
                         // NEW: Hall stabilization (Ohmic / hyper-resistive in spirit)
                         const double Babs = std::sqrt(Bvec.vec[0] * Bvec.vec[0] + Bvec.vec[1] * Bvec.vec[1] + Bvec.vec[2] * Bvec.vec[2]);
-                        constexpr double C_eta = 0.5;
                         const double eta_h = C_eta * std::abs(alpha) * Babs; // C_eta ~ 0.05 ~ 0.5
                         Evec.vec[0] += eta_h * Jvec.vec[0];
                         Evec.vec[1] += eta_h * Jvec.vec[1];
@@ -339,7 +338,6 @@ void MercurySolver::AddHallEdgeEMF_()
 
                         // NEW: Hall stabilization (Ohmic / hyper-resistive in spirit)
                         const double Babs = std::sqrt(Bvec.vec[0] * Bvec.vec[0] + Bvec.vec[1] * Bvec.vec[1] + Bvec.vec[2] * Bvec.vec[2]);
-                        constexpr double C_eta = 0.5;
                         const double eta_h = C_eta * std::abs(alpha) * Babs; // C_eta ~ 0.05 ~ 0.5
                         Evec.vec[0] += eta_h * Jvec.vec[0];
                         Evec.vec[1] += eta_h * Jvec.vec[1];
@@ -351,6 +349,87 @@ void MercurySolver::AddHallEdgeEMF_()
                         dr.vec[2] = z(i, j, k + 1) - z(i, j, k);
 
                         Ehall_zeta(i, j, k, 0) = Evec * dr;
+                    }
+        }
+    }
+
+    for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
+    {
+        auto &Ehall_xi = fld_->field(fid_.fid_Ehall.xi, iblk);
+        auto &Ehall_eta = fld_->field(fid_.fid_Ehall.eta, iblk);
+        auto &Ehall_zeta = fld_->field(fid_.fid_Ehall.zeta, iblk);
+
+        auto &x = grd_->grids(iblk).x;
+        auto &y = grd_->grids(iblk).y;
+        auto &z = grd_->grids(iblk).z;
+
+        auto radius = [&](int i, int j, int k) -> double
+        {
+            double xx = x(i, j, k);
+            double yy = y(i, j, k);
+            double zz = z(i, j, k);
+            return std::sqrt(xx * xx + yy * yy + zz * zz);
+        };
+
+        auto hall_factor_s = [&](double r) -> double
+        {
+            const double r0 = 1.0;   // 内边界
+            const double r1 = 1.017; // taper 外边界
+
+            if (r <= r0)
+                return 0.0;
+            if (r >= r1)
+                return 1.0;
+
+            double xi = (r - r0) / (r1 - r0);  // 映射到 [0,1]
+            return xi * xi * (3.0 - 2.0 * xi); // smoothstep
+        };
+
+        // ============================================================
+        // 1) EdgeXi : Ehall_xi(i,j,k) = (alpha * (J x B)) · dr_xi
+        // ============================================================
+        {
+            Int3 lo = Ehall_xi.inner_lo();
+            Int3 hi = Ehall_xi.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        double fac = hall_factor_s(radius(i, j, k));
+                        Ehall_xi(i, j, k, 0) *= fac;
+                    }
+        }
+
+        // ============================================================
+        // 2) EdgeEt
+        // ============================================================
+        {
+            Int3 lo = Ehall_eta.inner_lo();
+            Int3 hi = Ehall_eta.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        double fac = hall_factor_s(radius(i, j, k));
+                        Ehall_eta(i, j, k, 0) *= fac;
+                    }
+        }
+
+        // ============================================================
+        // 3) EdgeZe
+        // ============================================================
+        {
+            Int3 lo = Ehall_zeta.inner_lo();
+            Int3 hi = Ehall_zeta.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        double fac = hall_factor_s(radius(i, j, k));
+                        Ehall_zeta(i, j, k, 0) *= fac;
                     }
         }
     }

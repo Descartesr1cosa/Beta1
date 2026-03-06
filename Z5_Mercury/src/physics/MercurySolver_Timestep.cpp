@@ -172,6 +172,32 @@ void MercurySolver::Compute_Timestep()
             auto &dle = fld_->field("dl_eta", ib);
             auto &dlz = fld_->field("dl_zeta", ib); // may be absent
 
+            auto &x = grd_->grids(ib).x;
+            auto &y = grd_->grids(ib).y;
+            auto &z = grd_->grids(ib).z;
+
+            auto radius = [&](int i, int j, int k) -> double
+            {
+                double xx = x(i, j, k);
+                double yy = y(i, j, k);
+                double zz = z(i, j, k);
+                return std::sqrt(xx * xx + yy * yy + zz * zz);
+            };
+
+            auto hall_factor_s = [&](double r) -> double
+            {
+                const double r0 = 1.0;   // 内边界
+                const double r1 = 1.017; // taper 外边界
+
+                if (r <= r0)
+                    return 0.0;
+                if (r >= r1)
+                    return 1.0;
+
+                double xi = (r - r0) / (r1 - r0);  // 映射到 [0,1]
+                return xi * xi * (3.0 - 2.0 * xi); // smoothstep
+            };
+
             if (!UH.is_allocated() || !UNa.is_allocated() || !Bcel.is_allocated())
                 continue;
             if (!dlx.is_allocated() || !dle.is_allocated())
@@ -222,7 +248,8 @@ void MercurySolver::Compute_Timestep()
                                 continue;
 
                             // dt_hall' = CFL * h^2 * (ne'+floor) / (|hall_coef| * |B|)
-                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (std::abs(hall_coef) * Babs + 1e-300);
+                            double fac = hall_factor_s(radius(i, j, k));
+                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
                             dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
                         }
             }
@@ -258,7 +285,8 @@ void MercurySolver::Compute_Timestep()
                             if (Babs <= B_floor)
                                 continue;
 
-                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (std::abs(hall_coef) * Babs + 1e-300);
+                            double fac = hall_factor_s(radius(i, j, k));
+                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
                             dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
                         }
             }
@@ -295,7 +323,8 @@ void MercurySolver::Compute_Timestep()
                             if (Babs <= B_floor)
                                 continue;
 
-                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (std::abs(hall_coef) * Babs + 1e-300);
+                            double fac = hall_factor_s(radius(i, j, k));
+                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
                             dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
                         }
             }
@@ -325,7 +354,7 @@ void MercurySolver::Compute_Timestep()
     //     std::fflush(stdout);
     // }
 
-    dt_hall = dt_hall_min_global;
+    dt_hall = dt_hall_min_global * 0.25;
 
     const double dt_abort = 5e-7; // 依据你的无量纲标度调整
     if (!std::isfinite(dt) || dt < dt_abort)

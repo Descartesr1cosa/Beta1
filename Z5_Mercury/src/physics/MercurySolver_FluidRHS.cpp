@@ -303,6 +303,31 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
         double3D &x = fld_->grd->grids(ib).x;
 
+        auto &y = grd_->grids(ib).y;
+        auto &z = grd_->grids(ib).z;
+
+        auto radius = [&](int i, int j, int k) -> double
+        {
+            double xx = x(i, j, k);
+            double yy = y(i, j, k);
+            double zz = z(i, j, k);
+            return std::sqrt(xx * xx + yy * yy + zz * zz);
+        };
+
+        auto hall_factor_s = [&](double r) -> double
+        {
+            const double r0 = 1.0;   // 内边界
+            const double r1 = 1.017; // taper 外边界
+
+            if (r <= r0)
+                return 0.0;
+            if (r >= r1)
+                return 1.0;
+
+            double xi = (r - r0) / (r1 - r0);  // 映射到 [0,1]
+            return xi * xi * (3.0 - 2.0 * xi); // smoothstep
+        };
+
         if (!Jac.is_allocated() || !Axi.is_allocated())
             continue;
         if (!UH.is_allocated() || !UNa.is_allocated())
@@ -416,6 +441,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     // sse = qm1 (Fortran), here Photo is already (cm^-3 s^-1) For electrics
                     const double sse = Photo(i, j, k, 0);
 
+                    const double fac = hall_factor_s(radius(i, j, k));
                     // =====================
                     // species H+  (ls=1)
                     // =====================
@@ -442,11 +468,11 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
 
-                        RHS_H(i, j, k, 0) += 0.0;                                                                                    // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH_m * subx + momentum_hall_coeff * s * nH_m * (sjbx / ne_eff); //- a4 * rhoH_nd * uH * vst;
-                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH_m * suby + momentum_hall_coeff * s * nH_m * (sjby / ne_eff); //- a4 * rhoH_nd * vH * vst;
-                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH_m * subz + momentum_hall_coeff * s * nH_m * (sjbz / ne_eff); // - a4 * rhoH_nd * wH * vst;
-                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH_m * subu + momentum_hall_coeff * s * nH_m * (sjbu / ne_eff); // + a4 * rhoH_nd * us2 * b2; // work term for species energy
+                        RHS_H(i, j, k, 0) += 0.0;                                                                                          // H+ has no mass creation in Fortran here
+                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH_m * subx + fac * momentum_hall_coeff * s * nH_m * (sjbx / ne_eff); //- a4 * rhoH_nd * uH * vst;
+                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH_m * suby + fac * momentum_hall_coeff * s * nH_m * (sjby / ne_eff); //- a4 * rhoH_nd * vH * vst;
+                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH_m * subz + fac * momentum_hall_coeff * s * nH_m * (sjbz / ne_eff); // - a4 * rhoH_nd * wH * vst;
+                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH_m * subu + fac * momentum_hall_coeff * s * nH_m * (sjbu / ne_eff); // + a4 * rhoH_nd * us2 * b2; // work term for species energy
                     }
 
                     // =====================
@@ -479,10 +505,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
 
                         // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa_m * subx + momentum_hall_coeff * s * nNa_m * (sjbx / ne_eff); // - a4 * rhoNa_nd * uN * vst;
-                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa_m * suby + momentum_hall_coeff * s * nNa_m * (sjby / ne_eff); // - a4 * rhoNa_nd * vN * vst;
-                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa_m * subz + momentum_hall_coeff * s * nNa_m * (sjbz / ne_eff); // - a4 * rhoNa_nd * wN * vst;
-                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa_m * subu + momentum_hall_coeff * s * nNa_m * (sjbu / ne_eff); // + a4 * rhoNa_nd * us2 * vst;
+                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa_m * subx + fac * momentum_hall_coeff * s * nNa_m * (sjbx / ne_eff); // - a4 * rhoNa_nd * uN * vst;
+                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa_m * suby + fac * momentum_hall_coeff * s * nNa_m * (sjby / ne_eff); // - a4 * rhoNa_nd * vN * vst;
+                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa_m * subz + fac * momentum_hall_coeff * s * nNa_m * (sjbz / ne_eff); // - a4 * rhoNa_nd * wN * vst;
+                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa_m * subu + fac * momentum_hall_coeff * s * nNa_m * (sjbu / ne_eff); // + a4 * rhoNa_nd * us2 * vst;
                     }
 
                     {
@@ -536,17 +562,17 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         const double subx = (vH - upy) * Bz - (wH - upz) * By;
                         const double suby = (wH - upz) * Bx - (uH - upx) * Bz;
                         const double subz = (uH - upx) * By - (vH - upy) * Bx;
-                        const double FHx = momentum_induce_coeff * nH_m * subx + momentum_hall_coeff * s * nH_m * (sjbx / ne_eff);
-                        const double FHy = momentum_induce_coeff * nH_m * suby + momentum_hall_coeff * s * nH_m * (sjby / ne_eff);
-                        const double FHz = momentum_induce_coeff * nH_m * subz + momentum_hall_coeff * s * nH_m * (sjbz / ne_eff);
+                        const double FHx = momentum_induce_coeff * nH_m * subx + fac * momentum_hall_coeff * s * nH_m * (sjbx / ne_eff);
+                        const double FHy = momentum_induce_coeff * nH_m * suby + fac * momentum_hall_coeff * s * nH_m * (sjby / ne_eff);
+                        const double FHz = momentum_induce_coeff * nH_m * subz + fac * momentum_hall_coeff * s * nH_m * (sjbz / ne_eff);
 
                         // Na+:
                         const double subx_Na = (vN - upy) * Bz - (wN - upz) * By;
                         const double suby_Na = (wN - upz) * Bx - (uN - upx) * Bz;
                         const double subz_Na = (uN - upx) * By - (vN - upy) * Bx;
-                        const double FNx = momentum_induce_coeff * nNa_m * subx_Na + momentum_hall_coeff * s * nNa_m * (sjbx / ne_eff);
-                        const double FNy = momentum_induce_coeff * nNa_m * suby_Na + momentum_hall_coeff * s * nNa_m * (sjby / ne_eff);
-                        const double FNz = momentum_induce_coeff * nNa_m * subz_Na + momentum_hall_coeff * s * nNa_m * (sjbz / ne_eff);
+                        const double FNx = momentum_induce_coeff * nNa_m * subx_Na + fac * momentum_hall_coeff * s * nNa_m * (sjbx / ne_eff);
+                        const double FNy = momentum_induce_coeff * nNa_m * suby_Na + fac * momentum_hall_coeff * s * nNa_m * (sjby / ne_eff);
+                        const double FNz = momentum_induce_coeff * nNa_m * subz_Na + fac * momentum_hall_coeff * s * nNa_m * (sjbz / ne_eff);
 
                         // sum
                         const double Fsx = FHx + FNx;
@@ -554,7 +580,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         const double Fsz = FHz + FNz;
 
                         // target (total Lorentz force in your nondim form)
-                        const double chi = s * (nH_m + nNa_m) / (ne_eff); // 或者 chi=s*(ne_true/ne_eff) 看你如何定义目标
+                        const double chi = fac * s * (nH_m + nNa_m) / (ne_eff); // 或者 chi=s*(ne_true/ne_eff) 看你如何定义目标
                         const double FJx = momentum_hall_coeff * chi * sjbx;
                         const double FJy = momentum_hall_coeff * chi * sjby;
                         const double FJz = momentum_hall_coeff * chi * sjbz;
@@ -608,7 +634,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
     if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
     {
-        std::printf("[EMForceCheck] step=%d  max|Fsum-FJB|=%.3e  maxRel=%.3e  max|Find_sum|=%.3e\n",
+        std::printf("[EMForceCheck] step=%d  max|Fsum-FJB|=%.3e  maxRel=%.3e  max|Find_sum|=%.3e\n\n\n",
                     run_data_->step, EM_eabs_max_g, EM_erel_max_g, EM_Find_abs_max_g);
         std::fflush(stdout);
     }
