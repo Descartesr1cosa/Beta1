@@ -211,6 +211,22 @@ void MercurySolver::Scheme_U_()
 // 依赖字段：U_H/U_Na, PV_H/PV_Na, U_plus, B_cell, U_b(用于curl), Na(neutral), Photo_rate, Jac, metric(Axi/Aet/Aze)
 void MercurySolver::AddSourceToRHS_Fluid()
 {
+    const double limiter_C_alpha_eps = 1e-30;
+    const double C_alpha = 0.05; // 先试 0.3 ~ 0.5
+    const double B_floor = 1e-14;
+
+    auto hall_theta_cell = [&](double alpha_phy, double Babs, double h2) -> double
+    {
+        if (h2 <= 0.0)
+            return 0.0;
+        if (std::abs(alpha_phy) <= limiter_C_alpha_eps)
+            return 1.0;
+        if (Babs <= B_floor)
+            return 1.0;
+
+        const double alpha_max = C_alpha * h2 / (Babs * dt_sub + limiter_C_alpha_eps);
+        return std::min(1.0, alpha_max / (std::abs(alpha_phy) + limiter_C_alpha_eps));
+    };
 
     double Rabs_max_l = 0.0;
     double Rrel_max_l = 0.0;
@@ -306,6 +322,21 @@ void MercurySolver::AddSourceToRHS_Fluid()
         auto &y = grd_->grids(ib).y;
         auto &z = grd_->grids(ib).z;
 
+        FieldBlock &dlx = fld_->field("dl_xi", ib);
+        FieldBlock &dle = fld_->field("dl_eta", ib);
+        FieldBlock &dlz = fld_->field("dl_zeta", ib);
+
+        auto hmin2_cell = [&](int i, int j, int k) -> double
+        {
+            double hx = dlx.is_allocated() ? dlx(i, j, k, 0) : 1e100;
+            double he = dle.is_allocated() ? dle(i, j, k, 0) : 1e100;
+            double hz = dlz.is_allocated() ? dlz(i, j, k, 0) : 1e100;
+            double h = std::min(hx, std::min(he, hz));
+            if (h <= 1e-12)
+                return 0.0;
+            return h * h;
+        };
+
         auto radius = [&](int i, int j, int k) -> double
         {
             double xx = x(i, j, k);
@@ -316,8 +347,8 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
         auto hall_factor_s = [&](double r) -> double
         {
-            const double r0 = 1.0;   // 内边界
-            const double r1 = 1.017; // taper 外边界
+            const double r0 = 1.1; // 内边界
+            const double r1 = 1.2; // taper 外边界
 
             if (r <= r0)
                 return 0.0;
@@ -358,6 +389,8 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                     const double Bx = Bt(i, j, k, 0), By = Bt(i, j, k, 1), Bz = Bt(i, j, k, 2);
 
+                    const double Babs = std::sqrt(Bx * Bx + By * By + Bz * Bz);
+                    const double h2 = hmin2_cell(i, j, k);
                     // ---------- number densities in m^-3 ----------
                     const double rhoH_nd = std::max(UH(i, j, k, 0), 0.0);
                     const double rhoNa_nd = std::max(UNa(i, j, k, 0), 0.0);
@@ -369,7 +402,8 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     const double ne_true = nH_m + nNa_m;
                     const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor_dimensional * ne_hall_floor_dimensional);
                     const double s = ne_true / (ne_true + ne_hall_cut_dimensional); // 取同一个阈值，或用与 Hall 相同的量纲阈值
-
+                    const double alpha_phy_cell = momentum_hall_coeff * s / ne_eff;
+                    const double theta_hall = hall_theta_cell(alpha_phy_cell, Babs, h2);
                     // -------------------- metric derv(ax..cz) --------------------
                     double ax, ay, az, bx, by, bz, cx, cy, cz;
                     derv_at(Jac, Axi, Aet, Aze, i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
@@ -442,6 +476,8 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     const double sse = Photo(i, j, k, 0);
 
                     const double fac = hall_factor_s(radius(i, j, k));
+
+                    const double alpha = theta_hall * momentum_hall_coeff * s / ne_eff;
                     // =====================
                     // species H+  (ls=1)
                     // =====================
@@ -468,11 +504,11 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
 
-                        RHS_H(i, j, k, 0) += 0.0;                                                                                          // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH_m * subx + fac * momentum_hall_coeff * s * nH_m * (sjbx / ne_eff); //- a4 * rhoH_nd * uH * vst;
-                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH_m * suby + fac * momentum_hall_coeff * s * nH_m * (sjby / ne_eff); //- a4 * rhoH_nd * vH * vst;
-                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH_m * subz + fac * momentum_hall_coeff * s * nH_m * (sjbz / ne_eff); // - a4 * rhoH_nd * wH * vst;
-                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH_m * subu + fac * momentum_hall_coeff * s * nH_m * (sjbu / ne_eff); // + a4 * rhoH_nd * us2 * b2; // work term for species energy
+                        RHS_H(i, j, k, 0) += 0.0;                                                             // H+ has no mass creation in Fortran here
+                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH_m * subx + fac * alpha * nH_m * sjbx; //- a4 * rhoH_nd * uH * vst;
+                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH_m * suby + fac * alpha * nH_m * sjby; //- a4 * rhoH_nd * vH * vst;
+                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH_m * subz + fac * alpha * nH_m * sjbz; // - a4 * rhoH_nd * wH * vst;
+                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH_m * subu + fac * alpha * nH_m * sjbu; // + a4 * rhoH_nd * us2 * b2; // work term for species energy
                     }
 
                     // =====================
@@ -505,10 +541,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
 
                         // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa_m * subx + fac * momentum_hall_coeff * s * nNa_m * (sjbx / ne_eff); // - a4 * rhoNa_nd * uN * vst;
-                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa_m * suby + fac * momentum_hall_coeff * s * nNa_m * (sjby / ne_eff); // - a4 * rhoNa_nd * vN * vst;
-                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa_m * subz + fac * momentum_hall_coeff * s * nNa_m * (sjbz / ne_eff); // - a4 * rhoNa_nd * wN * vst;
-                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa_m * subu + fac * momentum_hall_coeff * s * nNa_m * (sjbu / ne_eff); // + a4 * rhoNa_nd * us2 * vst;
+                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa_m * subx + fac * alpha * nNa_m * sjbx; // - a4 * rhoNa_nd * uN * vst;
+                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa_m * suby + fac * alpha * nNa_m * sjby; // - a4 * rhoNa_nd * vN * vst;
+                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa_m * subz + fac * alpha * nNa_m * sjbz; // - a4 * rhoNa_nd * wN * vst;
+                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa_m * subu + fac * alpha * nNa_m * sjbu; // + a4 * rhoNa_nd * us2 * vst;
                     }
 
                     {
