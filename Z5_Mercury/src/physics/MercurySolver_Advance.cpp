@@ -6,7 +6,7 @@ void MercurySolver::Time_Advance()
 
     // ---------- Hall 子循环数 ----------
     const double safety = 0.8;
-    int nsub = 1;
+    int nsub = 500;
     // if (dt_hall > 0.0)
     //     nsub = std::max(1, (int)std::ceil(dt / (safety * dt_hall)));
     // nsub = std::min(nsub, 200);
@@ -327,23 +327,23 @@ void MercurySolver::Time_Advance()
             mercury_bound_.Sync("Bface"); // for next substep J=curl(B)
         };
 
-        for (int s = 0; s < nsub; ++s)
-        {
-            rk4_hall_bface_only(dt_sub);
-        }
+        // for (int s = 0; s < nsub; ++s)
+        // {
+        //     rk4_hall_bface_only(dt_sub);
+        // }
     }
 
-    // for (int s = 0; s < nsub; ++s)
-    // {
-    //     // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
-    //     AssembleRHS_Induction_CT_HallOnly_();
+    for (int s = 0; s < nsub; ++s)
+    {
+        // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
+        AssembleRHS_Induction_CT_HallOnly_();
 
-    //     // 只更新 Bface: Bface += dt_sub * RHS_b
-    //     ApplyUpdate_Euler_BfaceOnly_(dt_sub);
+        // 只更新 Bface: Bface += dt_sub * RHS_b
+        ApplyUpdate_Euler_BfaceOnly_(dt_sub);
 
-    //     // 更新后做一次 Bface 同步，供下一个子步算 J=curl(B)
-    //     mercury_bound_.Sync("Bface");
-    // }
+        // 更新后做一次 Bface 同步，供下一个子步算 J=curl(B)
+        mercury_bound_.Sync("Bface");
+    }
 }
 
 void MercurySolver::ZeroRHS_()
@@ -497,103 +497,9 @@ void MercurySolver::ApplyUpdate_Euler_()
 //   - AddHallEdgeEMF_() adds Ehall to E (so E must be zeroed first).
 //   - mercury_bound_.Sync("Eedge") exists and syncs E_xi/E_eta/E_zeta (halo + physical BC/pole if you configured it).
 //   - CTOperators::CurlEdgeToFace(..., multiper=-1.0) produces RHS consistent with B^{n+1}=B^n+dt*RHS.
-// void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
-// {
-//     const int nb = fld_->num_blocks();
-
-//     // 0) Clear E_edge
-//     for (int ib = 0; ib < nb; ++ib)
-//     {
-//         auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-//         auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
-//         auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
-//         if (!Exi.is_allocated())
-//             continue;
-
-//         auto zero_electric = [&](FieldBlock &E)
-//         {
-//             Int3 lo = E.get_lo(), hi = E.get_hi();
-//             for (int i = lo.i; i < hi.i; ++i)
-//                 for (int j = lo.j; j < hi.j; ++j)
-//                     for (int k = lo.k; k < hi.k; ++k)
-//                         E(i, j, k, 0) = 0.0;
-//         };
-
-//         zero_electric(Exi);
-//         zero_electric(Eeta);
-//         zero_electric(Eze);
-//     }
-
-//     // 1) Ensure Bface is ready for J = curl(B)
-//     // mercury_bound_.Sync("Bface");
-
-//     // 2) J_edge from current Bface
-//     Calc_J_Edge();
-//     // mercury_bound_.DebugCheckSurfaceTangentialEdgeField(
-//     //     "J-inner-solid", "J_xi", "J_eta", "J_zeta", "Coupled-Solid");
-
-//     // mercury_bound_.DebugCheckSurfaceTangentialEdgeFieldGhost(
-//     //     "J-ghost-solid", "J_xi", "J_eta", "J_zeta", "Coupled-Solid", 1);
-
-//     // 3) Add Hall EMF into E (E is currently zero => E = Ehall)
-//     AddHallEdgeEMF_();
-
-//     // 4) Sync Eedge before taking curl(E)
-//     mercury_bound_.Sync("Eedge");
-
-//     // mercury_bound_.DebugCheckSurfaceTangentialEdgeField(
-//     //     "E-inner-solid", "E_xi", "E_eta", "E_zeta", "Coupled-Solid");
-
-//     // mercury_bound_.DebugCheckSurfaceTangentialEdgeFieldGhost(
-//     //     "E-ghost-solid", "E_xi", "E_eta", "E_zeta", "Coupled-Solid", 1);
-
-//     // 5) Clear RHSB_* (important if CurlEdgeToFace writes += instead of =)
-//     for (int ib = 0; ib < nb; ++ib)
-//     {
-//         auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
-//         auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
-//         auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
-//         if (!RHSBxi.is_allocated())
-//             continue;
-
-//         auto zero_rhs = [&](FieldBlock &F)
-//         {
-//             Int3 lo = F.inner_lo(), hi = F.inner_hi();
-//             for (int i = lo.i; i < hi.i; ++i)
-//                 for (int j = lo.j; j < hi.j; ++j)
-//                     for (int k = lo.k; k < hi.k; ++k)
-//                         F(i, j, k, 0) = 0.0;
-//         };
-
-//         zero_rhs(RHSBxi);
-//         zero_rhs(RHSBeta);
-//         zero_rhs(RHSBze);
-//     }
-
-//     // 6) curl(Ehall) -> RHS_Bface
-//     for (int ib = 0; ib < nb; ++ib)
-//     {
-//         auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-//         auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
-//         auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
-
-//         auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
-//         auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
-//         auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
-
-//         if (!Exi.is_allocated())
-//             continue;
-
-//         // B^{n+1} = B^n - dt * curl(E)  ==> RHS = -curl(E)
-//         CTOperators::CurlEdgeToFace(ib, Exi, Eeta, Eze, RHSBxi, RHSBeta, RHSBze, /*multiper=*/-1.0);
-//     }
-// }
-
 void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
 {
     const int nb = fld_->num_blocks();
-
-    double dt_stage = dt_sub;
 
     // 0) Clear E_edge
     for (int ib = 0; ib < nb; ++ib)
@@ -618,16 +524,30 @@ void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
         zero_electric(Eze);
     }
 
-    // 1) J_edge from current Bface
-    Calc_J_Edge();
+    // 1) Ensure Bface is ready for J = curl(B)
+    // mercury_bound_.Sync("Bface");
 
-    // 2) E = Ehall
+    // 2) J_edge from current Bface
+    Calc_J_Edge();
+    // mercury_bound_.DebugCheckSurfaceTangentialEdgeField(
+    //     "J-inner-solid", "J_xi", "J_eta", "J_zeta", "Coupled-Solid");
+
+    // mercury_bound_.DebugCheckSurfaceTangentialEdgeFieldGhost(
+    //     "J-ghost-solid", "J_xi", "J_eta", "J_zeta", "Coupled-Solid", 1);
+
+    // 3) Add Hall EMF into E (E is currently zero => E = Ehall)
     AddHallEdgeEMF_();
 
-    // 3) Sync Eedge
+    // 4) Sync Eedge before taking curl(E)
     mercury_bound_.Sync("Eedge");
 
-    // 4) Clear RHSB
+    // mercury_bound_.DebugCheckSurfaceTangentialEdgeField(
+    //     "E-inner-solid", "E_xi", "E_eta", "E_zeta", "Coupled-Solid");
+
+    // mercury_bound_.DebugCheckSurfaceTangentialEdgeFieldGhost(
+    //     "E-ghost-solid", "E_xi", "E_eta", "E_zeta", "Coupled-Solid", 1);
+
+    // 5) Clear RHSB_* (important if CurlEdgeToFace writes += instead of =)
     for (int ib = 0; ib < nb; ++ib)
     {
         auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
@@ -650,15 +570,7 @@ void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
         zero_rhs(RHSBze);
     }
 
-    // ---- dB limiter parameters ----
-    const double C_dB_far = 0.01;  // 先保守，建议先 0.005~0.01
-    const double B_floor = 1.0e-2; // 按你的无量纲量级可再调
-    const double tiny = 1.0e-300;
-
-    double clip_ratio_max_l = 0.0;
-    double clip_count_l = 0;
-
-    // 5) curl(Ehall) -> RHS_Bface, then limit dB directly
+    // 6) curl(Ehall) -> RHS_Bface
     for (int ib = 0; ib < nb; ++ib)
     {
         auto &Exi = fld_->field(fid_.fid_E.xi, ib);
@@ -669,56 +581,145 @@ void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
         auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
         auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
 
-        auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
-        auto &Beta = fld_->field(fid_.fid_B.eta, ib);
-        auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
-
         if (!Exi.is_allocated())
             continue;
 
-        // RHS = -curl(Ehall)
-        CTOperators::CurlEdgeToFace(ib, Exi, Eeta, Eze, RHSBxi, RHSBeta, RHSBze, -1.0);
-
-        auto limit_rhs_face = [&](FieldBlock &Bf, FieldBlock &RHSf)
-        {
-            Int3 lo = RHSf.inner_lo(), hi = RHSf.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        const double Bref = std::max(std::abs(Bf(i, j, k, 0)), B_floor);
-                        const double dB = std::abs(dt_stage * RHSf(i, j, k, 0));
-                        const double dBmax = C_dB_far * Bref;
-
-                        if (dB > dBmax)
-                        {
-                            const double fac = dBmax / (dB + tiny);
-                            RHSf(i, j, k, 0) *= fac;
-
-                            clip_count_l += 1.0;
-                            clip_ratio_max_l = std::max(clip_ratio_max_l, dB / (dBmax + tiny));
-                        }
-                    }
-        };
-
-        limit_rhs_face(Bxi, RHSBxi);
-        limit_rhs_face(Beta, RHSBeta);
-        limit_rhs_face(Bze, RHSBze);
-    }
-
-    double clip_ratio_max_g = clip_ratio_max_l;
-    PARALLEL::mpi_max(&clip_ratio_max_l, &clip_ratio_max_g, 1);
-
-    double clip_count_g = clip_count_l;
-    PARALLEL::mpi_sum(&clip_count_l, &clip_count_g, 1);
-
-    if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
-    {
-        std::printf("[Hall-dB-Limiter] step=%d  clips=%lf  maxRatio=%.3e  C_dB=%.3e  dt_stage=%.3e\n",
-                    run_data_->step, clip_count_g, clip_ratio_max_g, C_dB_far, dt_stage);
-        std::fflush(stdout);
+        // B^{n+1} = B^n - dt * curl(E)  ==> RHS = -curl(E)
+        CTOperators::CurlEdgeToFace(ib, Exi, Eeta, Eze, RHSBxi, RHSBeta, RHSBze, /*multiper=*/-1.0);
     }
 }
+
+// void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
+// {
+//     const int nb = fld_->num_blocks();
+
+//     double dt_stage = dt_sub;
+
+//     // 0) Clear E_edge
+//     for (int ib = 0; ib < nb; ++ib)
+//     {
+//         auto &Exi = fld_->field(fid_.fid_E.xi, ib);
+//         auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
+//         auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+//         if (!Exi.is_allocated())
+//             continue;
+
+//         auto zero_electric = [&](FieldBlock &E)
+//         {
+//             Int3 lo = E.get_lo(), hi = E.get_hi();
+//             for (int i = lo.i; i < hi.i; ++i)
+//                 for (int j = lo.j; j < hi.j; ++j)
+//                     for (int k = lo.k; k < hi.k; ++k)
+//                         E(i, j, k, 0) = 0.0;
+//         };
+
+//         zero_electric(Exi);
+//         zero_electric(Eeta);
+//         zero_electric(Eze);
+//     }
+
+//     // 1) J_edge from current Bface
+//     Calc_J_Edge();
+
+//     // 2) E = Ehall
+//     AddHallEdgeEMF_();
+
+//     // 3) Sync Eedge
+//     mercury_bound_.Sync("Eedge");
+
+//     // 4) Clear RHSB
+//     for (int ib = 0; ib < nb; ++ib)
+//     {
+//         auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+//         auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+//         auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+//         if (!RHSBxi.is_allocated())
+//             continue;
+
+//         auto zero_rhs = [&](FieldBlock &F)
+//         {
+//             Int3 lo = F.inner_lo(), hi = F.inner_hi();
+//             for (int i = lo.i; i < hi.i; ++i)
+//                 for (int j = lo.j; j < hi.j; ++j)
+//                     for (int k = lo.k; k < hi.k; ++k)
+//                         F(i, j, k, 0) = 0.0;
+//         };
+
+//         zero_rhs(RHSBxi);
+//         zero_rhs(RHSBeta);
+//         zero_rhs(RHSBze);
+//     }
+
+//     // ---- dB limiter parameters ----
+//     const double C_dB_far = 0.01;  // 先保守，建议先 0.005~0.01
+//     const double B_floor = 1.0e-2; // 按你的无量纲量级可再调
+//     const double tiny = 1.0e-300;
+
+//     double clip_ratio_max_l = 0.0;
+//     double clip_count_l = 0;
+
+//     // 5) curl(Ehall) -> RHS_Bface, then limit dB directly
+//     for (int ib = 0; ib < nb; ++ib)
+//     {
+//         auto &Exi = fld_->field(fid_.fid_E.xi, ib);
+//         auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
+//         auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+
+//         auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+//         auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+//         auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+//         auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+//         auto &Beta = fld_->field(fid_.fid_B.eta, ib);
+//         auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+//         if (!Exi.is_allocated())
+//             continue;
+
+//         // RHS = -curl(Ehall)
+//         CTOperators::CurlEdgeToFace(ib, Exi, Eeta, Eze, RHSBxi, RHSBeta, RHSBze, -1.0);
+
+//         auto limit_rhs_face = [&](FieldBlock &Bf, FieldBlock &RHSf)
+//         {
+//             Int3 lo = RHSf.inner_lo(), hi = RHSf.inner_hi();
+//             for (int i = lo.i; i < hi.i; ++i)
+//                 for (int j = lo.j; j < hi.j; ++j)
+//                     for (int k = lo.k; k < hi.k; ++k)
+//                     {
+//                         const double Bref = std::max(std::abs(Bf(i, j, k, 0)), B_floor);
+//                         const double dB = std::abs(dt_stage * RHSf(i, j, k, 0));
+//                         const double dBmax = C_dB_far * Bref;
+
+//                         if (dB > dBmax)
+//                         {
+//                             const double fac = dBmax / (dB + tiny);
+//                             RHSf(i, j, k, 0) *= fac;
+
+//                             clip_count_l += 1.0;
+//                             clip_ratio_max_l = std::max(clip_ratio_max_l, dB / (dBmax + tiny));
+//                         }
+//                     }
+//         };
+
+//         limit_rhs_face(Bxi, RHSBxi);
+//         limit_rhs_face(Beta, RHSBeta);
+//         limit_rhs_face(Bze, RHSBze);
+//     }
+
+//     double clip_ratio_max_g = clip_ratio_max_l;
+//     PARALLEL::mpi_max(&clip_ratio_max_l, &clip_ratio_max_g, 1);
+
+//     double clip_count_g = clip_count_l;
+//     PARALLEL::mpi_sum(&clip_count_l, &clip_count_g, 1);
+
+//     if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
+//     {
+//         std::printf("[Hall-dB-Limiter] step=%d  clips=%lf  maxRatio=%.3e  C_dB=%.3e  dt_stage=%.3e\n",
+//                     run_data_->step, clip_count_g, clip_ratio_max_g, C_dB_far, dt_stage);
+//         std::fflush(stdout);
+//     }
+// }
+
 // Update only Bface with a supplied dt_step (used for Hall subcycling).
 void MercurySolver::ApplyUpdate_Euler_BfaceOnly_(double dt_step)
 {
