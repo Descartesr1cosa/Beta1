@@ -53,6 +53,7 @@ private:
     double mu0{0.0};
     double dt{0.0};
     double dt_hall{0.0};
+    double dt_sub{0.0};
     double ne_hall_floor{0.0};
     double ne_hall_floor_dimensional{0.0};
     double ne_hall_cut{0.0};

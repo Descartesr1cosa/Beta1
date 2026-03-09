@@ -95,6 +95,20 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Ehall_zeta", "Coupled-Solid", Eedge_zero_zeta_);
     RegisterPhysical_("Ehall_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
 
+    RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_zero_xi_);
+    RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_zero_xi_);
+    RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_zero_eta_);
+    RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_zero_eta_);
+    RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_zero_zeta_);
+    RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
+
+    RegisterPhysical_("J_xi", "Coupled-Solid", Eedge_zero_xi_);
+    RegisterPhysical_("J_xi", "Coupled-Fluid", Eedge_zero_xi_);
+    RegisterPhysical_("J_eta", "Coupled-Solid", Eedge_zero_eta_);
+    RegisterPhysical_("J_eta", "Coupled-Fluid", Eedge_zero_eta_);
+    RegisterPhysical_("J_zeta", "Coupled-Solid", Eedge_zero_zeta_);
+    RegisterPhysical_("J_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
+
     auto Eedge_Pole_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) == 2) // Pole rotational direction is zeta, so norm direction should be ETA
