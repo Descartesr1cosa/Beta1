@@ -686,8 +686,7 @@ void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                     {
-                        // const double Bref = std::max(std::abs(Bf(i, j, k, 0)), B_floor);
-                        const double Bref = std::max(std::abs(B0f_ref(i, j, k)), B_floor);
+                        const double Bref = std::max(std::abs(Bf(i, j, k, 0)), B_floor);
                         const double dB = std::abs(dt_stage * RHSf(i, j, k, 0));
                         const double dBmax = C_dB_far * Bref;
 
