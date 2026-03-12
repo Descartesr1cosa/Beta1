@@ -196,6 +196,9 @@ void MercuryBoundary::InstallHandlers()
 
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
+
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "Bind_cell", "Bind_cell", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "Bind_cell", "Bind_cell", ccopy);
 }
 
 void MercuryBoundary::InstallDefaultGroups()
@@ -261,7 +264,7 @@ void MercuryBoundary::InstallDefaultGroups()
 
     BoundGroup gBc;
     gBc.name = "B_cell";
-    gBc.fields = {"B_cell"};
+    gBc.fields = {"B_cell", "Bind_cell"};
     gBc.do_coupling = true;
     gBc.do_physical = true;
     gBc.do_halo = true;

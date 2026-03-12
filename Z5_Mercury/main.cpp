@@ -72,6 +72,7 @@ int main(int arg, char **argv)
     fld->register_field({"Badd_eta", StaggerLocation::FaceEt, 1, ngg});  // initial applied/added magnetic flux for Face Eta
     fld->register_field({"Badd_zeta", StaggerLocation::FaceZe, 1, ngg}); // initial applied/added magnetic flux for Face Zeta
     fld->register_field({"B_cell", StaggerLocation::Cell, 3, ngg});      // Total magnetic fields
+    fld->register_field({"Bind_cell", StaggerLocation::Cell, 3, ngg});   // Induced magnetic fields
 
     fld->register_field({"Na", StaggerLocation::Cell, 1, ngg, "Fluid"});         // Na neutral atom
     fld->register_field({"Photo_rate", StaggerLocation::Cell, 1, ngg, "Fluid"}); // Photoionization rate
@@ -112,6 +113,7 @@ int main(int arg, char **argv)
     fld->register_coupling_channel("Solid", "Fluid", "J_eta", StaggerLocation::EdgeEt, 1, ngg);      // Solid -> Fluid
     fld->register_coupling_channel("Solid", "Fluid", "J_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Solid -> Fluid
     fld->register_coupling_channel("Solid", "Fluid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
+    fld->register_coupling_channel("Solid", "Fluid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Solid -> Fluid
 
     fld->register_coupling_channel("Fluid", "Solid", "B_xi", StaggerLocation::FaceXi, 1, ngg);       // Fluid -> Solid
     fld->register_coupling_channel("Fluid", "Solid", "B_eta", StaggerLocation::FaceEt, 1, ngg);      // Fluid -> Solid
@@ -129,6 +131,7 @@ int main(int arg, char **argv)
     fld->register_coupling_channel("Fluid", "Solid", "J_eta", StaggerLocation::EdgeEt, 1, ngg);      // Fluid -> Solid
     fld->register_coupling_channel("Fluid", "Solid", "J_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Fluid -> Solid
     fld->register_coupling_channel("Fluid", "Solid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
+    fld->register_coupling_channel("Fluid", "Solid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Fluid -> Solid
     // Build coupling buffers (YOU CAN ONLY USE it ONCE!)
     fld->build_coupling_buffers(topology, par->GetInt("dimension"));
     //--------------------------------------------------------------------------

@@ -178,6 +178,7 @@ void MercurySolver::calc_Bcell()
     for (int ib = 0; ib < nblock; ++ib)
     {
         auto &Bcell = fld_->field(fid_.fid_Bcell, ib);
+        auto &Bindcell = fld_->field(fid_.fid_Bindcell, ib);
         // auto &U = fld_->field(fid_.fid_U, ib);
 
         auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
@@ -378,6 +379,159 @@ void MercurySolver::calc_Bcell()
                     Bcell(i, j, k, 0) = Bx_tot;
                     Bcell(i, j, k, 1) = By_tot;
                     Bcell(i, j, k, 2) = Bz_tot;
+                }
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    // cell center
+                    std::array<double, 3> Xc = {
+                        cx(i + 1, j + 1, k + 1),
+                        cy(i + 1, j + 1, k + 1),
+                        cz(i + 1, j + 1, k + 1)};
+
+                    struct FaceEq
+                    {
+                        std::array<double, 3> n; // normalized S
+                        double phi;              // normalized Phi
+                        double w;                // weight
+                    };
+                    FaceEq eqs[6];
+                    int K = 0;
+
+                    auto push = [&](const std::array<double, 3> &S,
+                                    double Phi,
+                                    const std::array<double, 3> &Xf)
+                    {
+                        double s_norm = norm(S) + eps;
+                        std::array<double, 3> nvec = {S[0] / s_norm, S[1] / s_norm, S[2] / s_norm};
+                        double phi_hat = Phi / s_norm;
+
+                        double dx = Xf[0] - Xc[0];
+                        double dy = Xf[1] - Xc[1];
+                        double dz = Xf[2] - Xc[2];
+                        double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+                        double w = 1.0 / std::sqrt(dist * dist + delta * delta);
+
+                        eqs[K++] = {nvec, phi_hat, w};
+                    };
+
+                    // ---------- xi- face (at i) ----------
+                    std::array<double, 3> S_xm = {
+                        -A_xi(i, j, k, 0),
+                        -A_xi(i, j, k, 1),
+                        -A_xi(i, j, k, 2)};
+                    double Phi_xm = -Bxi(i, j, k, 0);
+                    push(S_xm, Phi_xm, xfc_xi(i, j, k));
+
+                    // ---------- xi+ face (at i+1) ----------
+                    std::array<double, 3> S_xp = {
+                        A_xi(i + 1, j, k, 0),
+                        A_xi(i + 1, j, k, 1),
+                        A_xi(i + 1, j, k, 2)};
+                    double Phi_xp = Bxi(i + 1, j, k, 0);
+                    push(S_xp, Phi_xp, xfc_xi(i + 1, j, k));
+
+                    // ---------- eta- face (at j) ----------
+                    std::array<double, 3> S_em = {
+                        -A_eta(i, j, k, 0),
+                        -A_eta(i, j, k, 1),
+                        -A_eta(i, j, k, 2)};
+                    double Phi_em = -Beta(i, j, k, 0);
+                    push(S_em, Phi_em, xfc_eta(i, j, k));
+
+                    // ---------- eta+ face (at j+1) ----------
+                    std::array<double, 3> S_ep = {
+                        A_eta(i, j + 1, k, 0),
+                        A_eta(i, j + 1, k, 1),
+                        A_eta(i, j + 1, k, 2)};
+                    double Phi_ep = Beta(i, j + 1, k, 0);
+                    push(S_ep, Phi_ep, xfc_eta(i, j + 1, k));
+
+                    // ---------- zeta- face (at k) ----------
+                    std::array<double, 3> S_zm = {
+                        -A_ze(i, j, k, 0),
+                        -A_ze(i, j, k, 1),
+                        -A_ze(i, j, k, 2)};
+                    double Phi_zm = -Bzeta(i, j, k, 0);
+                    push(S_zm, Phi_zm, xfc_zeta(i, j, k));
+
+                    // ---------- zeta+ face (at k+1) ----------
+                    std::array<double, 3> S_zp = {
+                        A_ze(i, j, k + 1, 0),
+                        A_ze(i, j, k + 1, 1),
+                        A_ze(i, j, k + 1, 2)};
+                    double Phi_zp = Bzeta(i, j, k + 1, 0);
+                    push(S_zp, Phi_zp, xfc_zeta(i, j, k + 1));
+
+                    // ---------- build normal equations N = A^T W A, r = A^T W phi ----------
+                    double N00 = 0, N01 = 0, N02 = 0, N11 = 0, N12 = 0, N22 = 0;
+                    double rx = 0, ry = 0, rz = 0;
+
+                    for (int t = 0; t < K; ++t)
+                    {
+                        double w = eqs[t].w;
+                        const auto &n = eqs[t].n;
+                        double phi = eqs[t].phi;
+
+                        N00 += w * n[0] * n[0];
+                        N01 += w * n[0] * n[1];
+                        N02 += w * n[0] * n[2];
+                        N11 += w * n[1] * n[1];
+                        N12 += w * n[1] * n[2];
+                        N22 += w * n[2] * n[2];
+
+                        rx += w * phi * n[0];
+                        ry += w * phi * n[1];
+                        rz += w * phi * n[2];
+                    }
+
+                    auto det3 = [&](double a, double b, double c, double d, double e, double f)
+                    {
+                        // | a b c |
+                        // | b d e |
+                        // | c e f |
+                        return a * (d * f - e * e) - b * (b * f - c * e) + c * (b * e - c * d);
+                    };
+
+                    double det = det3(N00, N01, N02, N11, N12, N22);
+                    double reg = 1e-14 * (N00 + N11 + N22);
+
+                    if (std::abs(det) < reg)
+                    {
+                        N00 += reg;
+                        N11 += reg;
+                        N22 += reg;
+                        det = det3(N00, N01, N02, N11, N12, N22);
+                    }
+
+                    // cofactors of symmetric matrix
+                    double C00 = (N11 * N22 - N12 * N12);
+                    double C01 = (N02 * N12 - N01 * N22);
+                    double C02 = (N01 * N12 - N02 * N11);
+                    double C11 = (N00 * N22 - N02 * N02);
+                    double C12 = (N01 * N02 - N00 * N12);
+                    double C22 = (N00 * N11 - N01 * N01);
+
+                    double inv = 1.0 / det;
+
+                    double Bx_tot = inv * (C00 * rx + C01 * ry + C02 * rz);
+                    double By_tot = inv * (C01 * rx + C11 * ry + C12 * rz);
+                    double Bz_tot = inv * (C02 * rx + C12 * ry + C22 * rz);
+
+                    // // energy consistency (keep your existing style)
+                    // const double Bx_old = Bcell(i, j, k, 0);
+                    // const double By_old = Bcell(i, j, k, 1);
+                    // const double Bz_old = Bcell(i, j, k, 2);
+                    // const double Delta_Eb =
+                    //     0.5 * inver_MA2 * (Bx_tot * Bx_tot + By_tot * By_tot + Bz_tot * Bz_tot) -
+                    //     0.5 * inver_MA2 * (Bx_old * Bx_old + By_old * By_old + Bz_old * Bz_old);
+
+                    Bindcell(i, j, k, 0) = Bx_tot;
+                    Bindcell(i, j, k, 1) = By_tot;
+                    Bindcell(i, j, k, 2) = Bz_tot;
                 }
     }
 }

@@ -82,7 +82,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
             "Eface_zeta",
             "Ehall_xi",
             "Ehall_eta",
-            "Ehall_zeta"};
+            "Ehall_zeta",
+            "Bind_cell"};
 
         // 1) 初始化 Mercury Boundary
         mercury_bound_.Setup(grd_, fld_, topo_, halo_, par_, bnd_fields);

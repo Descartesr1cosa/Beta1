@@ -422,8 +422,9 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
     {
         auto &UH = fld_->field(fid_.fid_U_H, ib);
         auto &UNa = fld_->field(fid_.fid_U_Na, ib);
-        auto &Jc = fld_->field("J_cell", ib);       // 3 comps
-        auto &Bc = fld_->field(fid_.fid_Bcell, ib); // 3 comps, total B
+        auto &Jc = fld_->field("J_cell", ib);               // 3 comps
+        auto &Bc = fld_->field(fid_.fid_Bcell, ib);         // 3 comps, total B
+        auto &Binduce = fld_->field(fid_.fid_Bindcell, ib); // 3 comps, total B
 
         auto &JDxi = fld_->field("JDxi", ib);
         auto &JDet = fld_->field("JDet", ib);
@@ -461,6 +462,11 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
         auto B_cell = [&](int i, int j, int k) -> std::array<double, 3>
         {
             return {Bc(i, j, k, 0), Bc(i, j, k, 1), Bc(i, j, k, 2)};
+        };
+
+        auto Bind_cell = [&](int i, int j, int k) -> std::array<double, 3>
+        {
+            return {Binduce(i, j, k, 0), Binduce(i, j, k, 1), Binduce(i, j, k, 2)};
         };
 
         auto J_cell = [&](int i, int j, int k) -> std::array<double, 3>
@@ -504,8 +510,10 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                     {
                         int iL = i - 1, iR = i;
 
-                        std::array<double, 3> BL = B_cell(iL, j, k);
-                        std::array<double, 3> BR = B_cell(iR, j, k);
+                        std::array<double, 3> BL = Bind_cell(iL, j, k);
+                        std::array<double, 3> BR = Bind_cell(iR, j, k);
+                        std::array<double, 3> BL_all = B_cell(iL, j, k);
+                        std::array<double, 3> BR_all = B_cell(iR, j, k);
                         std::array<double, 3> EL = Ehall_cell(iL, j, k);
                         std::array<double, 3> ER = Ehall_cell(iR, j, k);
 
@@ -523,7 +531,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         double aR = std::abs(hall_alpha_from_ne(neR, r_cell(iR, j, k)));
 
                         double h_n = std::max(dlst_xi(i, j, k, 0), eps);
-                        double sH = Cwh * std::max(aL * norm3(BL), aR * norm3(BR)) / h_n;
+                        double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
 
                         std::array<double, 3> Ecen = scale3(plus3(EL, ER), 0.5);
                         std::array<double, 3> dB = minus3(BR, BL);
@@ -549,8 +557,10 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                     {
                         int jL = j - 1, jR = j;
 
-                        std::array<double, 3> BL = B_cell(i, jL, k);
-                        std::array<double, 3> BR = B_cell(i, jR, k);
+                        std::array<double, 3> BL = Bind_cell(i, jL, k);
+                        std::array<double, 3> BR = Bind_cell(i, jR, k);
+                        std::array<double, 3> BL_all = B_cell(i, jL, k);
+                        std::array<double, 3> BR_all = B_cell(i, jR, k);
                         std::array<double, 3> EL = Ehall_cell(i, jL, k);
                         std::array<double, 3> ER = Ehall_cell(i, jR, k);
 
@@ -568,7 +578,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         double aR = std::abs(hall_alpha_from_ne(neR, r_cell(i, jR, k)));
 
                         double h_n = std::max(dlst_et(i, j, k, 0), eps);
-                        double sH = Cwh * std::max(aL * norm3(BL), aR * norm3(BR)) / h_n;
+                        double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
 
                         std::array<double, 3> Ecen = scale3(plus3(EL, ER), 0.5);
                         std::array<double, 3> dB = minus3(BR, BL);
@@ -594,8 +604,10 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                     {
                         int kL = k - 1, kR = k;
 
-                        std::array<double, 3> BL = B_cell(i, j, kL);
-                        std::array<double, 3> BR = B_cell(i, j, kR);
+                        std::array<double, 3> BL = Bind_cell(i, j, kL);
+                        std::array<double, 3> BR = Bind_cell(i, j, kR);
+                        std::array<double, 3> BL_all = B_cell(i, j, kL);
+                        std::array<double, 3> BR_all = B_cell(i, j, kR);
                         std::array<double, 3> EL = Ehall_cell(i, j, kL);
                         std::array<double, 3> ER = Ehall_cell(i, j, kR);
 
@@ -613,7 +625,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         double aR = std::abs(hall_alpha_from_ne(neR, r_cell(i, j, kR)));
 
                         double h_n = std::max(dlst_ze(i, j, k, 0), eps);
-                        double sH = Cwh * std::max(aL * norm3(BL), aR * norm3(BR)) / h_n;
+                        double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
 
                         std::array<double, 3> Ecen = scale3(plus3(EL, ER), 0.5);
                         std::array<double, 3> dB = minus3(BR, BL);
