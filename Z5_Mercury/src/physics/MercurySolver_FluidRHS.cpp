@@ -653,12 +653,12 @@ void MercurySolver::AddSourceToRHS_Fluid()
     PARALLEL::mpi_max(&Rabs_max_l, &Rabs_max_g, 1);
     PARALLEL::mpi_max(&Rrel_max_l, &Rrel_max_g, 1);
 
-    if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
-    {
-        std::printf("[UplusCheck] step=%d  max|R|=%.3e  maxRel=%.3e\n",
-                    run_data_->step, Rabs_max_g, Rrel_max_g);
-        std::fflush(stdout);
-    }
+    // if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
+    // {
+    //     std::printf("[UplusCheck] step=%d  max|R|=%.3e  maxRel=%.3e\n",
+    //                 run_data_->step, Rabs_max_g, Rrel_max_g);
+    //     std::fflush(stdout);
+    // }
 
     double EM_eabs_max_g = EM_eabs_max_l;
     double EM_erel_max_g = EM_erel_max_l;
@@ -668,10 +668,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
     PARALLEL::mpi_max(&EM_erel_max_l, &EM_erel_max_g, 1);
     PARALLEL::mpi_max(&EM_Find_abs_max_l, &EM_Find_abs_max_g, 1);
 
-    if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
-    {
-        std::printf("[EMForceCheck] step=%d  max|Fsum-FJB|=%.3e  maxRel=%.3e  max|Find_sum|=%.3e\n\n\n",
-                    run_data_->step, EM_eabs_max_g, EM_erel_max_g, EM_Find_abs_max_g);
-        std::fflush(stdout);
-    }
+    // if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
+    // {
+    //     std::printf("[EMForceCheck] step=%d  max|Fsum-FJB|=%.3e  maxRel=%.3e  max|Find_sum|=%.3e\n\n\n",
+    //                 run_data_->step, EM_eabs_max_g, EM_erel_max_g, EM_Find_abs_max_g);
+    //     std::fflush(stdout);
+    // }
 }
