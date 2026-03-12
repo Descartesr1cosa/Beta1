@@ -92,6 +92,7 @@ private:
     void calc_Uplus();
     void calc_physical_constant(Param *par);
     void PrintMinMaxDiagnostics_();
+    double HallAlpha_Coeffient(double ne_true, double r);
     //=========================================================================
 
     //=========================================================================

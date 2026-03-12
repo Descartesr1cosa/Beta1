@@ -402,21 +402,21 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
 
     const int nb = fld_->num_blocks();
 
-    auto hall_alpha_from_ne = [&](double ne_true, double r) -> double
-    {
-        const double ne_pos = std::max(ne_true, 0.0);
-        const double ne_eff = std::sqrt(ne_pos * ne_pos + ne_hall_floor * ne_hall_floor);
-        const double s_ne = ne_pos / (ne_pos + ne_hall_cut + eps);
+    // auto hall_alpha_from_ne = [&](double ne_true, double r) -> double
+    // {
+    //     const double ne_pos = std::max(ne_true, 0.0);
+    //     const double ne_eff = std::sqrt(ne_pos * ne_pos + ne_hall_floor * ne_hall_floor);
+    //     const double s_ne = ne_pos / (ne_pos + ne_hall_cut + eps);
 
-        if (r <= 1.01)
-            return 0.0;
-        if (r >= 1.50)
-            return hall_coef * s_ne / ne_eff;
+    //     if (r <= 1.01)
+    //         return 0.0;
+    //     if (r >= 1.50)
+    //         return hall_coef * s_ne / ne_eff;
 
-        const double xi = (r - 1.01) / 0.49;
-        const double w = xi * xi * (3.0 - 2.0 * xi); // smoothstep
-        return hall_coef * s_ne / ne_eff * w;
-    };
+    //     const double xi = (r - 1.01) / 0.49;
+    //     const double w = xi * xi * (3.0 - 2.0 * xi); // smoothstep
+    //     return hall_coef * s_ne / ne_eff * w;
+    // };
 
     for (int ib = 0; ib < nb; ++ib)
     {
@@ -480,7 +480,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
             std::array<double, 3> B = B_cell(i, j, k);
             double ne = ne_cell(i, j, k);
             double rr = r_cell(i, j, k);
-            double alpha = hall_alpha_from_ne(ne, rr);
+            double alpha = HallAlpha_Coeffient(ne, rr);
 
             auto E = cross3(J, B);
             E = scale3(E, alpha);
@@ -527,8 +527,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
 
                         double neL = ne_cell(iL, j, k);
                         double neR = ne_cell(iR, j, k);
-                        double aL = std::abs(hall_alpha_from_ne(neL, r_cell(iL, j, k)));
-                        double aR = std::abs(hall_alpha_from_ne(neR, r_cell(iR, j, k)));
+                        double aL = std::abs(HallAlpha_Coeffient(neL, r_cell(iL, j, k)));
+                        double aR = std::abs(HallAlpha_Coeffient(neR, r_cell(iR, j, k)));
 
                         double h_n = std::max(dlst_xi(i, j, k, 0), eps);
                         double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
@@ -574,8 +574,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
 
                         double neL = ne_cell(i, jL, k);
                         double neR = ne_cell(i, jR, k);
-                        double aL = std::abs(hall_alpha_from_ne(neL, r_cell(i, jL, k)));
-                        double aR = std::abs(hall_alpha_from_ne(neR, r_cell(i, jR, k)));
+                        double aL = std::abs(HallAlpha_Coeffient(neL, r_cell(i, jL, k)));
+                        double aR = std::abs(HallAlpha_Coeffient(neR, r_cell(i, jR, k)));
 
                         double h_n = std::max(dlst_et(i, j, k, 0), eps);
                         double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
@@ -621,8 +621,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
 
                         double neL = ne_cell(i, j, kL);
                         double neR = ne_cell(i, j, kR);
-                        double aL = std::abs(hall_alpha_from_ne(neL, r_cell(i, j, kL)));
-                        double aR = std::abs(hall_alpha_from_ne(neR, r_cell(i, j, kR)));
+                        double aL = std::abs(HallAlpha_Coeffient(neL, r_cell(i, j, kL)));
+                        double aR = std::abs(HallAlpha_Coeffient(neR, r_cell(i, j, kR)));
 
                         double h_n = std::max(dlst_ze(i, j, k, 0), eps);
                         double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
