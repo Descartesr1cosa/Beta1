@@ -13,7 +13,7 @@ void MercurySolver::Time_Advance()
     dt_sub = dt / nsub;
     if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
     {
-        std::printf("[HallSub] step=%d dt=%.3e dt_hall=%.3e nsub=%d dt_sub=%.3e\n\n",
+        std::printf("           [HallSub] step=%d dt=%.3e dt_hall=%.3e nsub=%d dt_sub=%.3e\n\n",
                     run_data_->step, dt, dt_hall, nsub, dt / double(nsub));
     }
 
@@ -529,6 +529,7 @@ void MercurySolver::AssembleRHS_Induction_CT_HallOnly_()
 
     // 2) J_edge from current Bface
     Calc_J_Edge();
+    calc_Jcell();
     // mercury_bound_.DebugCheckSurfaceTangentialEdgeField(
     //     "J-inner-solid", "J_xi", "J_eta", "J_zeta", "Coupled-Solid");
 
