@@ -408,3 +408,204 @@ void MercurySolver::calc_divB()
                 }
     }
 }
+
+void MercurySolver::calc_Jcell()
+{
+    const int nblock = fld_->num_blocks();
+
+    constexpr double eps = 1e-25;
+
+    for (int ib = 0; ib < nblock; ++ib)
+    {
+        auto &Jcell = fld_->field(fid_.fid_Jcell, ib);
+
+        auto &Jxi = fld_->field(fid_.fid_J.xi, ib);
+        auto &Jeta = fld_->field(fid_.fid_J.eta, ib);
+        auto &Jzeta = fld_->field(fid_.fid_J.zeta, ib);
+
+        auto &dl_xi = fld_->field("dl_xi", ib);
+        auto &dl_eta = fld_->field("dl_eta", ib);
+        auto &dl_zeta = fld_->field("dl_zeta", ib);
+
+        auto &x = grd_->grids(ib).x;
+        auto &y = grd_->grids(ib).y;
+        auto &z = grd_->grids(ib).z;
+
+        if (!Jcell.is_allocated() || !Jxi.is_allocated() || !Jeta.is_allocated() || !Jzeta.is_allocated())
+            continue;
+
+        auto dot3 = [&](double ax, double ay, double az,
+                        double bx, double by, double bz) -> double
+        {
+            return ax * bx + ay * by + az * bz;
+        };
+
+        auto unit_t_xi = [&](int i, int j, int k,
+                             double &tx, double &ty, double &tz)
+        {
+            const double L = std::max(dl_xi(i, j, k, 0), eps);
+            tx = (x(i + 1, j, k) - x(i, j, k)) / L;
+            ty = (y(i + 1, j, k) - y(i, j, k)) / L;
+            tz = (z(i + 1, j, k) - z(i, j, k)) / L;
+        };
+
+        auto unit_t_eta = [&](int i, int j, int k,
+                              double &tx, double &ty, double &tz)
+        {
+            const double L = std::max(dl_eta(i, j, k, 0), eps);
+            tx = (x(i, j + 1, k) - x(i, j, k)) / L;
+            ty = (y(i, j + 1, k) - y(i, j, k)) / L;
+            tz = (z(i, j + 1, k) - z(i, j, k)) / L;
+        };
+
+        auto unit_t_zeta = [&](int i, int j, int k,
+                               double &tx, double &ty, double &tz)
+        {
+            const double L = std::max(dl_zeta(i, j, k, 0), eps);
+            tx = (x(i, j, k + 1) - x(i, j, k)) / L;
+            ty = (y(i, j, k + 1) - y(i, j, k)) / L;
+            tz = (z(i, j, k + 1) - z(i, j, k)) / L;
+        };
+
+        struct Eq
+        {
+            double tx, ty, tz; // unit tangent
+            double rhs;        // J_edge / |dl|
+            double w;          // weight
+        };
+
+        Int3 lo = Jcell.inner_lo();
+        Int3 hi = Jcell.inner_hi();
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    Eq eqs[12];
+                    int K = 0;
+
+                    auto push = [&](double tx, double ty, double tz,
+                                    double Jint, double L, double w = 1.0)
+                    {
+                        L = std::max(L, eps);
+                        eqs[K++] = {tx, ty, tz, Jint / L, w};
+                    };
+
+                    double tx, ty, tz;
+
+                    // =====================================================
+                    // 4 xi-edges around cell(i,j,k)
+                    // =====================================================
+                    unit_t_xi(i, j, k, tx, ty, tz);
+                    push(tx, ty, tz, Jxi(i, j, k, 0), dl_xi(i, j, k, 0));
+
+                    unit_t_xi(i, j + 1, k, tx, ty, tz);
+                    push(tx, ty, tz, Jxi(i, j + 1, k, 0), dl_xi(i, j + 1, k, 0));
+
+                    unit_t_xi(i, j, k + 1, tx, ty, tz);
+                    push(tx, ty, tz, Jxi(i, j, k + 1, 0), dl_xi(i, j, k + 1, 0));
+
+                    unit_t_xi(i, j + 1, k + 1, tx, ty, tz);
+                    push(tx, ty, tz, Jxi(i, j + 1, k + 1, 0), dl_xi(i, j + 1, k + 1, 0));
+
+                    // =====================================================
+                    // 4 eta-edges
+                    // =====================================================
+                    unit_t_eta(i, j, k, tx, ty, tz);
+                    push(tx, ty, tz, Jeta(i, j, k, 0), dl_eta(i, j, k, 0));
+
+                    unit_t_eta(i + 1, j, k, tx, ty, tz);
+                    push(tx, ty, tz, Jeta(i + 1, j, k, 0), dl_eta(i + 1, j, k, 0));
+
+                    unit_t_eta(i, j, k + 1, tx, ty, tz);
+                    push(tx, ty, tz, Jeta(i, j, k + 1, 0), dl_eta(i, j, k + 1, 0));
+
+                    unit_t_eta(i + 1, j, k + 1, tx, ty, tz);
+                    push(tx, ty, tz, Jeta(i + 1, j, k + 1, 0), dl_eta(i + 1, j, k + 1, 0));
+
+                    // =====================================================
+                    // 4 zeta-edges
+                    // =====================================================
+                    unit_t_zeta(i, j, k, tx, ty, tz);
+                    push(tx, ty, tz, Jzeta(i, j, k, 0), dl_zeta(i, j, k, 0));
+
+                    unit_t_zeta(i + 1, j, k, tx, ty, tz);
+                    push(tx, ty, tz, Jzeta(i + 1, j, k, 0), dl_zeta(i + 1, j, k, 0));
+
+                    unit_t_zeta(i, j + 1, k, tx, ty, tz);
+                    push(tx, ty, tz, Jzeta(i, j + 1, k, 0), dl_zeta(i, j + 1, k, 0));
+
+                    unit_t_zeta(i + 1, j + 1, k, tx, ty, tz);
+                    push(tx, ty, tz, Jzeta(i + 1, j + 1, k, 0), dl_zeta(i + 1, j + 1, k, 0));
+
+                    // =====================================================
+                    // Weighted least squares:
+                    //   minimize sum w | t·Jcell - J_edge/|dl| |^2
+                    // =====================================================
+                    double N00 = 0.0, N01 = 0.0, N02 = 0.0;
+                    double N11 = 0.0, N12 = 0.0, N22 = 0.0;
+                    double r0 = 0.0, r1 = 0.0, r2 = 0.0;
+
+                    for (int n = 0; n < K; ++n)
+                    {
+                        const double w = eqs[n].w;
+                        const double tx = eqs[n].tx;
+                        const double ty = eqs[n].ty;
+                        const double tz = eqs[n].tz;
+                        const double b = eqs[n].rhs;
+
+                        N00 += w * tx * tx;
+                        N01 += w * tx * ty;
+                        N02 += w * tx * tz;
+                        N11 += w * ty * ty;
+                        N12 += w * ty * tz;
+                        N22 += w * tz * tz;
+
+                        r0 += w * tx * b;
+                        r1 += w * ty * b;
+                        r2 += w * tz * b;
+                    }
+
+                    auto det3 = [&](double a, double b, double c,
+                                    double d, double e, double f) -> double
+                    {
+                        // | a b c |
+                        // | b d e |
+                        // | c e f |
+                        return a * (d * f - e * e) - b * (b * f - c * e) + c * (b * e - c * d);
+                    };
+
+                    double det = det3(N00, N01, N02, N11, N12, N22);
+                    const double reg = 1e-14 * (N00 + N11 + N22 + 1.0);
+
+                    if (std::abs(det) < reg)
+                    {
+                        N00 += reg;
+                        N11 += reg;
+                        N22 += reg;
+                        det = det3(N00, N01, N02, N11, N12, N22);
+                    }
+
+                    // inverse of symmetric 3x3 normal matrix
+                    const double C00 = (N11 * N22 - N12 * N12);
+                    const double C01 = (N02 * N12 - N01 * N22);
+                    const double C02 = (N01 * N12 - N02 * N11);
+                    const double C11 = (N00 * N22 - N02 * N02);
+                    const double C12 = (N01 * N02 - N00 * N12);
+                    const double C22 = (N00 * N11 - N01 * N01);
+
+                    const double invdet = 1.0 / det;
+
+                    const double Jx =
+                        invdet * (C00 * r0 + C01 * r1 + C02 * r2);
+                    const double Jy =
+                        invdet * (C01 * r0 + C11 * r1 + C12 * r2);
+                    const double Jz =
+                        invdet * (C02 * r0 + C12 * r1 + C22 * r2);
+
+                    Jcell(i, j, k, 0) = Jx;
+                    Jcell(i, j, k, 1) = Jy;
+                    Jcell(i, j, k, 2) = Jz;
+                }
+    }
+}

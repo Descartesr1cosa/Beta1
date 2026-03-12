@@ -78,6 +78,7 @@ struct SolverFields
     int fid_PV_H = -1;
     int fid_PV_Na = -1;
     int fid_Bcell = -1;
+    int fid_Jcell = -1;
     IdTriplet fid_Badd;
     int fid_Na = -1;
     int fid_Photo = -1;
@@ -171,6 +172,7 @@ struct SolverFields
         fid_PV_H = fld->field_id("PV_H");
         fid_PV_Na = fld->field_id("PV_Na");
         fid_Bcell = fld->field_id("B_cell");
+        fid_Jcell = fld->field_id("J_cell");
         fid_Badd.xi = fld->field_id("Badd_xi");
         fid_Badd.eta = fld->field_id("Badd_eta");
         fid_Badd.zeta = fld->field_id("Badd_zeta");
@@ -249,6 +251,7 @@ struct SolverFields
         require_id(fid_PV_H, "PV_H");
         require_id(fid_PV_Na, "PV_Na");
         require_id(fid_Bcell, "B_cell");
+        require_id(fid_Jcell, "J_cell");
         fid_Badd.require_all("Badd_xi/Badd_eta/Badd_zeta");
         require_id(fid_Na, "Na");
         require_id(fid_Photo, "Photo_rate");

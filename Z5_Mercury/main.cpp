@@ -66,6 +66,7 @@ int main(int arg, char **argv)
     fld->register_field({"J_xi", StaggerLocation::EdgeXi, 1, ngg});   // Integration of electric current along Edge Xi
     fld->register_field({"J_eta", StaggerLocation::EdgeEt, 1, ngg});  // Integration of electric current along Edge Eta
     fld->register_field({"J_zeta", StaggerLocation::EdgeZe, 1, ngg}); // Integration of electric current along Edge Zeta
+    fld->register_field({"J_cell", StaggerLocation::Cell, 3, ngg});   // Total magnetic fields
 
     fld->register_field({"Badd_xi", StaggerLocation::FaceXi, 1, ngg});   // initial applied/added magnetic flux for Face Xi
     fld->register_field({"Badd_eta", StaggerLocation::FaceEt, 1, ngg});  // initial applied/added magnetic flux for Face Eta

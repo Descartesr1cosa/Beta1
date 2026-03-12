@@ -86,6 +86,7 @@ private:
     //=========================================================================
     // TOOLS
     void calc_Bcell();
+    void calc_Jcell();
     void calc_divB();
     void calc_PV();
     void calc_Uplus();
@@ -124,6 +125,9 @@ private:
     void AssembleRHS_Induction_CT_HallOnly_();
     // 只更新 Bface: Bface += dt_sub * RHS_b
     void ApplyUpdate_Euler_BfaceOnly_(double dt_sub);
+
+    void BuildHallFaceEMF_Rusanov_();
+    void AssembleEdgeEMF_FromFaceE_Hall_();
     //--------------------------------
     //  For Ideal
     void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN);
