@@ -149,11 +149,11 @@ public:
                 auto &y = grd_->grids(iblock).y;
                 auto &z = grd_->grids(iblock).z;
 
-                const Int3 &sub = A_xi.get_lo();
-                const Int3 &sup = A_xi.get_hi();
-                for (int i = sub.i; i < sup.i; i++)
-                    for (int j = sub.j; j < sup.j; j++)
-                        for (int k = sub.k; k < sup.k; k++)
+                const Int3 &sub = A_xi.inner_lo();
+                const Int3 &sup = A_xi.inner_hi();
+                for (int i = sub.i - 1; i <= sup.i; i++)
+                    for (int j = sub.j - 1; j <= sup.j; j++)
+                        for (int k = sub.k - 1; k <= sup.k; k++)
                         {
                             Vec3 x1 = {x(i, j, k), y(i, j, k), z(i, j, k)};
                             Vec3 x2 = {x(i + 1, j, k), y(i + 1, j, k), z(i + 1, j, k)};
@@ -171,11 +171,11 @@ public:
                 auto &y = grd_->grids(iblock).y;
                 auto &z = grd_->grids(iblock).z;
 
-                const Int3 &sub = A_eta.get_lo();
-                const Int3 &sup = A_eta.get_hi();
-                for (int i = sub.i; i < sup.i; i++)
-                    for (int j = sub.j; j < sup.j; j++)
-                        for (int k = sub.k; k < sup.k; k++)
+                const Int3 &sub = A_eta.inner_lo();
+                const Int3 &sup = A_eta.inner_hi();
+                for (int i = sub.i - 1; i <= sup.i; i++)
+                    for (int j = sub.j - 1; j <= sup.j; j++)
+                        for (int k = sub.k - 1; k <= sup.k; k++)
                         {
                             Vec3 x1 = {x(i, j, k), y(i, j, k), z(i, j, k)};
                             Vec3 x2 = {x(i, j + 1, k), y(i, j + 1, k), z(i, j + 1, k)};
@@ -193,11 +193,11 @@ public:
                 auto &y = grd_->grids(iblock).y;
                 auto &z = grd_->grids(iblock).z;
 
-                const Int3 &sub = A_zeta.get_lo();
-                const Int3 &sup = A_zeta.get_hi();
-                for (int i = sub.i; i < sup.i; i++)
-                    for (int j = sub.j; j < sup.j; j++)
-                        for (int k = sub.k; k < sup.k; k++)
+                const Int3 &sub = A_zeta.inner_lo();
+                const Int3 &sup = A_zeta.inner_hi();
+                for (int i = sub.i - 1; i <= sup.i; i++)
+                    for (int j = sub.j - 1; j <= sup.j; j++)
+                        for (int k = sub.k - 1; k <= sup.k; k++)
                         {
                             Vec3 x1 = {x(i, j, k), y(i, j, k), z(i, j, k)};
                             Vec3 x2 = {x(i, j, k + 1), y(i, j, k + 1), z(i, j, k + 1)};
@@ -213,14 +213,122 @@ public:
         // 2) curl: edge -> face The dopoles' parts of Badd_face，added to IMF
         for (int iblk = 0; iblk < fld_->num_blocks(); iblk++)
         {
-            auto &Badd_xi = fld_->field(Badd_xi_id, iblk);
-            auto &Badd_eta = fld_->field(Badd_eta_id, iblk);
-            auto &Badd_zeta = fld_->field(Badd_zeta_id, iblk);
+            auto &Face_xi = fld_->field(Badd_xi_id, iblk);
+            auto &Face_eta = fld_->field(Badd_eta_id, iblk);
+            auto &Face_zeta = fld_->field(Badd_zeta_id, iblk);
 
-            auto &A_xi = Aadd_xi[iblk];
-            auto &A_eta = Aadd_eta[iblk];
-            auto &A_zeta = Aadd_zeta[iblk];
-            CTOperators::CurlEdgeToFace(iblk, A_xi, A_eta, A_zeta, Badd_xi, Badd_eta, Badd_zeta, /*multiper=*/1.0); //  B = curl A
+            auto &Edge_xi = Aadd_xi[iblk];
+            auto &Edge_eta = Aadd_eta[iblk];
+            auto &Edge_zeta = Aadd_zeta[iblk];
+
+            // CTOperators::CurlEdgeToFace(iblk, A_xi, A_eta, A_zeta, Badd_xi, Badd_eta, Badd_zeta, /*multiper=*/1.0); //  B = curl A
+
+            double multiper = 1.0;
+
+            // =====================================================
+            // Face_xi = multiper * [ (d/dzeta)Edge_eta - (d/deta)Edge_zeta ]
+            // curl_xi = (Edge_eta(i,j,k) - Edge_eta(i,j,k+1))
+            //         + (Edge_zeta(i,j+1,k) - Edge_zeta(i,j,k))
+            // needs: Edge_eta(...,k+1), Edge_zeta(...,j+1,...)
+            // =====================================================
+            {
+                Int3 lo = Face_xi.get_lo();
+                Int3 hi = Face_xi.get_hi();
+
+                const Int3 lo_eeta = Edge_eta.get_lo();
+                const Int3 hi_eeta = Edge_eta.get_hi();
+                const Int3 lo_eze = Edge_zeta.get_lo();
+                const Int3 hi_eze = Edge_zeta.get_hi();
+
+                lo.i = std::max(lo.i, std::max(lo_eeta.i, lo_eze.i));
+                lo.j = std::max(lo.j, std::max(lo_eeta.j, lo_eze.j));
+                lo.k = std::max(lo.k, std::max(lo_eeta.k, lo_eze.k));
+
+                hi.i = std::min(hi.i, std::min(hi_eeta.i, hi_eze.i));
+                hi.j = std::min(hi.j, std::min(hi_eeta.j, hi_eze.j - 1)); // j+1 on Edge_zeta
+                hi.k = std::min(hi.k, std::min(hi_eeta.k - 1, hi_eze.k)); // k+1 on Edge_eta
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            const double curl_xi =
+                                (Edge_eta(i, j, k, 0) - Edge_eta(i, j, k + 1, 0)) +
+                                (Edge_zeta(i, j + 1, k, 0) - Edge_zeta(i, j, k, 0));
+
+                            Face_xi(i, j, k, 0) = multiper * curl_xi;
+                        }
+            }
+
+            // =====================================================
+            // Face_eta = multiper * [ (d/dxi)Edge_zeta - (d/dzeta)Edge_xi ]
+            // curl_eta = (Edge_xi(i,j,k+1) - Edge_xi(i,j,k))
+            //          + (Edge_zeta(i,j,k) - Edge_zeta(i+1,j,k))
+            // needs: Edge_xi(...,k+1), Edge_zeta(i+1,...)
+            // =====================================================
+            {
+                Int3 lo = Face_eta.get_lo();
+                Int3 hi = Face_eta.get_hi();
+
+                const Int3 lo_exi = Edge_xi.get_lo();
+                const Int3 hi_exi = Edge_xi.get_hi();
+                const Int3 lo_eze = Edge_zeta.get_lo();
+                const Int3 hi_eze = Edge_zeta.get_hi();
+
+                lo.i = std::max(lo.i, std::max(lo_exi.i, lo_eze.i));
+                lo.j = std::max(lo.j, std::max(lo_exi.j, lo_eze.j));
+                lo.k = std::max(lo.k, std::max(lo_exi.k, lo_eze.k));
+
+                hi.i = std::min(hi.i, std::min(hi_exi.i, hi_eze.i - 1)); // i+1 on Edge_zeta
+                hi.j = std::min(hi.j, std::min(hi_exi.j, hi_eze.j));
+                hi.k = std::min(hi.k, std::min(hi_exi.k - 1, hi_eze.k)); // k+1 on Edge_xi
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            const double curl_eta =
+                                (Edge_xi(i, j, k + 1, 0) - Edge_xi(i, j, k, 0)) +
+                                (Edge_zeta(i, j, k, 0) - Edge_zeta(i + 1, j, k, 0));
+
+                            Face_eta(i, j, k, 0) = multiper * curl_eta;
+                        }
+            }
+
+            // =====================================================
+            // Face_zeta = multiper * [ (d/deta)Edge_xi - (d/dxi)Edge_eta ]
+            // curl_zeta = (Edge_xi(i,j,k) - Edge_xi(i,j+1,k))
+            //           + (Edge_eta(i+1,j,k) - Edge_eta(i,j,k))
+            // needs: Edge_xi(...,j+1,...), Edge_eta(i+1,...)
+            // =====================================================
+            {
+                Int3 lo = Face_zeta.get_lo();
+                Int3 hi = Face_zeta.get_hi();
+
+                const Int3 lo_exi = Edge_xi.get_lo();
+                const Int3 hi_exi = Edge_xi.get_hi();
+                const Int3 lo_eeta = Edge_eta.get_lo();
+                const Int3 hi_eeta = Edge_eta.get_hi();
+
+                lo.i = std::max(lo.i, std::max(lo_exi.i, lo_eeta.i));
+                lo.j = std::max(lo.j, std::max(lo_exi.j, lo_eeta.j));
+                lo.k = std::max(lo.k, std::max(lo_exi.k, lo_eeta.k));
+
+                hi.i = std::min(hi.i, std::min(hi_exi.i, hi_eeta.i - 1)); // i+1 on Edge_eta
+                hi.j = std::min(hi.j, std::min(hi_exi.j - 1, hi_eeta.j)); // j+1 on Edge_xi
+                hi.k = std::min(hi.k, std::min(hi_exi.k, hi_eeta.k));
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            const double curl_zeta =
+                                (Edge_xi(i, j, k, 0) - Edge_xi(i, j + 1, k, 0)) +
+                                (Edge_eta(i + 1, j, k, 0) - Edge_eta(i, j, k, 0));
+
+                            Face_zeta(i, j, k, 0) = multiper * curl_zeta;
+                        }
+            }
         }
 
         // 3) IMF can be directly added to face magnetic flux：Phi = B0 · S_face
