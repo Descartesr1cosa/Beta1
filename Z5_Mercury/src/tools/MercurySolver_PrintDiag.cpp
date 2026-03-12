@@ -140,7 +140,7 @@ void MercurySolver::PrintMinMaxDiagnostics_()
         // -----------------------------
         std::printf("           |B|max=%.3e  Omega0_H=%.3e  Omega0_Na=%.3e\n",
                     Babs_max, Omega0_H, Omega0_Na);
-        std::printf("           OmegaH_max=%.3e  OmegaNa_max=%.3e  dt*Omega_max=%.3e\n\n",
+        std::printf("           OmegaH_max=%.3e  OmegaNa_max=%.3e  dt*Omega_max=%.3e\n",
                     OmegaH_max, OmegaNa_max, dtOmega);
 
         std::fflush(stdout);
