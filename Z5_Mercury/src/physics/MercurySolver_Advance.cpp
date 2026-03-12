@@ -6,7 +6,7 @@ void MercurySolver::Time_Advance()
 
     // ---------- Hall 子循环数 ----------
     const double safety = 0.8;
-    int nsub = 500;
+    int nsub = 1;
     // if (dt_hall > 0.0)
     //     nsub = std::max(1, (int)std::ceil(dt / (safety * dt_hall)));
     // nsub = std::min(nsub, 200);
