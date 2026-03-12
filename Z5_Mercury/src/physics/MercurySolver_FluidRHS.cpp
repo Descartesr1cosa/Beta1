@@ -211,30 +211,6 @@ void MercurySolver::Scheme_U_()
 // 依赖字段：U_H/U_Na, PV_H/PV_Na, U_plus, B_cell, U_b(用于curl), Na(neutral), Photo_rate, Jac, metric(Axi/Aet/Aze)
 void MercurySolver::AddSourceToRHS_Fluid()
 {
-    const double limiter_C_alpha_eps = 1e-30;
-    const double C_alpha = 0.05; // 先试 0.3 ~ 0.5
-    const double B_floor = 1e-14;
-
-    auto hall_theta_cell = [&](double alpha_phy, double Babs, double h2) -> double
-    {
-        if (h2 <= 0.0)
-            return 0.0;
-        if (std::abs(alpha_phy) <= limiter_C_alpha_eps)
-            return 1.0;
-        if (Babs <= B_floor)
-            return 1.0;
-
-        const double alpha_max = C_alpha * h2 / (Babs * dt_sub + limiter_C_alpha_eps);
-        return std::min(1.0, alpha_max / (std::abs(alpha_phy) + limiter_C_alpha_eps));
-    };
-
-    double Rabs_max_l = 0.0;
-    double Rrel_max_l = 0.0;
-    int Rmax_ib_l = -1, Rmax_i_l = -1, Rmax_j_l = -1, Rmax_k_l = -1;
-    double EM_eabs_max_l = 0.0;
-    double EM_erel_max_l = 0.0;
-    double EM_Find_abs_max_l = 0.0;
-
     // ---------- constants  ----------
     const double Tn0 = 185.0;  // K
     const double sk1 = 5.0e-5; // 1/s  (day side)
@@ -250,8 +226,6 @@ void MercurySolver::AddSourceToRHS_Fluid()
     const double a5 = (3.0 * L_ref * k_Boltz) / (rho_ref * U_ref * U_ref * U_ref);
 
     const double a6 = (1.0e6 * L_ref * k_Boltz) / (rho_ref * U_ref * U_ref * U_ref * (gamma_ - 1.0));
-
-    const double ne_floor = 1e-2 * n_ref;
 
     // dd: Fortran 0.5*(a*(f(i+1)-f(i-1)) + b*(f(j+1)-f(j-1)) + c*(f(k+1)-f(k-1)))
     auto dd = [](double a, double b, double c,
@@ -304,59 +278,23 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
         FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib);
         FieldBlock &Bt = fld_->field(fid_.fid_Bcell, ib);
-
-        FieldBlock &Jxi = fld_->field(fid_.fid_J.xi, ib);
-        FieldBlock &Jet = fld_->field(fid_.fid_J.eta, ib);
-        FieldBlock &Jze = fld_->field(fid_.fid_J.zeta, ib);
-
-        FieldBlock &pinvGTc = fld_->field(fid_.fid_pinvGT_Cell, ib);
-
+        auto &Jc = fld_->field(fid_.fid_Jcell, ib);
         FieldBlock &NaNeu = fld_->field(fld_->field_id("Na"), ib);
         FieldBlock &Photo = fld_->field(fld_->field_id("Photo_rate"), ib);
 
         FieldBlock &RHS_H = fld_->field(fid_.fid_RHS_H, ib);
         FieldBlock &RHS_Na = fld_->field(fid_.fid_RHS_Na, ib);
 
-        double3D &x = fld_->grd->grids(ib).x;
-
-        auto &y = grd_->grids(ib).y;
-        auto &z = grd_->grids(ib).z;
-
-        FieldBlock &dlx = fld_->field("dl_xi", ib);
-        FieldBlock &dle = fld_->field("dl_eta", ib);
-        FieldBlock &dlz = fld_->field("dl_zeta", ib);
-
-        auto hmin2_cell = [&](int i, int j, int k) -> double
-        {
-            double hx = dlx.is_allocated() ? dlx(i, j, k, 0) : 1e100;
-            double he = dle.is_allocated() ? dle(i, j, k, 0) : 1e100;
-            double hz = dlz.is_allocated() ? dlz(i, j, k, 0) : 1e100;
-            double h = std::min(hx, std::min(he, hz));
-            if (h <= 1e-12)
-                return 0.0;
-            return h * h;
-        };
+        auto &cx = grd_->grids(ib).dual_x;
+        auto &cy = grd_->grids(ib).dual_y;
+        auto &cz = grd_->grids(ib).dual_z;
 
         auto radius = [&](int i, int j, int k) -> double
         {
-            double xx = x(i, j, k);
-            double yy = y(i, j, k);
-            double zz = z(i, j, k);
+            double xx = cx(i + 1, j + 1, k + 1);
+            double yy = cy(i + 1, j + 1, k + 1);
+            double zz = cz(i + 1, j + 1, k + 1);
             return std::sqrt(xx * xx + yy * yy + zz * zz);
-        };
-
-        auto hall_factor_s = [&](double r) -> double
-        {
-            const double r0 = 1.1; // 内边界
-            const double r1 = 1.2; // taper 外边界
-
-            if (r <= r0)
-                return 0.0;
-            if (r >= r1)
-                return 1.0;
-
-            double xi = (r - r0) / (r1 - r0);  // 映射到 [0,1]
-            return xi * xi * (3.0 - 2.0 * xi); // smoothstep
         };
 
         if (!Jac.is_allocated() || !Axi.is_allocated())
@@ -371,8 +309,6 @@ void MercurySolver::AddSourceToRHS_Fluid()
             continue;
         if (!NaNeu.is_allocated() || !Photo.is_allocated())
             continue;
-        if (!Jxi.is_allocated() || !Jet.is_allocated() || !Jze.is_allocated())
-            continue;
 
         Int3 lo = Jac.inner_lo();
         Int3 hi = Jac.inner_hi();
@@ -381,81 +317,63 @@ void MercurySolver::AddSourceToRHS_Fluid()
             for (int j = lo.j; j < hi.j; ++j)
                 for (int k = lo.k; k < hi.k; ++k)
                 {
-                    // ---------- basic primitives ----------
-                    const double uH = PVH(i, j, k, 0), vH = PVH(i, j, k, 1), wH = PVH(i, j, k, 2);
-                    const double uN = PVN(i, j, k, 0), vN = PVN(i, j, k, 1), wN = PVN(i, j, k, 2);
+                    // ---------- common state ----------
+                    const double upx = Up(i, j, k, 0);
+                    const double upy = Up(i, j, k, 1);
+                    const double upz = Up(i, j, k, 2);
 
-                    const double upx = Up(i, j, k, 0), upy = Up(i, j, k, 1), upz = Up(i, j, k, 2);
+                    const double Bx = Bt(i, j, k, 0);
+                    const double By = Bt(i, j, k, 1);
+                    const double Bz = Bt(i, j, k, 2);
 
-                    const double Bx = Bt(i, j, k, 0), By = Bt(i, j, k, 1), Bz = Bt(i, j, k, 2);
+                    const double Jx = Jc(i, j, k, 0);
+                    const double Jy = Jc(i, j, k, 1);
+                    const double Jz = Jc(i, j, k, 2);
 
-                    const double Babs = std::sqrt(Bx * Bx + By * By + Bz * Bz);
-                    const double h2 = hmin2_cell(i, j, k);
-                    // ---------- number densities in m^-3 ----------
+                    const double sjbx = Jy * Bz - Jz * By;
+                    const double sjby = Jz * Bx - Jx * Bz;
+                    const double sjbz = Jx * By - Jy * Bx;
+
+                    // ---------- Hall coefficient (same convention as induction) ----------
+                    const double nH_hall = UH(i, j, k, 0) / M_H;
+                    const double nNa_hall = UNa(i, j, k, 0) / M_Na;
+                    const double ne_hall = nH_hall + nNa_hall;
+
+                    const double rloc = radius(i, j, k);
+                    const double alphaH = HallAlpha_Coeffient(ne_hall, rloc);
+
+                    // ---------- physical number densities for induce term ----------
                     const double rhoH_nd = std::max(UH(i, j, k, 0), 0.0);
                     const double rhoNa_nd = std::max(UNa(i, j, k, 0), 0.0);
 
                     const double nH_m = (rho_ref * rhoH_nd) / m_H;
                     const double nNa_m = (rho_ref * rhoNa_nd) / m_Na;
-                    // const double ne_m = std::max(nH_m + nNa_m, ne_floor);
 
-                    const double ne_true = nH_m + nNa_m;
-                    const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor_dimensional * ne_hall_floor_dimensional);
-                    const double s = ne_true / (ne_true + ne_hall_cut_dimensional); // 取同一个阈值，或用与 Hall 相同的量纲阈值
-                    const double alpha_phy_cell = momentum_hall_coeff * s / ne_eff;
-                    const double theta_hall = hall_theta_cell(alpha_phy_cell, Babs, h2);
                     // -------------------- metric derv(ax..cz) --------------------
-                    double ax, ay, az, bx, by, bz, cx, cy, cz;
-                    derv_at(Jac, Axi, Aet, Aze, i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
-
-                    // ---------- J and JxB ----------
-                    double J[3];
-
-                    {
-                        // 1) Edge -> cell (4-pt symmetric average, same spirit as your Hall co-location)
-                        const double Jxi_int = 0.25 * (Jxi(i, j, k, 0) + Jxi(i, j + 1, k, 0) +
-                                                       Jxi(i, j, k + 1, 0) + Jxi(i, j + 1, k + 1, 0));
-
-                        const double Jeta_int = 0.25 * (Jet(i, j, k, 0) + Jet(i + 1, j, k, 0) +
-                                                        Jet(i, j, k + 1, 0) + Jet(i + 1, j, k + 1, 0));
-
-                        const double Jzeta_int = 0.25 * (Jze(i, j, k, 0) + Jze(i + 1, j, k, 0) +
-                                                         Jze(i, j + 1, k, 0) + Jze(i + 1, j + 1, k, 0));
-
-                        // Reconstruct physical vector J(x,y,z) by: J = pinvGT_cell * w
-                        // pinvGT_cell is row-major: [0..2; 3..5; 6..8]
-                        J[0] = pinvGTc(i, j, k, 0) * Jxi_int + pinvGTc(i, j, k, 1) * Jeta_int + pinvGTc(i, j, k, 2) * Jzeta_int;
-                        J[1] = pinvGTc(i, j, k, 3) * Jxi_int + pinvGTc(i, j, k, 4) * Jeta_int + pinvGTc(i, j, k, 5) * Jzeta_int;
-                        J[2] = pinvGTc(i, j, k, 6) * Jxi_int + pinvGTc(i, j, k, 7) * Jeta_int + pinvGTc(i, j, k, 8) * Jzeta_int;
-                    }
-
-                    // JxB (对应 Fortran sjb)
-                    const double sjbx = J[1] * Bz - J[2] * By;
-                    const double sjby = J[2] * Bx - J[0] * Bz;
-                    const double sjbz = J[0] * By - J[1] * Bx;
-
+                    // double ax, ay, az, bx, by, bz, cx, cy, cz;
+                    // derv_at(Jac, Axi, Aet, Aze, i, j, k, ax, ay, az, bx, by, bz, cx, cy, cz);
                     // -------------------- grad(pe) --------------------
-                    double dpex, dpey, dpez;
-                    {
-                        const double pe_p_i = PVH(i + 1, j, k, 3) + PVN(i + 1, j, k, 3);
-                        const double pe_m_i = PVH(i - 1, j, k, 3) + PVN(i - 1, j, k, 3);
+                    // double dpex, dpey, dpez;
+                    // {
+                    //     const double pe_p_i = PVH(i + 1, j, k, 3) + PVN(i + 1, j, k, 3);
+                    //     const double pe_m_i = PVH(i - 1, j, k, 3) + PVN(i - 1, j, k, 3);
 
-                        double pe_p_j = 0, pe_m_j = 0, pe_p_k = 0, pe_m_k = 0;
+                    //     double pe_p_j = 0, pe_m_j = 0, pe_p_k = 0, pe_m_k = 0;
 
-                        pe_p_j = PVH(i, j + 1, k, 3) + PVN(i, j + 1, k, 3);
-                        pe_m_j = PVH(i, j - 1, k, 3) + PVN(i, j - 1, k, 3);
+                    //     pe_p_j = PVH(i, j + 1, k, 3) + PVN(i, j + 1, k, 3);
+                    //     pe_m_j = PVH(i, j - 1, k, 3) + PVN(i, j - 1, k, 3);
 
-                        pe_p_k = PVH(i, j, k + 1, 3) + PVN(i, j, k + 1, 3);
-                        pe_m_k = PVH(i, j, k - 1, 3) + PVN(i, j, k - 1, 3);
+                    //     pe_p_k = PVH(i, j, k + 1, 3) + PVN(i, j, k + 1, 3);
+                    //     pe_m_k = PVH(i, j, k - 1, 3) + PVN(i, j, k - 1, 3);
 
-                        // dpex = dd(ax, bx, cx, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
-                        // dpey = dd(ay, by, cy, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
-                        // dpez = dd(az, bz, cz, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                    //     // dpex = dd(ax, bx, cx, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                    //     // dpey = dd(ay, by, cy, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
+                    //     // dpez = dd(az, bz, cz, pe_p_i, pe_m_i, pe_p_j, pe_m_j, pe_p_k, pe_m_k);
 
-                        dpex = 0.0;
-                        dpey = 0.0;
-                        dpez = 0.0;
-                    }
+                    //     dpex = 0.0;
+                    //     dpey = 0.0;
+                    //     dpez = 0.0;
+                    // }
 
                     // ---------- ionization source sss (cm^-3 s^-1), only for Na+ ----------
                     const double sss = Photo(i, j, k, 0); // cm^-3 s^-1
@@ -467,7 +385,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     // 这里给一个保守默认：统一用 sk1（你也可以改成 sk2 或按你已有的坐标场实现）
                     // const double sk1 = 5E-5;
                     // const double sk2 = 1E-5;
-                    const double vst = (x(i, j, k) >= 0) ? sk1 : sk2;
+                    const double vst = (cx(i, j, k) >= 0) ? sk1 : sk2;
 
                     // b2 = (sm2/(sm1+sm2))*vst ;  b1 = (Tn0 - Ts0)*sm1/(sm1+sm2)
                     const double b2 = (m_Na / (m_H + m_Na)) * vst;
@@ -475,26 +393,26 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     // sse = qm1 (Fortran), here Photo is already (cm^-3 s^-1) For electrics
                     const double sse = Photo(i, j, k, 0);
 
-                    const double fac = hall_factor_s(radius(i, j, k));
-
-                    const double alpha = theta_hall * momentum_hall_coeff * s / ne_eff;
                     // =====================
                     // species H+  (ls=1)
                     // =====================
                     {
-                        // Fortran-simplified sub:
-                        const double subx = (vH - upy) * Bz - (wH - upz) * By;
-                        const double suby = (wH - upz) * Bx - (uH - upx) * Bz;
-                        const double subz = (uH - upx) * By - (vH - upy) * Bx;
+                        const double u = PVH(i, j, k, 0);
+                        const double v = PVH(i, j, k, 1);
+                        const double w = PVH(i, j, k, 2);
 
-                        const double sjbu = sjbx * uH + sjby * vH + sjbz * wH;
-                        const double dpeu = dpex * uH + dpey * vH + dpez * wH;
-                        const double subu = subx * uH + suby * vH + subz * wH;
+                        const double subx = (v - upy) * Bz - (w - upz) * By;
+                        const double suby = (w - upz) * Bx - (u - upx) * Bz;
+                        const double subz = (u - upx) * By - (v - upy) * Bx;
+
+                        const double subu = subx * u + suby * v + subz * w;
+                        const double sjbu = sjbx * u + sjby * v + sjbz * w;
+                        // const double dpeu = dpex * u + dpey * v + dpez * w;
 
                         // Ts0 in Kelvin
-                        const double Ts0 = PVH(i, j, k, 4) * T_ref;
-                        const double us2 = uH * uH + vH * vH + wH * wH;
-                        const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
+                        // const double Ts0 = PVH(i, j, k, 4) * T_ref;
+                        // const double us2 = uH * uH + vH * vH + wH * wH;
+                        // const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
 
                         // RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
                         // RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoH_nd * uH * vst;
@@ -504,29 +422,32 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
 
-                        RHS_H(i, j, k, 0) += 0.0;                                                             // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH_m * subx + fac * alpha * nH_m * sjbx; //- a4 * rhoH_nd * uH * vst;
-                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH_m * suby + fac * alpha * nH_m * sjby; //- a4 * rhoH_nd * vH * vst;
-                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH_m * subz + fac * alpha * nH_m * sjbz; // - a4 * rhoH_nd * wH * vst;
-                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH_m * subu + fac * alpha * nH_m * sjbu; // + a4 * rhoH_nd * us2 * b2; // work term for species energy
+                        RHS_H(i, j, k, 0) += 0.0;                                                           // H+ has no mass creation in Fortran here
+                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH_m * subx + alphaH * nH_hall * sjbx; //- a4 * rhoH_nd * uH * vst;
+                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH_m * suby + alphaH * nH_hall * sjby; //- a4 * rhoH_nd * vH * vst;
+                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH_m * subz + alphaH * nH_hall * sjbz; // - a4 * rhoH_nd * wH * vst;
+                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH_m * subu + alphaH * nH_hall * sjbu; // + a4 * rhoH_nd * us2 * b2; // work term for species energy
                     }
 
                     // =====================
                     // species Na+ (ls=2)
                     // =====================
                     {
+                        const double u = PVN(i, j, k, 0);
+                        const double v = PVN(i, j, k, 1);
+                        const double w = PVN(i, j, k, 2);
 
-                        const double subx = (vN - upy) * Bz - (wN - upz) * By;
-                        const double suby = (wN - upz) * Bx - (uN - upx) * Bz;
-                        const double subz = (uN - upx) * By - (vN - upy) * Bx;
+                        const double subx = (v - upy) * Bz - (w - upz) * By;
+                        const double suby = (w - upz) * Bx - (u - upx) * Bz;
+                        const double subz = (u - upx) * By - (v - upy) * Bx;
 
-                        const double sjbu = sjbx * uN + sjby * vN + sjbz * wN;
-                        const double dpeu = dpex * uN + dpey * vN + dpez * wN;
-                        const double subu = subx * uN + suby * vN + subz * wN;
+                        const double subu = subx * u + suby * v + subz * w;
+                        const double sjbu = sjbx * u + sjby * v + sjbz * w;
+                        // const double dpeu = dpex * u + dpey * v + dpez * w;
 
-                        const double Ts0 = PVN(i, j, k, 4) * T_ref;
-                        const double us2 = uN * uN + vN * vN + wN * wN;
-                        const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
+                        // const double Ts0 = PVN(i, j, k, 4) * T_ref;
+                        // const double us2 = uN * uN + vN * vN + wN * wN;
+                        // const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
 
                         // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
                         // RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoNa_nd * uN * vst;
@@ -541,137 +462,11 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
 
                         // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa_m * subx + fac * alpha * nNa_m * sjbx; // - a4 * rhoNa_nd * uN * vst;
-                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa_m * suby + fac * alpha * nNa_m * sjby; // - a4 * rhoNa_nd * vN * vst;
-                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa_m * subz + fac * alpha * nNa_m * sjbz; // - a4 * rhoNa_nd * wN * vst;
-                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa_m * subu + fac * alpha * nNa_m * sjbu; // + a4 * rhoNa_nd * us2 * vst;
-                    }
-
-                    {
-                        // --------- Debug: check charge-weighted consistency of u_plus ---------
-                        // R = nH*(uH-u+) + nNa*(uNa-u+)  (should be ~0 if u_plus is charge-weighted)
-
-                        const double duHx = uH - upx;
-                        const double duHy = vH - upy;
-                        const double duHz = wH - upz;
-
-                        const double duNax = uN - upx;
-                        const double duNay = vN - upy;
-                        const double duNaz = wN - upz;
-
-                        // Use the same number densities you already computed in m^-3
-                        const double Rx = nH_m * duHx + nNa_m * duNax;
-                        const double Ry = nH_m * duHy + nNa_m * duNay;
-                        const double Rz = nH_m * duHz + nNa_m * duNaz;
-
-                        const double Rabs = std::sqrt(Rx * Rx + Ry * Ry + Rz * Rz);
-
-                        // A relative metric: |R| / (ne * (|uH-u+|+|uNa-u+|) + eps)
-                        const double duH_abs = std::sqrt(duHx * duHx + duHy * duHy + duHz * duHz);
-                        const double duNa_abs = std::sqrt(duNax * duNax + duNay * duNay + duNaz * duNaz);
-                        const double denom = ne_eff * (duH_abs + duNa_abs) + 1e-300;
-                        const double Rrel = Rabs / denom;
-
-                        // accumulate maxima (define these outside loops as double locals)
-                        Rabs_max_l = std::max(Rabs_max_l, Rabs);
-                        Rrel_max_l = std::max(Rrel_max_l, Rrel);
-
-                        // optional: remember where it happens (use ints outside loops)
-                        if (Rabs == Rabs_max_l)
-                        {
-                            Rmax_ib_l = ib;
-                            Rmax_i_l = i;
-                            Rmax_j_l = j;
-                            Rmax_k_l = k;
-                        }
-                    }
-
-                    {
-                        // ===================== Debug: EM force consistency =====================
-                        // Build per-species EM force you add via sources (only EM parts):
-                        //   F_s = induce_coeff * n_s * ((u_s - u_plus) x B)
-                        //       + hall_coeff   * n_s/ne * (J x B)
-                        // Then compare sum_s F_s  vs  hall_coeff * (J x B).
-
-                        // (1) already have subx/suby/subz for each species
-                        // H+:
-                        const double subx = (vH - upy) * Bz - (wH - upz) * By;
-                        const double suby = (wH - upz) * Bx - (uH - upx) * Bz;
-                        const double subz = (uH - upx) * By - (vH - upy) * Bx;
-                        const double FHx = momentum_induce_coeff * nH_m * subx + fac * momentum_hall_coeff * s * nH_m * (sjbx / ne_eff);
-                        const double FHy = momentum_induce_coeff * nH_m * suby + fac * momentum_hall_coeff * s * nH_m * (sjby / ne_eff);
-                        const double FHz = momentum_induce_coeff * nH_m * subz + fac * momentum_hall_coeff * s * nH_m * (sjbz / ne_eff);
-
-                        // Na+:
-                        const double subx_Na = (vN - upy) * Bz - (wN - upz) * By;
-                        const double suby_Na = (wN - upz) * Bx - (uN - upx) * Bz;
-                        const double subz_Na = (uN - upx) * By - (vN - upy) * Bx;
-                        const double FNx = momentum_induce_coeff * nNa_m * subx_Na + fac * momentum_hall_coeff * s * nNa_m * (sjbx / ne_eff);
-                        const double FNy = momentum_induce_coeff * nNa_m * suby_Na + fac * momentum_hall_coeff * s * nNa_m * (sjby / ne_eff);
-                        const double FNz = momentum_induce_coeff * nNa_m * subz_Na + fac * momentum_hall_coeff * s * nNa_m * (sjbz / ne_eff);
-
-                        // sum
-                        const double Fsx = FHx + FNx;
-                        const double Fsy = FHy + FNy;
-                        const double Fsz = FHz + FNz;
-
-                        // target (total Lorentz force in your nondim form)
-                        const double chi = fac * s * (nH_m + nNa_m) / (ne_eff); // 或者 chi=s*(ne_true/ne_eff) 看你如何定义目标
-                        const double FJx = momentum_hall_coeff * chi * sjbx;
-                        const double FJy = momentum_hall_coeff * chi * sjby;
-                        const double FJz = momentum_hall_coeff * chi * sjbz;
-
-                        // absolute and relative errors
-                        const double ex = Fsx - FJx;
-                        const double ey = Fsy - FJy;
-                        const double ez = Fsz - FJz;
-
-                        const double eabs = std::sqrt(ex * ex + ey * ey + ez * ez);
-                        const double FJabs = std::sqrt(FJx * FJx + FJy * FJy + FJz * FJz);
-
-                        // relative: |e| / (|FJ| + eps)
-                        const double erel = eabs / (FJabs + 1e-300);
-
-                        // accumulate max (locals defined outside loops)
-                        EM_eabs_max_l = std::max(EM_eabs_max_l, eabs);
-                        EM_erel_max_l = std::max(EM_erel_max_l, erel);
-
-                        // Optional: also track how big the induce-part sum is (should be ~0)
-                        const double Findx = momentum_induce_coeff * (nH_m * subx + nNa_m * subx_Na);
-                        const double Findy = momentum_induce_coeff * (nH_m * suby + nNa_m * suby_Na);
-                        const double Findz = momentum_induce_coeff * (nH_m * subz + nNa_m * subz_Na);
-                        const double Find_abs = std::sqrt(Findx * Findx + Findy * Findy + Findz * Findz);
-                        EM_Find_abs_max_l = std::max(EM_Find_abs_max_l, Find_abs);
+                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa_m * subx + alphaH * nNa_hall * sjbx; // - a4 * rhoNa_nd * uN * vst;
+                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa_m * suby + alphaH * nNa_hall * sjby; // - a4 * rhoNa_nd * vN * vst;
+                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa_m * subz + alphaH * nNa_hall * sjbz; // - a4 * rhoNa_nd * wN * vst;
+                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa_m * subu + alphaH * nNa_hall * sjbu; // + a4 * rhoNa_nd * us2 * vst;
                     }
                 }
     }
-
-    double Rabs_max_g = Rabs_max_l;
-    double Rrel_max_g = Rrel_max_l;
-
-    // global maxima
-    PARALLEL::mpi_max(&Rabs_max_l, &Rabs_max_g, 1);
-    PARALLEL::mpi_max(&Rrel_max_l, &Rrel_max_g, 1);
-
-    // if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
-    // {
-    //     std::printf("[UplusCheck] step=%d  max|R|=%.3e  maxRel=%.3e\n",
-    //                 run_data_->step, Rabs_max_g, Rrel_max_g);
-    //     std::fflush(stdout);
-    // }
-
-    double EM_eabs_max_g = EM_eabs_max_l;
-    double EM_erel_max_g = EM_erel_max_l;
-    double EM_Find_abs_max_g = EM_Find_abs_max_l;
-
-    PARALLEL::mpi_max(&EM_eabs_max_l, &EM_eabs_max_g, 1);
-    PARALLEL::mpi_max(&EM_erel_max_l, &EM_erel_max_g, 1);
-    PARALLEL::mpi_max(&EM_Find_abs_max_l, &EM_Find_abs_max_g, 1);
-
-    // if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
-    // {
-    //     std::printf("[EMForceCheck] step=%d  max|Fsum-FJB|=%.3e  maxRel=%.3e  max|Find_sum|=%.3e\n\n\n",
-    //                 run_data_->step, EM_eabs_max_g, EM_erel_max_g, EM_Find_abs_max_g);
-    //     std::fflush(stdout);
-    // }
 }
