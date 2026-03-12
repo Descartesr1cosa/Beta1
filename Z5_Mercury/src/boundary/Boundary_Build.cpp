@@ -125,12 +125,28 @@ void MercuryBoundary::InstallHandlers()
             BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     };
 
+    auto Eedge_Pole_xi_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) == 2) // Pole rotational direction is zeta, so norm direction should be ETA
+            BC_Pole_Eedge_(U, fld, r, ngh);
+        else
+            BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
+    };
+
+    auto Eedge_Pole_eta_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        if (abs(r.direction) == 1) // Pole rotational direction is zeta, so norm direction should be XI
+            BC_Pole_Eedge_(U, fld, r, ngh);
+        else
+            BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
+    };
+
     RegisterPhysical_("E_xi", "Pole", Eedge_Pole_xi_);
-    RegisterPhysical_("Ehall_xi", "Pole", Eedge_Pole_xi_);
-    RegisterPhysical_("J_xi", "Pole", Eedge_Pole_xi_);
+    RegisterPhysical_("Ehall_xi", "Pole", Eedge_Pole_xi_zero);
+    RegisterPhysical_("J_xi", "Pole", Eedge_Pole_xi_zero);
     RegisterPhysical_("E_eta", "Pole", Eedge_Pole_eta_);
-    RegisterPhysical_("Ehall_eta", "Pole", Eedge_Pole_eta_);
-    RegisterPhysical_("J_eta", "Pole", Eedge_Pole_eta_);
+    RegisterPhysical_("Ehall_eta", "Pole", Eedge_Pole_eta_zero);
+    RegisterPhysical_("J_eta", "Pole", Eedge_Pole_eta_zero);
     // RegisterPhysical_("E_zeta", "Pole", Eedge_Pole_);
 
     // 3) coupling：按你的耦合 channel 注册（先 DefaultCouplingCopy）

@@ -358,3 +358,17 @@ void MercuryBoundary::BC_Pole_Eedge_(FieldBlock &U, Field *fld, const BOUND::Phy
 
     bound_.DefaultPhysicalCopy(U, fld, r, ngh);
 }
+
+void MercuryBoundary::BC_Pole_Eedge_Zero(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    const Box3 &inner = r.inner_slab;
+
+    for (int i = inner.lo.i; i < inner.hi.i; ++i)
+        for (int j = inner.lo.j; j < inner.hi.j; ++j)
+        {
+            for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                U(i, j, k, 0) = 0.0;
+        }
+
+    bound_.DefaultPhysicalCopy(U, fld, r, ngh);
+}
