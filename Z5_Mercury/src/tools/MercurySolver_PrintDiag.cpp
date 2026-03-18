@@ -132,7 +132,7 @@ void MercurySolver::PrintMinMaxDiagnostics_()
 
         std::printf("           Bx  =[%.3e, %.3e]  By=[%.3e, %.3e]  Bz   =[%.3e, %.3e]  \n",
                     mins_g[4], maxs_g[4], mins_g[5], maxs_g[5], mins_g[6], maxs_g[6]);
-        std::printf("           Pmag=[%.3e, %.3e]\n\n\n",
+        std::printf("           Pmag=[%.3e, %.3e]\n\n",
                     mins_g[7], maxs_g[7]);
 
         // -----------------------------

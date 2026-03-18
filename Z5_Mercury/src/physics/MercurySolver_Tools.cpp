@@ -36,36 +36,74 @@ void MercurySolver::calc_physical_constant(Param *par)
 
     // ambi_coef = M_H * U_ref / (cst.data["q_e"] * ref.data["L_ref"] * ref.data["B_ref"]);
 
-    momentum_induce_coeff = (q_e * L_ref * B_ref) / (rho_ref * U_ref);       // incude_coeff * n_ns * (u_ns - u_+) \times B  = momentum eqs source, n_ns: m^-3
-    momentum_hall_coeff = (B_ref * B_ref) / (mu0 * rho_ref * U_ref * U_ref); // momentum_hall_coeff * n_ns / n_e * \nabla\times B\times B = momentum eqs source
+    momentum_induce_coeff = (q_e * L_ref * B_ref * n_ref) / (rho_ref * U_ref); // incude_coeff * n_ns * (u_ns - u_+) \times B  = momentum eqs source, n_ns: m^-3
+    momentum_hall_coeff = (B_ref * B_ref) / (mu0 * rho_ref * U_ref * U_ref);   // momentum_hall_coeff * n_ns / n_e * \nabla\times B\times B = momentum eqs source
 
     inver_MA2 = ref.data["B_ref"] * ref.data["B_ref"] / (U_ref * U_ref * cst.data["mu_mag"] * rho_ref);
 
     inver_Rem = par->GetDou("eta_max_mercury") / (cst.data["mu_mag"] * U_ref * ref.data["L_ref"]);
 
-    double range = 0.1, cut = 0.05;
-    ne_hall_floor = range * ref.data["n"] / (rho_ref * NA); // equals to the dimension of rho_H(non_dimensional) / M_H : mol/kg
-    ne_hall_floor_dimensional = range * n_ref;
-    ne_hall_cut = cut * ref.data["n"] / (rho_ref * NA);
-    ne_hall_cut_dimensional = cut * n_ref;
+    ne_hall_floor = 0.01;                              // nondimensional
+    ne_hall_floor_dimensional = ne_hall_floor * n_ref; // dimension
+}
+
+void MercurySolver::Hall_Num_Limiter(double rhoH, double rhoNa, double *num)
+{
+    // const double nH_m = (rho_ref * rhoH) / m_H;    // #/m^3
+    // const double nNa_m = (rho_ref * rhoNa) / m_Na; // #/m^3
+
+    const double rhoH_pos = std::max(rhoH, 0.0);
+    const double rhoNa_pos = std::max(rhoNa, 0.0);
+
+    const double nH_ = rhoH_pos / M_H * M_ref;    // non-dimensional
+    const double nNa_ = rhoNa_pos / M_Na * M_ref; // non-dimensional
+    const double ne_true = nH_ + nNa_;
+
+    // 平滑 floor 后的总电子数密度
+    const double ne_lim = std::sqrt(ne_true * ne_true +
+                                    ne_hall_floor * ne_hall_floor);
+
+    double nH_lim = 0.0;
+    double nNa_lim = 0.0;
+
+    if (ne_true > 1e-300)
+    {
+        // 统一相似缩放：保持组分比例不变，同时保证 ne = nH + nNa
+        const double scale = ne_lim / ne_true;
+        nH_lim = scale * nH_;
+        nNa_lim = scale * nNa_;
+    }
+    else
+    {
+        // 真空/极低密区的退化情形：
+        // 这里比例本来就没有定义，给一个兜底组成。
+        // 最简单先全给 H；如果你有更合适的远场组成，也可改成远场比例。
+        nH_lim = ne_lim;
+        nNa_lim = 0.0;
+    }
+
+    num[0] = nH_lim;
+    num[1] = nNa_lim;
+    num[2] = ne_lim;
 }
 
 double MercurySolver::HallAlpha_Coeffient(double ne_true, double r)
 {
-    constexpr double eps = 1e-300;
+    // constexpr double eps = 1e-300;
 
-    const double ne_pos = std::max(ne_true, 0.0);
-    const double ne_eff = std::sqrt(ne_pos * ne_pos + ne_hall_floor * ne_hall_floor);
-    const double s_ne = ne_pos / (ne_pos + ne_hall_cut + eps);
+    // const double ne_pos = std::max(ne_true, 0.0);
+    // const double ne_eff = std::sqrt(ne_pos * ne_pos + ne_hall_floor * ne_hall_floor);
+    // const double s_ne = ne_pos / (ne_pos + ne_hall_cut + eps);
 
-    if (r <= 1.01)
-        return 0.0;
-    if (r >= 1.50)
-        return hall_coef * s_ne / ne_eff;
+    // if (r <= 1.01)
+    //     return 0.0;
+    // if (r >= 1.50)
+    //     return hall_coef * s_ne / ne_eff;
 
-    const double xi = (r - 1.01) / 0.49;
-    const double w = xi * xi * (3.0 - 2.0 * xi); // smoothstep
-    return hall_coef * s_ne / ne_eff * w;
+    // const double xi = (r - 1.01) / 0.49;
+    // const double w = xi * xi * (3.0 - 2.0 * xi); // smoothstep
+    // return hall_coef * s_ne / ne_eff * w;
+    return 0.0;
 }
 
 void MercurySolver::calc_PV()
@@ -157,22 +195,33 @@ void MercurySolver::calc_Uplus()
                     const double vNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 2) / rhoNa0 : 0.0;
                     const double wNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 3) / rhoNa0 : 0.0;
 
-                    const double nH = rhoH0;
-                    const double nNa = rhoNa0 * inv23;
-                    const double nt = nH + nNa;
+                    double num[3];
+                    Hall_Num_Limiter(rhoH0, rhoNa0, num);
 
-                    if (nt <= 0.0)
-                    {
-                        Up(i, j, k, 0) = 0.0;
-                        Up(i, j, k, 1) = 0.0;
-                        Up(i, j, k, 2) = 0.0;
-                    }
-                    else
-                    {
-                        Up(i, j, k, 0) = (nH * uH + nNa * uNa) / nt;
-                        Up(i, j, k, 1) = (nH * vH + nNa * vNa) / nt;
-                        Up(i, j, k, 2) = (nH * wH + nNa * wNa) / nt;
-                    }
+                    const double nH = num[0];
+                    const double nNa = num[1];
+                    const double ne = num[2];
+
+                    Up(i, j, k, 0) = (nH * uH + nNa * uNa) / ne;
+                    Up(i, j, k, 1) = (nH * vH + nNa * vNa) / ne;
+                    Up(i, j, k, 2) = (nH * wH + nNa * wNa) / ne;
+
+                    // const double nH = rhoH0;
+                    // const double nNa = rhoNa0 * inv23;
+                    // const double nt = nH + nNa;
+
+                    // if (nt <= 0.0)
+                    // {
+                    //     Up(i, j, k, 0) = 0.0;
+                    //     Up(i, j, k, 1) = 0.0;
+                    //     Up(i, j, k, 2) = 0.0;
+                    // }
+                    // else
+                    // {
+                    //     Up(i, j, k, 0) = (nH * uH + nNa * uNa) / nt;
+                    //     Up(i, j, k, 1) = (nH * vH + nNa * vNa) / nt;
+                    //     Up(i, j, k, 2) = (nH * wH + nNa * wNa) / nt;
+                    // }
                 }
     }
 }

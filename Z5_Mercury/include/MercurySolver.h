@@ -56,8 +56,6 @@ private:
     double dt_sub{0.0};
     double ne_hall_floor{0.0};
     double ne_hall_floor_dimensional{0.0};
-    double ne_hall_cut{0.0};
-    double ne_hall_cut_dimensional{0.0};
 
     double U_ref{0.0};
     double L_ref{0.0};
@@ -93,6 +91,7 @@ private:
     void calc_physical_constant(Param *par);
     void PrintMinMaxDiagnostics_();
     double HallAlpha_Coeffient(double ne_true, double r);
+    void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
     //=========================================================================
 
     //=========================================================================
