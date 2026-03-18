@@ -333,17 +333,17 @@ void MercurySolver::Time_Advance()
         // }
     }
 
-    for (int s = 0; s < nsub; ++s)
-    {
-        // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
-        AssembleRHS_Induction_CT_HallOnly_();
+    // for (int s = 0; s < nsub; ++s)
+    // {
+    //     // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
+    //     AssembleRHS_Induction_CT_HallOnly_();
 
-        // 只更新 Bface: Bface += dt_sub * RHS_b
-        ApplyUpdate_Euler_BfaceOnly_(dt_sub);
+    //     // 只更新 Bface: Bface += dt_sub * RHS_b
+    //     ApplyUpdate_Euler_BfaceOnly_(dt_sub);
 
-        // 更新后做一次 Bface 同步，供下一个子步算 J=curl(B)
-        mercury_bound_.Sync("Bface");
-    }
+    //     // 更新后做一次 Bface 同步，供下一个子步算 J=curl(B)
+    //     mercury_bound_.Sync("Bface");
+    // }
 }
 
 void MercurySolver::ZeroRHS_()

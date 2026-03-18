@@ -139,202 +139,202 @@ void MercurySolver::Compute_Timestep()
     //     std::fflush(stdout);
     // }
 
-    if (std::abs(hall_coef) > 0.0)
-    {
-        const double CFL_HALL = 1.0;
-        // const double ne_floor = ne_hall_floor; // same "prime" unit as your rho/M
-        const double h_eps = 1e-12;
-        const double B_floor = 1e-30;
+    // if (std::abs(hall_coef) > 0.0)
+    // {
+    //     const double CFL_HALL = 1.0;
+    //     // const double ne_floor = ne_hall_floor; // same "prime" unit as your rho/M
+    //     const double h_eps = 1e-12;
+    //     const double B_floor = 1e-30;
 
-        double dt_hall_min_l = 1e100;
+    //     double dt_hall_min_l = 1e100;
 
-        auto NUM_cell = [&](FieldBlock &UH, FieldBlock &UNa, int i, int j, int k) -> double
-        {
-            const double rhoH = std::max(0.0, UH(i, j, k, 0));
-            const double rhoN = std::max(0.0, UNa(i, j, k, 0));
-            return rhoH / M_H + rhoN / M_Na; // this is your n_e' (mol/kg), consistent with hall_coef
-        };
+    //     auto NUM_cell = [&](FieldBlock &UH, FieldBlock &UNa, int i, int j, int k) -> double
+    //     {
+    //         const double rhoH = std::max(0.0, UH(i, j, k, 0));
+    //         const double rhoN = std::max(0.0, UNa(i, j, k, 0));
+    //         return rhoH / M_H + rhoN / M_Na; // this is your n_e' (mol/kg), consistent with hall_coef
+    //     };
 
-        auto Bcell_vec = [&](FieldBlock &Bcel, int i, int j, int k, double &bx, double &by, double &bz)
-        {
-            bx = Bcel(i, j, k, 0);
-            by = Bcel(i, j, k, 1);
-            bz = Bcel(i, j, k, 2); // you said Bcell already includes Badd
-        };
+    //     auto Bcell_vec = [&](FieldBlock &Bcel, int i, int j, int k, double &bx, double &by, double &bz)
+    //     {
+    //         bx = Bcel(i, j, k, 0);
+    //         by = Bcel(i, j, k, 1);
+    //         bz = Bcel(i, j, k, 2); // you said Bcell already includes Badd
+    //     };
 
-        for (int ib = 0; ib < fld_->num_blocks(); ++ib)
-        {
-            auto &UH = fld_->field(fid_.fid_U_H, ib);
-            auto &UNa = fld_->field(fid_.fid_U_Na, ib);
-            auto &Bcel = fld_->field(fid_.fid_Bcell, ib);
+    //     for (int ib = 0; ib < fld_->num_blocks(); ++ib)
+    //     {
+    //         auto &UH = fld_->field(fid_.fid_U_H, ib);
+    //         auto &UNa = fld_->field(fid_.fid_U_Na, ib);
+    //         auto &Bcel = fld_->field(fid_.fid_Bcell, ib);
 
-            auto &dlx = fld_->field("dl_xi", ib);
-            auto &dle = fld_->field("dl_eta", ib);
-            auto &dlz = fld_->field("dl_zeta", ib); // may be absent
+    //         auto &dlx = fld_->field("dl_xi", ib);
+    //         auto &dle = fld_->field("dl_eta", ib);
+    //         auto &dlz = fld_->field("dl_zeta", ib); // may be absent
 
-            auto &x = grd_->grids(ib).x;
-            auto &y = grd_->grids(ib).y;
-            auto &z = grd_->grids(ib).z;
+    //         auto &x = grd_->grids(ib).x;
+    //         auto &y = grd_->grids(ib).y;
+    //         auto &z = grd_->grids(ib).z;
 
-            auto radius = [&](int i, int j, int k) -> double
-            {
-                double xx = x(i, j, k);
-                double yy = y(i, j, k);
-                double zz = z(i, j, k);
-                return std::sqrt(xx * xx + yy * yy + zz * zz);
-            };
+    //         auto radius = [&](int i, int j, int k) -> double
+    //         {
+    //             double xx = x(i, j, k);
+    //             double yy = y(i, j, k);
+    //             double zz = z(i, j, k);
+    //             return std::sqrt(xx * xx + yy * yy + zz * zz);
+    //         };
 
-            auto hall_factor_s = [&](double r) -> double
-            {
-                const double r0 = 1.0;   // 内边界
-                const double r1 = 1.017; // taper 外边界
+    //         auto hall_factor_s = [&](double r) -> double
+    //         {
+    //             const double r0 = 1.0;   // 内边界
+    //             const double r1 = 1.017; // taper 外边界
 
-                if (r <= r0)
-                    return 0.0;
-                if (r >= r1)
-                    return 1.0;
+    //             if (r <= r0)
+    //                 return 0.0;
+    //             if (r >= r1)
+    //                 return 1.0;
 
-                double xi = (r - r0) / (r1 - r0);  // 映射到 [0,1]
-                return xi * xi * (3.0 - 2.0 * xi); // smoothstep
-            };
+    //             double xi = (r - r0) / (r1 - r0);  // 映射到 [0,1]
+    //             return xi * xi * (3.0 - 2.0 * xi); // smoothstep
+    //         };
 
-            if (!UH.is_allocated() || !UNa.is_allocated() || !Bcel.is_allocated())
-                continue;
-            if (!dlx.is_allocated() || !dle.is_allocated())
-                continue;
+    //         if (!UH.is_allocated() || !UNa.is_allocated() || !Bcel.is_allocated())
+    //             continue;
+    //         if (!dlx.is_allocated() || !dle.is_allocated())
+    //             continue;
 
-            auto hmin2 = [&](int i, int j, int k) -> double
-            {
-                double hx = dlx.is_allocated() ? dlx(i, j, k, 0) : 1e100;
-                double he = dle.is_allocated() ? dle(i, j, k, 0) : 1e100;
-                double hz = dlz.is_allocated() ? dlz(i, j, k, 0) : 1e100;
-                double h = std::min(hx, std::min(he, hz));
-                if (h <= h_eps)
-                    return 0.0;
-                return h * h;
-            };
+    //         auto hmin2 = [&](int i, int j, int k) -> double
+    //         {
+    //             double hx = dlx.is_allocated() ? dlx(i, j, k, 0) : 1e100;
+    //             double he = dle.is_allocated() ? dle(i, j, k, 0) : 1e100;
+    //             double hz = dlz.is_allocated() ? dlz(i, j, k, 0) : 1e100;
+    //             double h = std::min(hx, std::min(he, hz));
+    //             if (h <= h_eps)
+    //                 return 0.0;
+    //             return h * h;
+    //         };
 
-            // ---------- EdgeXi loop (use dlx index space, but h uses local min) ----------
-            {
-                Int3 lo = dlx.inner_lo(), hi = dlx.inner_hi();
-                for (int i = lo.i; i < hi.i; ++i)
-                    for (int j = lo.j; j < hi.j; ++j)
-                        for (int k = lo.k; k < hi.k; ++k)
-                        {
-                            const double h2 = hmin2(i, j, k);
-                            if (h2 <= 0.0)
-                                continue;
+    //         // ---------- EdgeXi loop (use dlx index space, but h uses local min) ----------
+    //         {
+    //             Int3 lo = dlx.inner_lo(), hi = dlx.inner_hi();
+    //             for (int i = lo.i; i < hi.i; ++i)
+    //                 for (int j = lo.j; j < hi.j; ++j)
+    //                     for (int k = lo.k; k < hi.k; ++k)
+    //                     {
+    //                         const double h2 = hmin2(i, j, k);
+    //                         if (h2 <= 0.0)
+    //                             continue;
 
-                            // ne' at xi-edge: avg 4 surrounding cells in (j,k)
-                            const double ne = 0.25 * (NUM_cell(UH, UNa, i, j, k) + NUM_cell(UH, UNa, i, j - 1, k) + NUM_cell(UH, UNa, i, j, k - 1) + NUM_cell(UH, UNa, i, j - 1, k - 1));
-                            // const double ne_eff = ne + ne_floor;
-                            const double ne_true = ne;
-                            // 1) 平滑 floor（避免 max 的硬拐点）
-                            const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
-                            // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
-                            const double s = ne_true / (ne_true + ne_hall_cut);
+    //                         // ne' at xi-edge: avg 4 surrounding cells in (j,k)
+    //                         const double ne = 0.25 * (NUM_cell(UH, UNa, i, j, k) + NUM_cell(UH, UNa, i, j - 1, k) + NUM_cell(UH, UNa, i, j, k - 1) + NUM_cell(UH, UNa, i, j - 1, k - 1));
+    //                         // const double ne_eff = ne + ne_floor;
+    //                         const double ne_true = ne;
+    //                         // 1) 平滑 floor（避免 max 的硬拐点）
+    //                         const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
+    //                         // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
+    //                         const double s = ne_true / (ne_true + ne_hall_cut);
 
-                            // B at same edge location: avg same 4 cells (vector)
-                            double bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2, bx3, by3, bz3;
-                            Bcell_vec(Bcel, i, j, k, bx0, by0, bz0);
-                            Bcell_vec(Bcel, i, j - 1, k, bx1, by1, bz1);
-                            Bcell_vec(Bcel, i, j, k - 1, bx2, by2, bz2);
-                            Bcell_vec(Bcel, i, j - 1, k - 1, bx3, by3, bz3);
-                            const double bx = 0.25 * (bx0 + bx1 + bx2 + bx3);
-                            const double by = 0.25 * (by0 + by1 + by2 + by3);
-                            const double bz = 0.25 * (bz0 + bz1 + bz2 + bz3);
-                            const double Babs = std::sqrt(bx * bx + by * by + bz * bz);
-                            if (Babs <= B_floor)
-                                continue;
+    //                         // B at same edge location: avg same 4 cells (vector)
+    //                         double bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2, bx3, by3, bz3;
+    //                         Bcell_vec(Bcel, i, j, k, bx0, by0, bz0);
+    //                         Bcell_vec(Bcel, i, j - 1, k, bx1, by1, bz1);
+    //                         Bcell_vec(Bcel, i, j, k - 1, bx2, by2, bz2);
+    //                         Bcell_vec(Bcel, i, j - 1, k - 1, bx3, by3, bz3);
+    //                         const double bx = 0.25 * (bx0 + bx1 + bx2 + bx3);
+    //                         const double by = 0.25 * (by0 + by1 + by2 + by3);
+    //                         const double bz = 0.25 * (bz0 + bz1 + bz2 + bz3);
+    //                         const double Babs = std::sqrt(bx * bx + by * by + bz * bz);
+    //                         if (Babs <= B_floor)
+    //                             continue;
 
-                            // dt_hall' = CFL * h^2 * (ne'+floor) / (|hall_coef| * |B|)
-                            double fac = hall_factor_s(radius(i, j, k));
-                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
-                            dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
-                        }
-            }
+    //                         // dt_hall' = CFL * h^2 * (ne'+floor) / (|hall_coef| * |B|)
+    //                         double fac = hall_factor_s(radius(i, j, k));
+    //                         const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
+    //                         dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
+    //                     }
+    //         }
 
-            // ---------- EdgeEta loop ----------
-            {
-                Int3 lo = dle.inner_lo(), hi = dle.inner_hi();
-                for (int i = lo.i; i < hi.i; ++i)
-                    for (int j = lo.j; j < hi.j; ++j)
-                        for (int k = lo.k; k < hi.k; ++k)
-                        {
-                            const double h2 = hmin2(i, j, k);
-                            if (h2 <= 0.0)
-                                continue;
+    //         // ---------- EdgeEta loop ----------
+    //         {
+    //             Int3 lo = dle.inner_lo(), hi = dle.inner_hi();
+    //             for (int i = lo.i; i < hi.i; ++i)
+    //                 for (int j = lo.j; j < hi.j; ++j)
+    //                     for (int k = lo.k; k < hi.k; ++k)
+    //                     {
+    //                         const double h2 = hmin2(i, j, k);
+    //                         if (h2 <= 0.0)
+    //                             continue;
 
-                            const double ne = 0.25 * (NUM_cell(UH, UNa, i, j, k) + NUM_cell(UH, UNa, i - 1, j, k) + NUM_cell(UH, UNa, i, j, k - 1) + NUM_cell(UH, UNa, i - 1, j, k - 1));
-                            // const double ne_eff = ne + ne_floor;
-                            const double ne_true = ne;
-                            // 1) 平滑 floor（避免 max 的硬拐点）
-                            const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
-                            // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
-                            const double s = ne_true / (ne_true + ne_hall_cut);
+    //                         const double ne = 0.25 * (NUM_cell(UH, UNa, i, j, k) + NUM_cell(UH, UNa, i - 1, j, k) + NUM_cell(UH, UNa, i, j, k - 1) + NUM_cell(UH, UNa, i - 1, j, k - 1));
+    //                         // const double ne_eff = ne + ne_floor;
+    //                         const double ne_true = ne;
+    //                         // 1) 平滑 floor（避免 max 的硬拐点）
+    //                         const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
+    //                         // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
+    //                         const double s = ne_true / (ne_true + ne_hall_cut);
 
-                            double bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2, bx3, by3, bz3;
-                            Bcell_vec(Bcel, i, j, k, bx0, by0, bz0);
-                            Bcell_vec(Bcel, i - 1, j, k, bx1, by1, bz1);
-                            Bcell_vec(Bcel, i, j, k - 1, bx2, by2, bz2);
-                            Bcell_vec(Bcel, i - 1, j, k - 1, bx3, by3, bz3);
-                            const double bx = 0.25 * (bx0 + bx1 + bx2 + bx3);
-                            const double by = 0.25 * (by0 + by1 + by2 + by3);
-                            const double bz = 0.25 * (bz0 + bz1 + bz2 + bz3);
-                            const double Babs = std::sqrt(bx * bx + by * by + bz * bz);
-                            if (Babs <= B_floor)
-                                continue;
+    //                         double bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2, bx3, by3, bz3;
+    //                         Bcell_vec(Bcel, i, j, k, bx0, by0, bz0);
+    //                         Bcell_vec(Bcel, i - 1, j, k, bx1, by1, bz1);
+    //                         Bcell_vec(Bcel, i, j, k - 1, bx2, by2, bz2);
+    //                         Bcell_vec(Bcel, i - 1, j, k - 1, bx3, by3, bz3);
+    //                         const double bx = 0.25 * (bx0 + bx1 + bx2 + bx3);
+    //                         const double by = 0.25 * (by0 + by1 + by2 + by3);
+    //                         const double bz = 0.25 * (bz0 + bz1 + bz2 + bz3);
+    //                         const double Babs = std::sqrt(bx * bx + by * by + bz * bz);
+    //                         if (Babs <= B_floor)
+    //                             continue;
 
-                            double fac = hall_factor_s(radius(i, j, k));
-                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
-                            dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
-                        }
-            }
+    //                         double fac = hall_factor_s(radius(i, j, k));
+    //                         const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
+    //                         dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
+    //                     }
+    //         }
 
-            // ---------- EdgeZeta loop (only if dlz exists) ----------
-            if (dlz.is_allocated())
-            {
-                Int3 lo = dlz.inner_lo(), hi = dlz.inner_hi();
-                for (int i = lo.i; i < hi.i; ++i)
-                    for (int j = lo.j; j < hi.j; ++j)
-                        for (int k = lo.k; k < hi.k; ++k)
-                        {
-                            const double h2 = hmin2(i, j, k);
-                            if (h2 <= 0.0)
-                                continue;
+    //         // ---------- EdgeZeta loop (only if dlz exists) ----------
+    //         if (dlz.is_allocated())
+    //         {
+    //             Int3 lo = dlz.inner_lo(), hi = dlz.inner_hi();
+    //             for (int i = lo.i; i < hi.i; ++i)
+    //                 for (int j = lo.j; j < hi.j; ++j)
+    //                     for (int k = lo.k; k < hi.k; ++k)
+    //                     {
+    //                         const double h2 = hmin2(i, j, k);
+    //                         if (h2 <= 0.0)
+    //                             continue;
 
-                            const double ne = 0.25 * (NUM_cell(UH, UNa, i, j, k) + NUM_cell(UH, UNa, i - 1, j, k) + NUM_cell(UH, UNa, i, j - 1, k) + NUM_cell(UH, UNa, i - 1, j - 1, k));
-                            // const double ne_eff = ne + ne_floor;
-                            const double ne_true = ne;
-                            // 1) 平滑 floor（避免 max 的硬拐点）
-                            const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
-                            // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
-                            const double s = ne_true / (ne_true + ne_hall_cut);
+    //                         const double ne = 0.25 * (NUM_cell(UH, UNa, i, j, k) + NUM_cell(UH, UNa, i - 1, j, k) + NUM_cell(UH, UNa, i, j - 1, k) + NUM_cell(UH, UNa, i - 1, j - 1, k));
+    //                         // const double ne_eff = ne + ne_floor;
+    //                         const double ne_true = ne;
+    //                         // 1) 平滑 floor（避免 max 的硬拐点）
+    //                         const double ne_eff = std::sqrt(ne_true * ne_true + ne_hall_floor * ne_hall_floor);
+    //                         // 2) 平滑 taper（替代 hard cut；ne_cut_hall 控制过渡宽度）
+    //                         const double s = ne_true / (ne_true + ne_hall_cut);
 
-                            double bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2, bx3, by3, bz3;
-                            Bcell_vec(Bcel, i, j, k, bx0, by0, bz0);
-                            Bcell_vec(Bcel, i - 1, j, k, bx1, by1, bz1);
-                            Bcell_vec(Bcel, i, j - 1, k, bx2, by2, bz2);
-                            Bcell_vec(Bcel, i - 1, j - 1, k, bx3, by3, bz3);
-                            const double bx = 0.25 * (bx0 + bx1 + bx2 + bx3);
-                            const double by = 0.25 * (by0 + by1 + by2 + by3);
-                            const double bz = 0.25 * (bz0 + bz1 + bz2 + bz3);
-                            const double Babs = std::sqrt(bx * bx + by * by + bz * bz);
-                            if (Babs <= B_floor)
-                                continue;
+    //                         double bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2, bx3, by3, bz3;
+    //                         Bcell_vec(Bcel, i, j, k, bx0, by0, bz0);
+    //                         Bcell_vec(Bcel, i - 1, j, k, bx1, by1, bz1);
+    //                         Bcell_vec(Bcel, i, j - 1, k, bx2, by2, bz2);
+    //                         Bcell_vec(Bcel, i - 1, j - 1, k, bx3, by3, bz3);
+    //                         const double bx = 0.25 * (bx0 + bx1 + bx2 + bx3);
+    //                         const double by = 0.25 * (by0 + by1 + by2 + by3);
+    //                         const double bz = 0.25 * (bz0 + bz1 + bz2 + bz3);
+    //                         const double Babs = std::sqrt(bx * bx + by * by + bz * bz);
+    //                         if (Babs <= B_floor)
+    //                             continue;
 
-                            double fac = hall_factor_s(radius(i, j, k));
-                            const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
-                            dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
-                        }
-            }
-        }
+    //                         double fac = hall_factor_s(radius(i, j, k));
+    //                         const double dt_try = CFL_HALL * h2 / s * ne_eff / (fac * std::abs(hall_coef) * Babs + 1e-300);
+    //                         dt_hall_min_l = std::min(dt_hall_min_l, dt_try);
+    //                     }
+    //         }
+    //     }
 
-        double dt_hall_min_g = dt_hall_min_l;
-        PARALLEL::mpi_min(&dt_hall_min_l, &dt_hall_min_g, 1);
+    //     double dt_hall_min_g = dt_hall_min_l;
+    //     PARALLEL::mpi_min(&dt_hall_min_l, &dt_hall_min_g, 1);
 
-        dt_hall_min_local = std::min(dt_hall_min_local, dt_hall_min_g);
-    }
+    //     dt_hall_min_local = std::min(dt_hall_min_local, dt_hall_min_g);
+    // }
 
     // MPI 全局最小 dt
     double dt_global = dt_local;
