@@ -12,7 +12,7 @@ void MercurySolver::AddIdealEdgeEMF_()
             continue;
         auto &Bcell = fld_->field(fid_.fid_Bcell, iblk);
         //  三方向：通量 + ideal face EMF
-        for (int dir = 0; dir < 3; ++dir)
+        for (int dir = 1; dir <= 3; ++dir)
         {
             auto &E_face = fld_->field(fid_.fid_Eface.at(dir), iblk);
             auto &B_face = fld_->field(fid_.fid_B.at(dir), iblk);
