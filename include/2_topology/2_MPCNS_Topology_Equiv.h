@@ -169,8 +169,8 @@ namespace TOPO
             edge_owner.clear();
             edge_is_owner.clear();
 
-            std::unordered_map<EdgeLocalID, int, EdgeLocalID::Hash> edge_owner_gid;
-            std::unordered_map<int, EdgeLocalID> gid2edge_owner;
+            edge_owner_gid.clear();
+            gid2edge_owner.clear();
 
             int n_local_edge_owner = 0;
             int n_global_edge_owner = 0;
