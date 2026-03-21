@@ -11,7 +11,13 @@
 #include "4_halo/1_MPCNS_Halo.h"
 
 #include "MercurySolver.h"
+
+#define HALL_IMPLICIT
+#ifdef HALL_IMPLICIT
+#include "2_topology/2_MPCNS_Topology_Equiv.h"
+#include "4_halo/1_MPCNS_Halo_EdgeOwner.h"
 // #include "4_solver/ImplicitHall_Solver.h"
+#endif
 //==============================================================================
 
 //==============================================================================
@@ -39,6 +45,10 @@ int main(int arg, char **argv)
     //--------------------------------------------------------------------------
     // Build topology
     TOPO::Topology topology = TOPO::build_topology(*grd, myid, par->GetInt("dimension"));
+#ifdef HALL_IMPLICIT
+    TOPO::TopologyEquiv topo_equiv;
+    TOPO::build_topology_equiv(topology, *grd, myid, par->GetInt("dimension"), topo_equiv);
+#endif
     //--------------------------------------------------------------------------
     int ngg = par->GetInt("ngg");
     // Build Field
@@ -162,8 +172,20 @@ int main(int arg, char **argv)
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
     fieldname = "J_zeta";
     hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "Ehall_xi";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "Ehall_eta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
+    fieldname = "Ehall_zeta";
+    hal->register_halo_field(fieldname, HaloLevel::Vertex);
     // Build halo communicator patterns between blocks with same fields and coupling fields
     hal->build_registered_patterns();
+    //--------------------------------------------------------------------------
+    // Build Owner Sync Pattern for Hall Implicit Process
+#ifdef HALL_IMPLICIT
+    HALO_OWNER::EdgeOwnerSyncPattern edge_owner_pattern;
+    HALO_OWNER::build_edge_owner_sync_pattern(topo_equiv, edge_owner_pattern);
+#endif
     //=============================================================================================
 
     //=============================================================================================

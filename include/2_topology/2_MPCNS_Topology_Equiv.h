@@ -214,7 +214,7 @@ namespace TOPO
 
     void build_topology_equiv(
         const Topology &topo,
-        const Grid &grid,
+        Grid &grid,
         int my_rank,
         int dimension,
         TopologyEquiv &equiv);
