@@ -73,14 +73,14 @@ namespace HALO_OWNER
     // rep(comp) = sign * owner(comp)
     void sync_edge_1form(
         Field &fld,
-        IdTriplet &field_id,
+        const IdTriplet &field_id,
         const EdgeOwnerSyncPattern &pattern);
 
     // Treat every component on edge as a Cartesian vector component:
     // rep(comp) = owner(comp)
     void sync_edge_vec(
         Field &fld,
-        IdTriplet &field_id,
+        const IdTriplet &field_id,
         const EdgeOwnerSyncPattern &pattern);
 
     void pack_owner_edge_1form_local(
