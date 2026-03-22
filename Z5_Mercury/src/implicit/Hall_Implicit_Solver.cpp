@@ -44,6 +44,13 @@ void ImplicitHallSolver::Setup(Grid *grd,
 
     x_local_.resize(static_cast<size_t>(equiv_.n_local_edge_owner), 0.0);
     eh_pred_local_.resize(static_cast<size_t>(equiv_.n_local_edge_owner), 0.0);
+
+    HALO_OWNER::gather_local_owner_edges_sorted(equiv_, owner_edges_sorted_);
+    if (static_cast<int>(owner_edges_sorted_.size()) != equiv_.n_local_edge_owner)
+    {
+        throw std::runtime_error(
+            "ImplicitHallSolver::Setup: owner_edges_sorted_ size mismatch.");
+    }
 }
 
 void ImplicitHallSolver::CheckReady_() const
@@ -143,7 +150,7 @@ void ImplicitHallSolver::SolveOneStep(double dt)
 
     // 2) 初值：拿当前显式/上一步的 Ehall 当 guess
     HALO_OWNER::pack_owner_edge_1form_local(
-        *fld_, fid_.fid_Ehall, equiv_, x_local_);
+        *fld_, fid_.fid_Ehall, equiv_, owner_edges_sorted_, x_local_);
 
     PetscScalar *xarr = nullptr;
     VecGetArray(X_, &xarr);

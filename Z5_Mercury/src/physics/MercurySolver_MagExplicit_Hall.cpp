@@ -49,43 +49,6 @@ void MercurySolver::AddHallEdgeEMF_()
     mercury_bound_.Sync("Ehall");
 
     // 6) 加到总 E 上
-    for (int ib = 0; ib < fld_->num_blocks(); ++ib)
-    {
-        auto &E_xi = fld_->field(fid_.fid_E.xi, ib);
-        auto &E_et = fld_->field(fid_.fid_E.eta, ib);
-        auto &E_ze = fld_->field(fid_.fid_E.zeta, ib);
-
-        auto &EH_xi = fld_->field(fid_.fid_Ehall.xi, ib);
-        auto &EH_et = fld_->field(fid_.fid_Ehall.eta, ib);
-        auto &EH_ze = fld_->field(fid_.fid_Ehall.zeta, ib);
-
-        if (E_xi.is_allocated())
-        {
-            Int3 lo = E_xi.inner_lo(), hi = E_xi.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        E_xi(i, j, k, 0) += EH_xi(i, j, k, 0);
-        }
-
-        if (E_et.is_allocated())
-        {
-            Int3 lo = E_et.inner_lo(), hi = E_et.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        E_et(i, j, k, 0) += EH_et(i, j, k, 0);
-        }
-
-        if (E_ze.is_allocated())
-        {
-            Int3 lo = E_ze.inner_lo(), hi = E_ze.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        E_ze(i, j, k, 0) += EH_ze(i, j, k, 0);
-        }
-    }
 }
 // void MercurySolver::AddHallEdgeEMF_()
 // {
@@ -349,157 +312,104 @@ void MercurySolver::AddHallEdgeEMF_()
 
 void MercurySolver::BuildHallFaceEMF_Rusanov_()
 {
-    constexpr double eps = 1e-300;
-    constexpr double Cwh = 1.0;   // 先取 1.0，后面可调 0.5~2
-    constexpr double C_eta = 0.0; // 先关掉额外人工耗散
+    constexpr double eps = 1e-14;
+    const double Cwh = 0.5;
 
-    auto cross3 = [](const std::array<double, 3> &a,
-                     const std::array<double, 3> &b) -> std::array<double, 3>
+    auto norm3 = [](double x, double y, double z) -> double
     {
-        return {
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0]};
-    };
-
-    auto dot3 = [](const std::array<double, 3> &a,
-                   const std::array<double, 3> &b) -> double
-    {
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    };
-
-    auto norm3 = [&](const std::array<double, 3> &a) -> double
-    {
-        return std::sqrt(dot3(a, a));
-    };
-
-    auto plus3 = [](const std::array<double, 3> &a,
-                    const std::array<double, 3> &b) -> std::array<double, 3>
-    {
-        return {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
-    };
-
-    auto minus3 = [](const std::array<double, 3> &a,
-                     const std::array<double, 3> &b) -> std::array<double, 3>
-    {
-        return {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
-    };
-
-    auto scale3 = [](const std::array<double, 3> &a, double s) -> std::array<double, 3>
-    {
-        return {s * a[0], s * a[1], s * a[2]};
-    };
-
-    auto proj_tangent = [&](const std::array<double, 3> &E,
-                            const std::array<double, 3> &n) -> std::array<double, 3>
-    {
-        double En = dot3(E, n);
-        return {
-            E[0] - En * n[0],
-            E[1] - En * n[1],
-            E[2] - En * n[2]};
+        return std::sqrt(x * x + y * y + z * z);
     };
 
     const int nb = fld_->num_blocks();
 
-    // auto hall_alpha_from_ne = [&](double ne_true, double r) -> double
-    // {
-    //     const double ne_pos = std::max(ne_true, 0.0);
-    //     const double ne_eff = std::sqrt(ne_pos * ne_pos + ne_hall_floor * ne_hall_floor);
-    //     const double s_ne = ne_pos / (ne_pos + ne_hall_cut + eps);
-
-    //     if (r <= 1.01)
-    //         return 0.0;
-    //     if (r >= 1.50)
-    //         return hall_coef * s_ne / ne_eff;
-
-    //     const double xi = (r - 1.01) / 0.49;
-    //     const double w = xi * xi * (3.0 - 2.0 * xi); // smoothstep
-    //     return hall_coef * s_ne / ne_eff * w;
-    // };
-
     for (int ib = 0; ib < nb; ++ib)
     {
-        auto &UH = fld_->field(fid_.fid_U_H, ib);
+        auto &Bc = fld_->field(fid_.fid_Bcell, ib); // total B on cells
+        auto &Binduce = fld_->field(fid_.fid_Bindcell, ib);
+        auto &Jc = fld_->field(fid_.fid_Jcell, ib);
+
+        auto &UH = fld_->field(fid_.fid_U_H, ib); // rho_H etc.
         auto &UNa = fld_->field(fid_.fid_U_Na, ib);
-        auto &Jc = fld_->field("J_cell", ib);               // 3 comps
-        auto &Bc = fld_->field(fid_.fid_Bcell, ib);         // 3 comps, total B
-        auto &Binduce = fld_->field(fid_.fid_Bindcell, ib); // 3 comps, total B
-
-        auto &JDxi = fld_->field("JDxi", ib);
-        auto &JDet = fld_->field("JDet", ib);
-        auto &JDze = fld_->field("JDze", ib);
-
-        auto &dlst_xi = fld_->field("dlstar_xi", ib);
-        auto &dlst_et = fld_->field("dlstar_eta", ib);
-        auto &dlst_ze = fld_->field("dlstar_zeta", ib);
 
         auto &Efxi = fld_->field(fid_.fid_Eface.xi, ib);
         auto &Efet = fld_->field(fid_.fid_Eface.eta, ib);
         auto &Efze = fld_->field(fid_.fid_Eface.zeta, ib);
 
-        auto &cx = grd_->grids(ib).dual_x;
-        auto &cy = grd_->grids(ib).dual_y;
-        auto &cz = grd_->grids(ib).dual_z;
+        auto &JDxi = fld_->field(fid_.fid_metric.xi, ib);
+        auto &JDet = fld_->field(fid_.fid_metric.eta, ib);
+        auto &JDze = fld_->field(fid_.fid_metric.zeta, ib);
 
-        if (!UH.is_allocated() || !UNa.is_allocated() || !Jc.is_allocated() ||
-            !Bc.is_allocated() || !Efxi.is_allocated())
+        auto &dlst_xi = fld_->field("dlstar_xi", ib);
+        auto &dlst_et = fld_->field("dlstar_eta", ib);
+        auto &dlst_ze = fld_->field("dlstar_zeta", ib);
+
+        if (!Bc.is_allocated() || !Binduce.is_allocated() || !Jc.is_allocated() ||
+            !UH.is_allocated() || !UNa.is_allocated() ||
+            !Efxi.is_allocated() || !Efet.is_allocated() || !Efze.is_allocated())
+        {
+            continue;
+        }
+
+        // ============================================================
+        // 1) 先在 cell 上预计算：
+        //    Ehc = alpha * (J x B), beta_hall = |hall_coef|*|B|/ne_lim
+        // ============================================================
+
+        Int3 clo = Bc.get_lo();
+        Int3 chi = Bc.get_hi();
+
+        const int ni = chi.i - clo.i;
+        const int nj = chi.j - clo.j;
+        const int nk = chi.k - clo.k;
+
+        if (ni <= 0 || nj <= 0 || nk <= 0)
             continue;
 
-        auto ne_cell = [&](int i, int j, int k) -> double
+        const std::size_t nc =
+            static_cast<std::size_t>(ni) *
+            static_cast<std::size_t>(nj) *
+            static_cast<std::size_t>(nk);
+
+        std::vector<double> Ehc_x(nc), Ehc_y(nc), Ehc_z(nc);
+        std::vector<double> beta_hall(nc);
+
+        auto idx = [&](int i, int j, int k) -> std::size_t
         {
-            return UH(i, j, k, 0) / M_H + UNa(i, j, k, 0) / M_Na;
+            return (static_cast<std::size_t>(i - clo.i) * nj +
+                    static_cast<std::size_t>(j - clo.j)) *
+                       nk +
+                   static_cast<std::size_t>(k - clo.k);
         };
 
-        auto r_cell = [&](int i, int j, int k) -> double
-        {
-            double x0 = cx(i + 1, j + 1, k + 1);
-            double y0 = cy(i + 1, j + 1, k + 1);
-            double z0 = cz(i + 1, j + 1, k + 1);
-            return std::sqrt(x0 * x0 + y0 * y0 + z0 * z0);
-        };
+        for (int i = clo.i; i < chi.i; ++i)
+            for (int j = clo.j; j < chi.j; ++j)
+                for (int k = clo.k; k < chi.k; ++k)
+                {
+                    const std::size_t id = idx(i, j, k);
 
-        auto B_cell = [&](int i, int j, int k) -> std::array<double, 3>
-        {
-            return {Bc(i, j, k, 0), Bc(i, j, k, 1), Bc(i, j, k, 2)};
-        };
+                    double num[3];
+                    Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                    const double ne = num[2];
+                    const double alpha = hall_coef / ne;
 
-        auto Bind_cell = [&](int i, int j, int k) -> std::array<double, 3>
-        {
-            return {Binduce(i, j, k, 0), Binduce(i, j, k, 1), Binduce(i, j, k, 2)};
-        };
+                    const double Jx = Jc(i, j, k, 0);
+                    const double Jy = Jc(i, j, k, 1);
+                    const double Jz = Jc(i, j, k, 2);
 
-        auto J_cell = [&](int i, int j, int k) -> std::array<double, 3>
-        {
-            return {Jc(i, j, k, 0), Jc(i, j, k, 1), Jc(i, j, k, 2)};
-        };
+                    const double Bx = Bc(i, j, k, 0);
+                    const double By = Bc(i, j, k, 1);
+                    const double Bz = Bc(i, j, k, 2);
 
-        auto Ehall_cell = [&](int i, int j, int k) -> std::array<double, 3>
-        {
-            std::array<double, 3> J = {
-                Jc(i, j, k, 0),
-                Jc(i, j, k, 1),
-                Jc(i, j, k, 2)};
+                    Ehc_x[id] = alpha * (Jy * Bz - Jz * By);
+                    Ehc_y[id] = alpha * (Jz * Bx - Jx * Bz);
+                    Ehc_z[id] = alpha * (Jx * By - Jy * Bx);
 
-            std::array<double, 3> B = {
-                Bc(i, j, k, 0),
-                Bc(i, j, k, 1),
-                Bc(i, j, k, 2)};
+                    beta_hall[id] = std::abs(hall_coef) * norm3(Bx, By, Bz) / ne;
+                }
 
-            double num[3];
-            Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
-
-            const double ne = num[2];            // limited electron density
-            const double alpha = hall_coef / ne; // unified Hall coefficient
-
-            auto E = cross3(J, B);
-            E = scale3(E, alpha);
-            return E;
-        };
-
-        // --------------------------------------------------------
-        // xi-face : face(i,j,k) separates cell(i-1,j,k) and cell(i,j,k)
-        // --------------------------------------------------------
+        // ============================================================
+        // 2) xi-face
+        // ============================================================
         {
             Int3 lo = Efxi.inner_lo();
             Int3 hi = Efxi.inner_hi();
@@ -508,50 +418,71 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                     {
-                        int iL = i - 1, iR = i;
+                        const int iL = i - 1;
+                        const int iR = i;
 
-                        std::array<double, 3> BL = Bind_cell(iL, j, k);
-                        std::array<double, 3> BR = Bind_cell(iR, j, k);
-                        std::array<double, 3> BL_all = B_cell(iL, j, k);
-                        std::array<double, 3> BR_all = B_cell(iR, j, k);
-                        std::array<double, 3> EL = Ehall_cell(iL, j, k);
-                        std::array<double, 3> ER = Ehall_cell(iR, j, k);
+                        const std::size_t idL = idx(iL, j, k);
+                        const std::size_t idR = idx(iR, j, k);
 
-                        std::array<double, 3> S = {
-                            JDxi(i, j, k, 0), JDxi(i, j, k, 1), JDxi(i, j, k, 2)};
-                        double Smag = norm3(S) + eps;
-                        std::array<double, 3> n = {S[0] / Smag, S[1] / Smag, S[2] / Smag};
+                        // 左右 cell 的 Hall central EMF
+                        double ELx = Ehc_x[idL], ELy = Ehc_y[idL], ELz = Ehc_z[idL];
+                        double ERx = Ehc_x[idR], ERy = Ehc_y[idR], ERz = Ehc_z[idR];
 
-                        EL = proj_tangent(EL, n);
-                        ER = proj_tangent(ER, n);
+                        // 面法向：n = S/|S|
+                        const double Sx = JDxi(i, j, k, 0);
+                        const double Sy = JDxi(i, j, k, 1);
+                        const double Sz = JDxi(i, j, k, 2);
 
-                        double numL[3], numR[3];
-                        Hall_Num_Limiter(UH(iL, j, k, 0), UNa(iL, j, k, 0), numL);
-                        Hall_Num_Limiter(UH(iR, j, k, 0), UNa(iR, j, k, 0), numR);
+                        const double Smag = norm3(Sx, Sy, Sz) + eps;
+                        const double nx = Sx / Smag;
+                        const double ny = Sy / Smag;
+                        const double nz = Sz / Smag;
 
-                        const double neL_lim = numL[2];
-                        const double neR_lim = numR[2];
+                        // 切向投影
+                        {
+                            const double En = ELx * nx + ELy * ny + ELz * nz;
+                            ELx -= En * nx;
+                            ELy -= En * ny;
+                            ELz -= En * nz;
+                        }
+                        {
+                            const double En = ERx * nx + ERy * ny + ERz * nz;
+                            ERx -= En * nx;
+                            ERy -= En * ny;
+                            ERz -= En * nz;
+                        }
 
-                        double aL = std::abs(hall_coef) / neL_lim;
-                        double aR = std::abs(hall_coef) / neR_lim;
+                        // Rusanov Hall speed
+                        const double h_n = std::max(dlst_xi(i, j, k, 0), eps);
+                        const double sH = Cwh * std::max(beta_hall[idL], beta_hall[idR]) / h_n;
 
-                        double h_n = std::max(dlst_xi(i, j, k, 0), eps);
-                        double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
+                        // induced B jump
+                        const double BLx = Binduce(iL, j, k, 0);
+                        const double BLy = Binduce(iL, j, k, 1);
+                        const double BLz = Binduce(iL, j, k, 2);
 
-                        std::array<double, 3> Ecen = scale3(plus3(EL, ER), 0.5);
-                        std::array<double, 3> dB = minus3(BR, BL);
-                        std::array<double, 3> Ediss = scale3(cross3(n, dB), 0.5 * sH);
-                        std::array<double, 3> Ef = plus3(Ecen, Ediss);
+                        const double BRx = Binduce(iR, j, k, 0);
+                        const double BRy = Binduce(iR, j, k, 1);
+                        const double BRz = Binduce(iR, j, k, 2);
 
-                        Efxi(i, j, k, 0) = Ef[0];
-                        Efxi(i, j, k, 1) = Ef[1];
-                        Efxi(i, j, k, 2) = Ef[2];
+                        const double dBx = BRx - BLx;
+                        const double dBy = BRy - BLy;
+                        const double dBz = BRz - BLz;
+
+                        // cross(n, dB)
+                        const double cx = ny * dBz - nz * dBy;
+                        const double cy = nz * dBx - nx * dBz;
+                        const double cz = nx * dBy - ny * dBx;
+
+                        Efxi(i, j, k, 0) = 0.5 * (ELx + ERx) + 0.5 * sH * cx;
+                        Efxi(i, j, k, 1) = 0.5 * (ELy + ERy) + 0.5 * sH * cy;
+                        Efxi(i, j, k, 2) = 0.5 * (ELz + ERz) + 0.5 * sH * cz;
                     }
         }
 
-        // --------------------------------------------------------
-        // eta-face : face(i,j,k) separates cell(i,j-1,k) and cell(i,j,k)
-        // --------------------------------------------------------
+        // ============================================================
+        // 3) eta-face
+        // ============================================================
         {
             Int3 lo = Efet.inner_lo();
             Int3 hi = Efet.inner_hi();
@@ -560,48 +491,65 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                     {
-                        int jL = j - 1, jR = j;
+                        const int jL = j - 1;
+                        const int jR = j;
 
-                        std::array<double, 3> BL = Bind_cell(i, jL, k);
-                        std::array<double, 3> BR = Bind_cell(i, jR, k);
-                        std::array<double, 3> BL_all = B_cell(i, jL, k);
-                        std::array<double, 3> BR_all = B_cell(i, jR, k);
-                        std::array<double, 3> EL = Ehall_cell(i, jL, k);
-                        std::array<double, 3> ER = Ehall_cell(i, jR, k);
+                        const std::size_t idL = idx(i, jL, k);
+                        const std::size_t idR = idx(i, jR, k);
 
-                        std::array<double, 3> S = {
-                            JDet(i, j, k, 0), JDet(i, j, k, 1), JDet(i, j, k, 2)};
-                        double Smag = norm3(S) + eps;
-                        std::array<double, 3> n = {S[0] / Smag, S[1] / Smag, S[2] / Smag};
+                        double ELx = Ehc_x[idL], ELy = Ehc_y[idL], ELz = Ehc_z[idL];
+                        double ERx = Ehc_x[idR], ERy = Ehc_y[idR], ERz = Ehc_z[idR];
 
-                        EL = proj_tangent(EL, n);
-                        ER = proj_tangent(ER, n);
+                        const double Sx = JDet(i, j, k, 0);
+                        const double Sy = JDet(i, j, k, 1);
+                        const double Sz = JDet(i, j, k, 2);
 
-                        double numL[3], numR[3];
-                        Hall_Num_Limiter(UH(i, jL, k, 0), UNa(i, jL, k, 0), numL);
-                        Hall_Num_Limiter(UH(i, jR, k, 0), UNa(i, jR, k, 0), numR);
-                        const double neL_lim = numL[2];
-                        const double neR_lim = numR[2];
-                        double aL = std::abs(hall_coef) / neL_lim;
-                        double aR = std::abs(hall_coef) / neR_lim;
+                        const double Smag = norm3(Sx, Sy, Sz) + eps;
+                        const double nx = Sx / Smag;
+                        const double ny = Sy / Smag;
+                        const double nz = Sz / Smag;
 
-                        double h_n = std::max(dlst_et(i, j, k, 0), eps);
-                        double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
+                        {
+                            const double En = ELx * nx + ELy * ny + ELz * nz;
+                            ELx -= En * nx;
+                            ELy -= En * ny;
+                            ELz -= En * nz;
+                        }
+                        {
+                            const double En = ERx * nx + ERy * ny + ERz * nz;
+                            ERx -= En * nx;
+                            ERy -= En * ny;
+                            ERz -= En * nz;
+                        }
 
-                        std::array<double, 3> Ecen = scale3(plus3(EL, ER), 0.5);
-                        std::array<double, 3> dB = minus3(BR, BL);
-                        std::array<double, 3> Ediss = scale3(cross3(n, dB), 0.5 * sH);
-                        std::array<double, 3> Ef = plus3(Ecen, Ediss);
+                        const double h_n = std::max(dlst_et(i, j, k, 0), eps);
+                        const double sH = Cwh * std::max(beta_hall[idL], beta_hall[idR]) / h_n;
 
-                        Efet(i, j, k, 0) = Ef[0];
-                        Efet(i, j, k, 1) = Ef[1];
-                        Efet(i, j, k, 2) = Ef[2];
+                        const double BLx = Binduce(i, jL, k, 0);
+                        const double BLy = Binduce(i, jL, k, 1);
+                        const double BLz = Binduce(i, jL, k, 2);
+
+                        const double BRx = Binduce(i, jR, k, 0);
+                        const double BRy = Binduce(i, jR, k, 1);
+                        const double BRz = Binduce(i, jR, k, 2);
+
+                        const double dBx = BRx - BLx;
+                        const double dBy = BRy - BLy;
+                        const double dBz = BRz - BLz;
+
+                        const double cx = ny * dBz - nz * dBy;
+                        const double cy = nz * dBx - nx * dBz;
+                        const double cz = nx * dBy - ny * dBx;
+
+                        Efet(i, j, k, 0) = 0.5 * (ELx + ERx) + 0.5 * sH * cx;
+                        Efet(i, j, k, 1) = 0.5 * (ELy + ERy) + 0.5 * sH * cy;
+                        Efet(i, j, k, 2) = 0.5 * (ELz + ERz) + 0.5 * sH * cz;
                     }
         }
 
-        // --------------------------------------------------------
-        // zeta-face : face(i,j,k) separates cell(i,j,k-1) and cell(i,j,k)
-        // --------------------------------------------------------
+        // ============================================================
+        // 4) zeta-face
+        // ============================================================
         {
             Int3 lo = Efze.inner_lo();
             Int3 hi = Efze.inner_hi();
@@ -610,42 +558,59 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                     {
-                        int kL = k - 1, kR = k;
+                        const int kL = k - 1;
+                        const int kR = k;
 
-                        std::array<double, 3> BL = Bind_cell(i, j, kL);
-                        std::array<double, 3> BR = Bind_cell(i, j, kR);
-                        std::array<double, 3> BL_all = B_cell(i, j, kL);
-                        std::array<double, 3> BR_all = B_cell(i, j, kR);
-                        std::array<double, 3> EL = Ehall_cell(i, j, kL);
-                        std::array<double, 3> ER = Ehall_cell(i, j, kR);
+                        const std::size_t idL = idx(i, j, kL);
+                        const std::size_t idR = idx(i, j, kR);
 
-                        std::array<double, 3> S = {
-                            JDze(i, j, k, 0), JDze(i, j, k, 1), JDze(i, j, k, 2)};
-                        double Smag = norm3(S) + eps;
-                        std::array<double, 3> n = {S[0] / Smag, S[1] / Smag, S[2] / Smag};
+                        double ELx = Ehc_x[idL], ELy = Ehc_y[idL], ELz = Ehc_z[idL];
+                        double ERx = Ehc_x[idR], ERy = Ehc_y[idR], ERz = Ehc_z[idR];
 
-                        EL = proj_tangent(EL, n);
-                        ER = proj_tangent(ER, n);
+                        const double Sx = JDze(i, j, k, 0);
+                        const double Sy = JDze(i, j, k, 1);
+                        const double Sz = JDze(i, j, k, 2);
 
-                        double numL[3], numR[3];
-                        Hall_Num_Limiter(UH(i, j, kL, 0), UNa(i, j, kL, 0), numL);
-                        Hall_Num_Limiter(UH(i, j, kR, 0), UNa(i, j, kR, 0), numR);
-                        const double neL_lim = numL[2];
-                        const double neR_lim = numR[2];
-                        double aL = std::abs(hall_coef) / neL_lim;
-                        double aR = std::abs(hall_coef) / neR_lim;
+                        const double Smag = norm3(Sx, Sy, Sz) + eps;
+                        const double nx = Sx / Smag;
+                        const double ny = Sy / Smag;
+                        const double nz = Sz / Smag;
 
-                        double h_n = std::max(dlst_ze(i, j, k, 0), eps);
-                        double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
+                        {
+                            const double En = ELx * nx + ELy * ny + ELz * nz;
+                            ELx -= En * nx;
+                            ELy -= En * ny;
+                            ELz -= En * nz;
+                        }
+                        {
+                            const double En = ERx * nx + ERy * ny + ERz * nz;
+                            ERx -= En * nx;
+                            ERy -= En * ny;
+                            ERz -= En * nz;
+                        }
 
-                        std::array<double, 3> Ecen = scale3(plus3(EL, ER), 0.5);
-                        std::array<double, 3> dB = minus3(BR, BL);
-                        std::array<double, 3> Ediss = scale3(cross3(n, dB), 0.5 * sH);
-                        std::array<double, 3> Ef = plus3(Ecen, Ediss);
+                        const double h_n = std::max(dlst_ze(i, j, k, 0), eps);
+                        const double sH = Cwh * std::max(beta_hall[idL], beta_hall[idR]) / h_n;
 
-                        Efze(i, j, k, 0) = Ef[0];
-                        Efze(i, j, k, 1) = Ef[1];
-                        Efze(i, j, k, 2) = Ef[2];
+                        const double BLx = Binduce(i, j, kL, 0);
+                        const double BLy = Binduce(i, j, kL, 1);
+                        const double BLz = Binduce(i, j, kL, 2);
+
+                        const double BRx = Binduce(i, j, kR, 0);
+                        const double BRy = Binduce(i, j, kR, 1);
+                        const double BRz = Binduce(i, j, kR, 2);
+
+                        const double dBx = BRx - BLx;
+                        const double dBy = BRy - BLy;
+                        const double dBz = BRz - BLz;
+
+                        const double cx = ny * dBz - nz * dBy;
+                        const double cy = nz * dBx - nx * dBz;
+                        const double cz = nx * dBy - ny * dBx;
+
+                        Efze(i, j, k, 0) = 0.5 * (ELx + ERx) + 0.5 * sH * cx;
+                        Efze(i, j, k, 1) = 0.5 * (ELy + ERy) + 0.5 * sH * cy;
+                        Efze(i, j, k, 2) = 0.5 * (ELz + ERz) + 0.5 * sH * cz;
                     }
         }
     }

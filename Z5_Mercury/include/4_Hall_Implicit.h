@@ -103,6 +103,8 @@ private:
     std::vector<std::vector<double>> Bstar_eta_;
     std::vector<std::vector<double>> Bstar_ze_;
 
+    std::vector<TOPO::EdgeLocalID> owner_edges_sorted_;
+
 private:
     static PetscErrorCode FormFunction_(SNES snes, Vec X, Vec F, void *ctx);
 

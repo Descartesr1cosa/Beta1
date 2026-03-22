@@ -34,7 +34,7 @@ void ImplicitHallSolver::UnpackVecToEhallField_(Vec X)
     VecRestoreArrayRead(X, &xarr);
 
     HALO_OWNER::unpack_owner_edge_1form_local(
-        x_local_, *fld_, fid_.fid_Ehall, equiv_, owner_pat_);
+        x_local_, *fld_, fid_.fid_Ehall, equiv_, owner_edges_sorted_, owner_pat_);
 }
 
 void ImplicitHallSolver::BuildTrialBfaceFromUnknownE_()
@@ -76,8 +76,8 @@ void ImplicitHallSolver::BuildTrialBfaceFromUnknownE_()
 
 void ImplicitHallSolver::EvaluatePredictedEhallFromTrialB_()
 {
-    cb_.calc_PV();
-    cb_.calc_Uplus();
+    // cb_.calc_PV();
+    // cb_.calc_Uplus();
 
     // 约定：这个 callback 会基于“当前 fld_->B_xi/eta/zeta”
     // 重新写出 fid_.fid_Ehall
@@ -87,7 +87,7 @@ void ImplicitHallSolver::EvaluatePredictedEhallFromTrialB_()
 void ImplicitHallSolver::PackPredictedEhallToLocal_()
 {
     HALO_OWNER::pack_owner_edge_1form_local(
-        *fld_, fid_.fid_Ehall, equiv_, eh_pred_local_);
+        *fld_, fid_.fid_Ehall, equiv_, owner_edges_sorted_, eh_pred_local_);
 }
 
 void ImplicitHallSolver::WriteResidual_(Vec X, Vec F)
