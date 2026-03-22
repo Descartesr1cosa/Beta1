@@ -32,7 +32,7 @@ void MercurySolver::calc_physical_constant(Param *par)
 
     CFL = par_->GetDou("CFL");
 
-    hall_coef = B_ref / (U_ref * q_e * L_ref * mu0 * rho_ref * NA);
+    hall_coef = B_ref * M_ref / (U_ref * q_e * L_ref * mu0 * rho_ref * NA);
 
     // ambi_coef = M_H * U_ref / (cst.data["q_e"] * ref.data["L_ref"] * ref.data["B_ref"]);
 
@@ -85,25 +85,6 @@ void MercurySolver::Hall_Num_Limiter(double rhoH, double rhoNa, double *num)
     num[0] = nH_lim;
     num[1] = nNa_lim;
     num[2] = ne_lim;
-}
-
-double MercurySolver::HallAlpha_Coeffient(double ne_true, double r)
-{
-    // constexpr double eps = 1e-300;
-
-    // const double ne_pos = std::max(ne_true, 0.0);
-    // const double ne_eff = std::sqrt(ne_pos * ne_pos + ne_hall_floor * ne_hall_floor);
-    // const double s_ne = ne_pos / (ne_pos + ne_hall_cut + eps);
-
-    // if (r <= 1.01)
-    //     return 0.0;
-    // if (r >= 1.50)
-    //     return hall_coef * s_ne / ne_eff;
-
-    // const double xi = (r - 1.01) / 0.49;
-    // const double w = xi * xi * (3.0 - 2.0 * xi); // smoothstep
-    // return hall_coef * s_ne / ne_eff * w;
-    return 0.0;
 }
 
 void MercurySolver::calc_PV()

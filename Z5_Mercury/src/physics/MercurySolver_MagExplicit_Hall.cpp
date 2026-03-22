@@ -476,24 +476,24 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
 
         auto Ehall_cell = [&](int i, int j, int k) -> std::array<double, 3>
         {
-            std::array<double, 3> J = J_cell(i, j, k);
-            std::array<double, 3> B = B_cell(i, j, k);
-            double ne = ne_cell(i, j, k);
-            double rr = r_cell(i, j, k);
-            double alpha = HallAlpha_Coeffient(ne, rr);
+            std::array<double, 3> J = {
+                Jc(i, j, k, 0),
+                Jc(i, j, k, 1),
+                Jc(i, j, k, 2)};
+
+            std::array<double, 3> B = {
+                Bc(i, j, k, 0),
+                Bc(i, j, k, 1),
+                Bc(i, j, k, 2)};
+
+            double num[3];
+            Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+
+            const double ne = num[2];            // limited electron density
+            const double alpha = hall_coef / ne; // unified Hall coefficient
 
             auto E = cross3(J, B);
             E = scale3(E, alpha);
-
-            if constexpr (true)
-            {
-                if (C_eta != 0.0)
-                {
-                    double Bmag = norm3(B);
-                    double hloc = 1.0;
-                    E = plus3(E, scale3(J, C_eta * Bmag * hloc));
-                }
-            }
             return E;
         };
 
@@ -525,10 +525,15 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         EL = proj_tangent(EL, n);
                         ER = proj_tangent(ER, n);
 
-                        double neL = ne_cell(iL, j, k);
-                        double neR = ne_cell(iR, j, k);
-                        double aL = std::abs(HallAlpha_Coeffient(neL, r_cell(iL, j, k)));
-                        double aR = std::abs(HallAlpha_Coeffient(neR, r_cell(iR, j, k)));
+                        double numL[3], numR[3];
+                        Hall_Num_Limiter(UH(iL, j, k, 0), UNa(iL, j, k, 0), numL);
+                        Hall_Num_Limiter(UH(iR, j, k, 0), UNa(iR, j, k, 0), numR);
+
+                        const double neL_lim = numL[2];
+                        const double neR_lim = numR[2];
+
+                        double aL = std::abs(hall_coef) / neL_lim;
+                        double aR = std::abs(hall_coef) / neR_lim;
 
                         double h_n = std::max(dlst_xi(i, j, k, 0), eps);
                         double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
@@ -572,10 +577,13 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         EL = proj_tangent(EL, n);
                         ER = proj_tangent(ER, n);
 
-                        double neL = ne_cell(i, jL, k);
-                        double neR = ne_cell(i, jR, k);
-                        double aL = std::abs(HallAlpha_Coeffient(neL, r_cell(i, jL, k)));
-                        double aR = std::abs(HallAlpha_Coeffient(neR, r_cell(i, jR, k)));
+                        double numL[3], numR[3];
+                        Hall_Num_Limiter(UH(i, jL, k, 0), UNa(i, jL, k, 0), numL);
+                        Hall_Num_Limiter(UH(i, jR, k, 0), UNa(i, jR, k, 0), numR);
+                        const double neL_lim = numL[2];
+                        const double neR_lim = numR[2];
+                        double aL = std::abs(hall_coef) / neL_lim;
+                        double aR = std::abs(hall_coef) / neR_lim;
 
                         double h_n = std::max(dlst_et(i, j, k, 0), eps);
                         double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;
@@ -619,10 +627,13 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         EL = proj_tangent(EL, n);
                         ER = proj_tangent(ER, n);
 
-                        double neL = ne_cell(i, j, kL);
-                        double neR = ne_cell(i, j, kR);
-                        double aL = std::abs(HallAlpha_Coeffient(neL, r_cell(i, j, kL)));
-                        double aR = std::abs(HallAlpha_Coeffient(neR, r_cell(i, j, kR)));
+                        double numL[3], numR[3];
+                        Hall_Num_Limiter(UH(i, j, kL, 0), UNa(i, j, kL, 0), numL);
+                        Hall_Num_Limiter(UH(i, j, kR, 0), UNa(i, j, kR, 0), numR);
+                        const double neL_lim = numL[2];
+                        const double neR_lim = numR[2];
+                        double aL = std::abs(hall_coef) / neL_lim;
+                        double aR = std::abs(hall_coef) / neR_lim;
 
                         double h_n = std::max(dlst_ze(i, j, k, 0), eps);
                         double sH = Cwh * std::max(aL * norm3(BL_all), aR * norm3(BR_all)) / h_n;

@@ -68,7 +68,7 @@ void RuntimeMonitor::PrintLineMinimal(const RunData &run) const
 
     // ---- line 1 ----
     // Nstep: 6 columns, t/dt: width 10 with 5 decimals (adjust if you want wider)
-    std::printf("[  Diag  ] Nstep   =%9d            t  =%10.5f        dt = %10.5f\n",
+    std::printf("[  Diag  ] Nstep   =%9d            t  =%10.5f        dt = %10.3e\n",
                 run.step, run.time, run.dt);
 
     // ---- line 2 ----

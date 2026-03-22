@@ -11,11 +11,11 @@ void MercurySolver::Time_Advance()
     //     nsub = std::max(1, (int)std::ceil(dt / (safety * dt_hall)));
     // nsub = std::min(nsub, 200);
     dt_sub = dt / nsub;
-    if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
-    {
-        std::printf("           [HallSub] step=%d dt=%.3e dt_hall=%.3e nsub=%d dt_sub=%.3e\n\n",
-                    run_data_->step, dt, dt_hall, nsub, dt / double(nsub));
-    }
+    // if (par_->GetInt("myid") == 0 && (run_data_->step % par_->GetInt("output_residual") == 0))
+    // {
+    //     std::printf("           [HallSub] step=%d dt=%.3e dt_hall=%.3e nsub=%d dt_sub=%.3e\n\n",
+    //                 run_data_->step, dt, dt_hall, nsub, dt / double(nsub));
+    // }
 
     // 1) dq/db set to ZERO
     ZeroRHS_();
@@ -38,6 +38,10 @@ void MercurySolver::Time_Advance()
 
     calc_PV();
     calc_Uplus();
+#ifdef HALL_IMPLICIT
+    hall_implicit_.SolveOneStep(dt);
+#else
+    // 旧显式子循环
 
     {
         const int nb2 = fld_->num_blocks();
@@ -333,17 +337,18 @@ void MercurySolver::Time_Advance()
         // }
     }
 
-    // for (int s = 0; s < nsub; ++s)
-    // {
-    //     // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
-    //     AssembleRHS_Induction_CT_HallOnly_();
+// for (int s = 0; s < nsub; ++s)
+// {
+//     // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
+//     AssembleRHS_Induction_CT_HallOnly_();
 
-    //     // 只更新 Bface: Bface += dt_sub * RHS_b
-    //     ApplyUpdate_Euler_BfaceOnly_(dt_sub);
+//     // 只更新 Bface: Bface += dt_sub * RHS_b
+//     ApplyUpdate_Euler_BfaceOnly_(dt_sub);
 
-    //     // 更新后做一次 Bface 同步，供下一个子步算 J=curl(B)
-    //     mercury_bound_.Sync("Bface");
-    // }
+//     // 更新后做一次 Bface 同步，供下一个子步算 J=curl(B)
+//     mercury_bound_.Sync("Bface");
+// }
+#endif
 }
 
 void MercurySolver::ZeroRHS_()

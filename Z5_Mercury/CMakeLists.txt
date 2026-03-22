@@ -6,6 +6,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json" F
 # Find MPI
 find_package(MPI REQUIRED)
 
+# Find PETSc
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PETSC REQUIRED IMPORTED_TARGET PETSc)
+
 # Set Compile Options
 set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_BUILD_TYPE Debug)
@@ -37,13 +41,14 @@ aux_source_directory(./src/physics  SRC_PHY)
 # aux_source_directory(./src/3_io  SRC2)
 # aux_source_directory(./src/4_solver  SRC3)
 aux_source_directory(./src/tools  SRC_TOOL)
+aux_source_directory(./src/implicit  SRC_IMP)
 
 # build the executable program
 add_executable(Mercury main.cpp 
 ${DIRSRCS0} ${DIRSRCS1} ${DIRSRCS2} ${DIRSRCS3}
  ${DIRSRCS4} ${DIRSRCS5} ${DIRSRCS6} ${SRC}
- ${SRC_OPERATOR} ${SRC_BOUND} ${SRC_PHY} ${SRC_TOOL})
+ ${SRC_OPERATOR} ${SRC_BOUND} ${SRC_PHY} ${SRC_TOOL} ${SRC_IMP})
 #  ${SRC0} ${SRC1} ${SRC2} ${SRC3} ${SRC4} ${SRC5} ${SRC6})
 
 # add the mpi linkings
-target_link_libraries(Mercury PRIVATE ${MPI_LIBRARIES} stdc++fs)
+target_link_libraries(Mercury PRIVATE ${MPI_LIBRARIES} PkgConfig::PETSC stdc++fs)

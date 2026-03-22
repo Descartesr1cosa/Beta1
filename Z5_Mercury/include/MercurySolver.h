@@ -7,6 +7,10 @@
 #include "2_Initial.h"
 #include "3_Control.h"
 
+#ifdef HALL_IMPLICIT
+#include "4_Hall_Implicit.h"
+#endif
+
 // ---- forward declarations (avoid heavy includes in header) ----
 class Grid;
 namespace TOPO
@@ -21,7 +25,13 @@ class FieldBlock;
 class MercurySolver
 {
 public:
-    MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo, Param *par);
+    MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo, Param *par
+#ifdef HALL_IMPLICIT
+                  ,
+                  TOPO::TopologyEquiv *topo_equiv,
+                  HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat
+#endif
+    );
 
     void Advance();
 
@@ -33,6 +43,11 @@ private:
     Halo *halo_{nullptr};
     Param *par_{nullptr};
 
+#ifdef HALL_IMPLICIT
+    TOPO::TopologyEquiv *topo_equiv_{nullptr};
+    HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat_{nullptr};
+    ImplicitHallSolver hall_implicit_;
+#endif
     // --- components ---
     Control control_;
     MercuryBoundary mercury_bound_;
@@ -90,7 +105,6 @@ private:
     void calc_Uplus();
     void calc_physical_constant(Param *par);
     void PrintMinMaxDiagnostics_();
-    double HallAlpha_Coeffient(double ne_true, double r);
     void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
     //=========================================================================
 

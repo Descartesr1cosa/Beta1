@@ -25,6 +25,7 @@ void MercurySolver::PrintMinMaxDiagnostics_()
     double bz_max_l = -std::numeric_limits<double>::infinity();
     double b2_min_l = std::numeric_limits<double>::infinity();
     double b2_max_l = -std::numeric_limits<double>::infinity();
+    double divb_max_l = -std::numeric_limits<double>::infinity();
 
     const int nblock = fld_->num_blocks();
     for (int ib = 0; ib < nblock; ++ib)
@@ -34,6 +35,7 @@ void MercurySolver::PrintMinMaxDiagnostics_()
         auto &PVH = fld_->field(fid_.fid_PV_H, ib);
         auto &PVNa = fld_->field(fid_.fid_PV_Na, ib);
         auto &Bcel = fld_->field(fid_.fid_Bcell, ib);
+        auto &divB = fld_->field(fid_.fid_divB, ib);
 
         if (!UH.is_allocated() || !UNa.is_allocated() || !PVH.is_allocated() || !PVNa.is_allocated() || !Bcel.is_allocated())
             continue;
@@ -54,6 +56,7 @@ void MercurySolver::PrintMinMaxDiagnostics_()
                     const double bx = Bcel(i, j, k, 0);
                     const double by = Bcel(i, j, k, 1);
                     const double bz = Bcel(i, j, k, 2);
+                    const double divb = fabs(divB(i, j, k, 0));
 
                     rhoH_min_l = std::min(rhoH_min_l, rhoH);
                     rhoH_max_l = std::max(rhoH_max_l, rhoH);
@@ -74,6 +77,8 @@ void MercurySolver::PrintMinMaxDiagnostics_()
 
                     b2_min_l = std::min(b2_min_l, 0.5 * (bx * bx + by * by + bz * bz));
                     b2_max_l = std::max(b2_max_l, 0.5 * (bx * bx + by * by + bz * bz));
+
+                    divb_max_l = std::max(divb_max_l, divb);
                 }
     }
 
@@ -81,11 +86,11 @@ void MercurySolver::PrintMinMaxDiagnostics_()
     double mins_l[8] = {rhoH_min_l, pH_min_l, rhoNa_min_l, pNa_min_l, bx_min_l, by_min_l, bz_min_l, b2_min_l};
     double mins_g[8];
 
-    double maxs_l[8] = {rhoH_max_l, pH_max_l, rhoNa_max_l, pNa_max_l, bx_max_l, by_max_l, bz_max_l, b2_max_l};
-    double maxs_g[8];
+    double maxs_l[9] = {rhoH_max_l, pH_max_l, rhoNa_max_l, pNa_max_l, bx_max_l, by_max_l, bz_max_l, b2_max_l, divb_max_l};
+    double maxs_g[9];
 
     PARALLEL::mpi_min(mins_l, mins_g, 8);
-    PARALLEL::mpi_max(maxs_l, maxs_g, 8);
+    PARALLEL::mpi_max(maxs_l, maxs_g, 9);
 
     const int myid = par_->GetInt("myid");
     if (myid == 0)
@@ -132,16 +137,16 @@ void MercurySolver::PrintMinMaxDiagnostics_()
 
         std::printf("           Bx  =[%.3e, %.3e]  By=[%.3e, %.3e]  Bz   =[%.3e, %.3e]  \n",
                     mins_g[4], maxs_g[4], mins_g[5], maxs_g[5], mins_g[6], maxs_g[6]);
-        std::printf("           Pmag=[%.3e, %.3e]\n\n",
-                    mins_g[7], maxs_g[7]);
+        std::printf("           Pmag=[%.3e, %.3e]  |B|max=%.3e         divB_max =%.3e\n\n",
+                    mins_g[7], maxs_g[7], Babs_max, maxs_g[8]);
 
-        // -----------------------------
-        // NEW: stiffness diagnostics
-        // -----------------------------
-        std::printf("           |B|max=%.3e  Omega0_H=%.3e  Omega0_Na=%.3e\n",
-                    Babs_max, Omega0_H, Omega0_Na);
-        std::printf("           OmegaH_max=%.3e  OmegaNa_max=%.3e  dt*Omega_max=%.3e\n",
-                    OmegaH_max, OmegaNa_max, dtOmega);
+        // // -----------------------------
+        // // NEW: stiffness diagnostics
+        // // -----------------------------
+        // std::printf("           |B|max=%.3e  Omega0_H=%.3e  Omega0_Na=%.3e\n",
+        //             Babs_max, Omega0_H, Omega0_Na);
+        // std::printf("           OmegaH_max=%.3e  OmegaNa_max=%.3e  dt*Omega_max=%.3e\n",
+        //             OmegaH_max, OmegaNa_max, dtOmega);
 
         std::fflush(stdout);
     }

@@ -8,12 +8,23 @@
 #include "MercurySolver.h"
 
 MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo,
-                             Param *par)
+                             Param *par
+#ifdef HALL_IMPLICIT
+                             ,
+                             TOPO::TopologyEquiv *topo_equiv,
+                             HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat
+#endif
+                             )
     : grd_(grd),
       topo_(topo),
       fld_(fld),
       halo_(halo),
       par_(par)
+#ifdef HALL_IMPLICIT
+      ,
+      topo_equiv_(topo_equiv),
+      edge_owner_pat_(edge_owner_pat)
+#endif
 {
     // ---- Cache field ids ----
     fid_.Init(fld_);
@@ -122,4 +133,40 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     };
 
     runtime_data_->Begin(*run_data_, par_, count_global_cells());
+
+#ifdef HALL_IMPLICIT
+    if (!topo_equiv_ || !edge_owner_pat_)
+        throw std::runtime_error("MercurySolver: hall implicit topology/pattern is null.");
+
+    hall_implicit_.Setup(grd_, topo_, fld_, halo_, par_, &mercury_bound_,
+                         fid_, *topo_equiv_, *edge_owner_pat_);
+
+    ImplicitHallSolver::Callbacks cb;
+    cb.sync_Bface = [this]()
+    {
+        mercury_bound_.Sync("Bface");
+    };
+    cb.sync_Eedge = [this]()
+    {
+        mercury_bound_.Sync("Eedge");
+    };
+    cb.calc_PV = [this]()
+    {
+        calc_PV();
+    };
+    cb.calc_Uplus = [this]()
+    {
+        calc_Uplus();
+    };
+    cb.build_Ehall_from_current_B = [this]()
+    {
+        Calc_J_Edge();
+        calc_Jcell();
+        AddHallEdgeEMF_();
+    };
+
+    hall_implicit_.SetCallbacks(cb);
+    hall_implicit_.SetTheta(1.0); // midpoint
+    hall_implicit_.InitializePetsc();
+#endif
 }

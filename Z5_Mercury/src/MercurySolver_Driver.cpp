@@ -60,6 +60,7 @@ bool MercurySolver::UpdateControlAndOutput()
 
     if (control_.if_outres)
     {
+        calc_divB();
         runtime_data_->UpdateOnOutres(run);
         runtime_data_->PrintLineMinimal(run);
         PrintMinMaxDiagnostics_();
