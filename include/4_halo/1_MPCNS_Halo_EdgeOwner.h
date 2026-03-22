@@ -69,6 +69,10 @@ namespace HALO_OWNER
     // runtime sync
     // ============================================================
 
+    void gather_local_owner_edges_sorted(
+        const TOPO::TopologyEquiv &equiv,
+        std::vector<TOPO::EdgeLocalID> &owner_edges_sorted);
+
     // Treat every component on edge as a 1-form component:
     // rep(comp) = sign * owner(comp)
     void sync_edge_1form(
@@ -87,6 +91,7 @@ namespace HALO_OWNER
         Field &fld,
         const IdTriplet &field_id,
         const TOPO::TopologyEquiv &equiv,
+        const std::vector<TOPO::EdgeLocalID> &owner_edges_sorted,
         std::vector<double> &buf_local);
 
     void unpack_owner_edge_1form_local(
@@ -94,6 +99,7 @@ namespace HALO_OWNER
         Field &fld,
         const IdTriplet &field_id,
         const TOPO::TopologyEquiv &equiv,
+        const std::vector<TOPO::EdgeLocalID> &owner_edges_sorted,
         const EdgeOwnerSyncPattern &pattern);
 
 } // namespace HALO_OWNER
