@@ -8,7 +8,8 @@ void MercurySolver::Advance()
     // 初始先算一遍派生量（用于输出/诊断）
     // Boundary_Condition();
     calc_Bcell();
-    mercury_bound_.Sync("B_cell");
+    Calc_J_Edge();
+    calc_Jcell();
     calc_PV();
     calc_Uplus();
 
@@ -43,8 +44,8 @@ bool MercurySolver::StepOnce()
         mercury_bound_.Sync("Bface");
 
         calc_Bcell();
-        mercury_bound_.Sync("B_cell");
-
+        Calc_J_Edge();
+        calc_Jcell();
         calc_PV();
         calc_Uplus();
     }

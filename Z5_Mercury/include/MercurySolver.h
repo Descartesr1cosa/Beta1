@@ -150,88 +150,38 @@ private:
                             FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
                             double *out_flux);
     //---------------------------------------------------------------
+    double ComputeMagEnergy_Cell_()
+    {
+        double E = 0.0;
 
+        const int nb = fld_->num_blocks();
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bc = fld_->field(fid_.fid_Bcell, ib);
+            auto &Jdet = fld_->field(fid_.fid_Jac, ib); // 这里换成你的 cell volume / Jacobian 字段
+
+            if (!Bc.is_allocated() || !Jdet.is_allocated())
+                continue;
+
+            Int3 lo = Bc.inner_lo();
+            Int3 hi = Bc.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        const double Bx = Bc(i, j, k, 0);
+                        const double By = Bc(i, j, k, 1);
+                        const double Bz = Bc(i, j, k, 2);
+
+                        const double vol = Jdet(i, j, k, 0); // 按你的存法改
+                        E += 0.5 * (Bx * Bx + By * By + Bz * Bz) * vol;
+                    }
+        }
+
+        double Eglob = 0.0;
+        MPI_Allreduce(&E, &Eglob, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        return Eglob;
+    }
     //=========================================================================
-
-private:
-    // //=========================================================================
-    // void BC_UH_Farfield_Na(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
-    // // void BC_UH_Farfield_b(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh) {};
-    // void BC_UH_Farfield_H(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
-    // void BC_Solid_Surface(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
-
-    // // void Time_Advance();
-    // //---------------------------------------------------------------
-    // void ZeroRHS_();
-    // void Scheme_U_();
-    // void Scheme_B_();
-    // void AddSourceToRHS_B();
-    // void AddSourceToRHS_Fluid();
-    // void ApplyUpdate_Euler_();
-    // void calc_Uplus();
-    // //=========================================================================
-
-private:
-    //     // =============================== Step driver ============================
-    //     bool StepOnce();
-    //     //-------------------------------------------------------------------------
-    //     void Compute_Timestep();
-    //     void Calc_Residual();
-    //     bool UpdateControlAndOutput();
-    //     //=========================================================================
-
-    //     // ======================== Prepare / Sync pipeline =======================
-    //     void PrepareStep();
-    //     void PrepareSubstep_NoSnapshot();
-    //     //-------------------------------------------------------------------------
-    //     void SyncPrimaryFaceB();       // B_face_*（ghost）
-    //     void ComputeBcellInner();      // 在 inner 域从 B_face_* 重建 cell 磁场。
-    //     void SyncDerivedBcell();       // 更新 B_cell 的 ghost
-    //     void SyncPrimaryCellU();       // 守恒变量U添加边界条件
-    //     void UpdateDerivedPVandDivB(); // 计算原始变量等被动量
-    //     void SnapshotOldFields();      // 拷贝保存当前场，用于残差计算
-    //     //=========================================================================
-
-    //     // ============================= RHS assembly =============================
-    //     void Time_Advance();
-    //     //-------------------------------------------------------------------------
-    //     void ZeroRHS();
-    //     void AssembleRHS_Fluid();     // inv_fluid()
-    //     void SyncElectricFace();      // E_face_* BC+halo
-    //     void AssembleRHS_Induction(); // inv_induce()
-    //     void ApplyTimeUpdate_Euler(); // += dt*RHS
-    //     void Update_Physic_Time();    // record physical time
-    //     //=========================================================================
-
-    //     // ========================== helper for Fluid ============================
-    //     void AssembleOneDirectionFluxAndEMF_(int iblk,
-    //                                          int dir,                 // 0 xi, 1 eta, 2 zeta
-    //                                          FieldBlock &flux,        // F_xi / F_eta / F_zeta (ncomp=5)
-    //                                          FieldBlock &E_face,      // E_face_xi/eta/zeta   (ncomp=3)
-    //                                          FieldBlock &B_face,      // B_xi/eta/zeta        (ncomp=1)
-    //                                          FieldBlock &B_face_add,  // B_xi/eta/zeta add        (ncomp=1)
-    //                                          FieldBlock &metricField, // Xi_/Eta_/Zeta_       (ncomp=3)
-    //                                          FieldBlock &PV,
-    //                                          FieldBlock &U,
-    //                                          FieldBlock &Bcell);
-    //     void AssembleCellRHSFromFlux_();
-    //     // Reconstruction / flux
-    //     void Reconstruction(double *metric, int32_t direction, FieldBlock &PV, FieldBlock &U, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k, double *out_flux);
-    //     //=========================================================================
-
-    //     // ========================= helper for Induction =========================
-    //     void AssembleEdgeEMF_FromFaceE_Ideal_();
-    //     void AddExplicitHallToEdgeEMF_(); // 只在 hall_explicit.cpp 实现由宏控制, 对于Ideal Implicit均为空
-    //     void ApplyBC_EdgeEMF_();
-    //     void AssembleFaceRHS_FromEdgeEMF_Curl_();
-
-    //     // ================================== TOOLS ==============================
-
-    //     void calc_Bcell();
-    //     void calc_divB();
-    //     void copy_field();
-    //     void PrintMinMaxDiagnostics_();
-    //     void add_Emag_to_Etotal();
-    //     double ComputeLocalMaxRadius_();
-    //     //=========================================================================
 };

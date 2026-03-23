@@ -197,6 +197,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "B_cell", "B_cell", ccopy);
 
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "J_cell", "J_cell", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "J_cell", "J_cell", ccopy);
+
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::Cell, "Bind_cell", "Bind_cell", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::Cell, "Bind_cell", "Bind_cell", ccopy);
 }
@@ -271,6 +274,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gBc.halo_level = HaloLevel::Vertex;
     gBc.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gBc);
+
+    BoundGroup gJc;
+    gJc.name = "J_cell";
+    gJc.fields = {"J_cell"};
+    gJc.do_coupling = true;
+    gJc.do_physical = true;
+    gJc.do_halo = true;
+    gJc.halo_level = HaloLevel::Vertex;
+    gJc.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gJc);
 }
 
 void MercuryBoundary::Build(bool strict_check)

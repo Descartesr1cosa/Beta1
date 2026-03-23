@@ -582,6 +582,7 @@ void MercurySolver::calc_Bcell()
                     Bindcell(i, j, k, 2) = Bz_tot;
                 }
     }
+    mercury_bound_.Sync("B_cell");
 }
 
 void MercurySolver::calc_divB()
@@ -810,4 +811,5 @@ void MercurySolver::calc_Jcell()
                     Jcell(i, j, k, 2) = Jz;
                 }
     }
+    mercury_bound_.Sync("J_cell");
 }

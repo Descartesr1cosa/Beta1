@@ -124,6 +124,7 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Solid", "Fluid", "J_xi", StaggerLocation::EdgeXi, 1, ngg);       // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "J_eta", StaggerLocation::EdgeEt, 1, ngg);      // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "J_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "J_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Solid -> Fluid
 
@@ -142,6 +143,7 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Fluid", "Solid", "J_xi", StaggerLocation::EdgeXi, 1, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "J_eta", StaggerLocation::EdgeEt, 1, ngg);      // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "J_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Fluid -> Solid
+        fld->register_coupling_channel("Fluid", "Solid", "J_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Fluid -> Solid
         // Build coupling buffers (YOU CAN ONLY USE it ONCE!)

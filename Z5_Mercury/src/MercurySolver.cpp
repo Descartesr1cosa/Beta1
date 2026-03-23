@@ -42,7 +42,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
         std::vector<std::string> tec_block_name = {}; // 全部物理块输出
         io_.SetTecplotBlock(tec_block_name);
 
-        std::vector<std::string> plt_name = {"PV_H", "PV_Na", "B_cell", "Na", "U_plus"};
+        std::vector<std::string> plt_name = {"PV_H", "PV_Na", "B_cell", "Na", "J_cell"};
         io_.SetTecplotFields(plt_name);
 
         std::string fld_name = "PV_H";
@@ -61,9 +61,13 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
         var_name = {"n_Na"};
         io_.SetTecplotFieldComponentNames(fld_name, var_name);
 
-        fld_name = "U_plus";
-        var_name = {"Up_u", "Up_v", "Up_w"};
+        fld_name = "J_cell";
+        var_name = {"Jx", "Jy", "Jz"};
         io_.SetTecplotFieldComponentNames(fld_name, var_name);
+
+        // fld_name = "U_plus";
+        // var_name = {"Up_u", "Up_v", "Up_w"};
+        // io_.SetTecplotFieldComponentNames(fld_name, var_name);
     }
 
     // ---- Calc Constants ----
@@ -94,7 +98,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
             "Ehall_xi",
             "Ehall_eta",
             "Ehall_zeta",
-            "Bind_cell"};
+            "Bind_cell",
+            "J_cell"};
 
         // 1) 初始化 Mercury Boundary
         mercury_bound_.Setup(grd_, fld_, topo_, halo_, par_, bnd_fields);
