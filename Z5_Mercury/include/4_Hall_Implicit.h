@@ -69,7 +69,7 @@ public:
     void FinalizePetsc();
 
     // 解 Hall 子步；输入/输出都作用在当前 fld_->B_xi/eta/zeta 上
-    void SolveOneStep(double dt);
+    void SolveOneStep(double dt, bool if_outres);
 
 private:
     Grid *grd_{nullptr};

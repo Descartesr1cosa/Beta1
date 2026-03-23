@@ -137,7 +137,7 @@ void ImplicitHallSolver::DestroyPetscObjects_()
     }
 }
 
-void ImplicitHallSolver::SolveOneStep(double dt)
+void ImplicitHallSolver::SolveOneStep(double dt, bool if_outres)
 {
     CheckReady_();
     if (!petsc_ready_)
@@ -187,6 +187,7 @@ void ImplicitHallSolver::SolveOneStep(double dt)
         CTOperators::CurlEdgeToFace(ib, Exi, Eet, Eze, Rxi, Ret, Rze, -1.0);
     }
 
+    if (if_outres)
     {
         SNESConvergedReason reason;
         PetscInt its;
@@ -243,8 +244,6 @@ void ImplicitHallSolver::SolveOneStep(double dt)
                       << "  |F|_2=" << fnorm
                       << "  max|Ehall|=" << maxEhall
                       << "  dt*max|RHS_B|=" << maxdBhall_est
-                      << std::endl
-                      << std::endl
                       << std::endl;
         }
     }
