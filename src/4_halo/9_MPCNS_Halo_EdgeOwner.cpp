@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace HALO_OWNER
@@ -171,70 +172,90 @@ namespace HALO_OWNER
         // ------------------------------------------------------------
         // 4) 针对“本 rank 涉及到的 key”，构造 local_alias / send / recv
         // ------------------------------------------------------------
-        for (const auto &[key, local_members] : equiv.edge_members)
+        // ------------------------------------------------------------
+        // 4) 针对“本 rank 涉及到的 key”，构造 local_alias / send / recv
+        //    关键：不能只遍历 equiv.edge_members，
+        //         因为 non-owner rank 可能没有 local edge_members[key]，
+        //         但一定有 local edge2key[rep]。
+        // ------------------------------------------------------------
         {
-            auto it_owner = equiv.edge_owner.find(key);
-            if (it_owner == equiv.edge_owner.end())
+            std::unordered_set<TOPO::EdgeKey, TOPO::EdgeKey::Hash> local_keys;
+            local_keys.reserve(equiv.edge2key.size());
+
+            for (const auto &[rep, key] : equiv.edge2key)
+                local_keys.insert(key);
+
+            for (const auto &key : local_keys)
             {
-                throw std::runtime_error(
-                    "build_edge_owner_sync_pattern: local key missing in equiv.edge_owner.");
-            }
-
-            const TOPO::EdgeLocalID &owner = it_owner->second;
-
-            auto it_global = global_members.find(key);
-            if (it_global == global_members.end())
-            {
-                throw std::runtime_error(
-                    "build_edge_owner_sync_pattern: local key missing in global member table.");
-            }
-
-            const auto &members_all = it_global->second;
-
-            // 找 owner 对应的 sign_to_canonical
-            bool owner_sign_found = false;
-            int8_t owner_sign = 0;
-
-            for (const auto &m : members_all)
-            {
-                if (m.rep == owner)
+                auto it_owner = equiv.edge_owner.find(key);
+                if (it_owner == equiv.edge_owner.end())
                 {
-                    owner_sign = m.sign_to_canonical;
-                    owner_sign_found = true;
-                    break;
+                    throw std::runtime_error(
+                        "build_edge_owner_sync_pattern: local key missing in equiv.edge_owner.");
                 }
-            }
 
-            if (!owner_sign_found)
-            {
-                throw std::runtime_error(
-                    "build_edge_owner_sync_pattern: owner sign not found in global members.");
-            }
+                const TOPO::EdgeLocalID &owner = it_owner->second;
 
-            for (const auto &m : members_all)
-            {
-                if (m.rep == owner)
-                    continue;
-
-                const int8_t sign = factor_from_signs(m.sign_to_canonical, owner_sign);
-
-                if (owner.rank == my_rank && m.rep.rank == my_rank)
+                auto it_global = global_members.find(key);
+                if (it_global == global_members.end())
                 {
-                    // local alias
-                    pattern.local_alias.push_back(
-                        EdgeOwnerLocalAliasItem{owner, m.rep, sign});
+                    throw std::runtime_error(
+                        "build_edge_owner_sync_pattern: local key missing in global member table.");
                 }
-                else if (owner.rank == my_rank && m.rep.rank != my_rank)
+
+                const auto &members_all = it_global->second;
+
+                // 找 owner 对应的 sign_to_canonical
+                bool owner_sign_found = false;
+                int8_t owner_sign = 0;
+
+                for (const auto &m : members_all)
                 {
-                    // send from local owner to remote rep rank
-                    pattern.send_items.push_back(
-                        EdgeOwnerSendItem{m.rep.rank, owner});
+                    if (m.rep == owner)
+                    {
+                        owner_sign = m.sign_to_canonical;
+                        owner_sign_found = true;
+                        break;
+                    }
                 }
-                else if (owner.rank != my_rank && m.rep.rank == my_rank)
+
+                if (!owner_sign_found)
                 {
-                    // recv from remote owner rank to local rep
-                    pattern.recv_items.push_back(
-                        EdgeOwnerRecvItem{owner.rank, m.rep, sign});
+                    throw std::runtime_error(
+                        "build_edge_owner_sync_pattern: owner sign not found in global members.");
+                }
+
+                for (const auto &m : members_all)
+                {
+                    if (m.rep == owner)
+                        continue;
+
+                    const int8_t sign = factor_from_signs(m.sign_to_canonical, owner_sign);
+
+                    if (owner.rank == my_rank)
+                    {
+                        if (m.rep.rank == my_rank)
+                        {
+                            // owner 和 rep 都在本 rank：本地 alias
+                            pattern.local_alias.push_back(
+                                EdgeOwnerLocalAliasItem{owner, m.rep, sign});
+                        }
+                        else
+                        {
+                            // 本 rank 是 owner，给远端 rep 所在 rank 发送
+                            pattern.send_items.push_back(
+                                EdgeOwnerSendItem{m.rep.rank, key, owner});
+                        }
+                    }
+                    else
+                    {
+                        if (m.rep.rank == my_rank)
+                        {
+                            // owner 在远端，本 rank 持有本地 non-owner rep：需要 recv
+                            pattern.recv_items.push_back(
+                                EdgeOwnerRecvItem{owner.rank, key, m.rep, sign});
+                        }
+                    }
                 }
             }
         }
@@ -247,7 +268,7 @@ namespace HALO_OWNER
                   {
                       if (a.tar_id != b.tar_id)
                           return a.tar_id < b.tar_id;
-                      return a.owner < b.owner;
+                      return a.key < b.key;
                   });
 
         std::sort(pattern.recv_items.begin(), pattern.recv_items.end(),
@@ -255,7 +276,7 @@ namespace HALO_OWNER
                   {
                       if (a.tar_id != b.tar_id)
                           return a.tar_id < b.tar_id;
-                      return a.rep < b.rep;
+                      return a.key < b.key;
                   });
 
         pattern.send_counts.assign(nrank, 0);

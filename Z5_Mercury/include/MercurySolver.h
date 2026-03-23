@@ -183,5 +183,13 @@ private:
         MPI_Allreduce(&E, &Eglob, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         return Eglob;
     }
+
+    void DebugPrintFieldByTopo_(int query_rank,
+                                int blk_num,
+                                int i, int j, int k,
+                                std::string &field_name);
+
+    void DebugPrintEdgeEquivClass_(int query_rank,
+                                   int blk, int i, int j, int k, int dir) const;
     //=========================================================================
 };

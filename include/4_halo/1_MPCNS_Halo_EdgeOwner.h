@@ -22,12 +22,14 @@ namespace HALO_OWNER
     struct EdgeOwnerSendItem
     {
         int tar_id;              // target rank id
+        TOPO::EdgeKey key;       //
         TOPO::EdgeLocalID owner; // local owner rep
     };
 
     struct EdgeOwnerRecvItem
     {
         int tar_id;            // remote owner rank id
+        TOPO::EdgeKey key;     //
         TOPO::EdgeLocalID rep; // local non-owner rep
         int8_t sign;           // for 1-form; ignored by vec copy
     };
