@@ -294,6 +294,42 @@ namespace HALO_OWNER
             pattern.send_displs[r] = pattern.send_displs[r - 1] + pattern.send_counts[r - 1];
             pattern.recv_displs[r] = pattern.recv_displs[r - 1] + pattern.recv_counts[r - 1];
         }
+
+        // ------------------------------------------------------------
+        // 6) runtime caches: allocate once
+        // ------------------------------------------------------------
+        pattern.send_buf_cache.clear();
+        pattern.recv_buf_cache.clear();
+        pattern.send_buf_cache.resize(nrank);
+        pattern.recv_buf_cache.resize(nrank);
+
+        int nrecv_active = 0;
+        int nsend_active = 0;
+
+        for (int r = 0; r < nrank; ++r)
+        {
+            const int send_len = pattern.send_counts[r];
+            const int recv_len = pattern.recv_counts[r];
+
+            if (send_len > 0)
+            {
+                pattern.send_buf_cache[r].resize(
+                    static_cast<std::size_t>(send_len) * 1u); // ncomp unknown here; later resize if needed
+                ++nsend_active;
+            }
+
+            if (recv_len > 0)
+            {
+                pattern.recv_buf_cache[r].resize(
+                    static_cast<std::size_t>(recv_len) * 1u); // ncomp unknown here; later resize if needed
+                ++nrecv_active;
+            }
+        }
+
+        pattern.req_recv_cache.resize(nrecv_active);
+        pattern.stat_recv_cache.resize(nrecv_active);
+        pattern.req_send_cache.resize(nsend_active);
+        pattern.stat_send_cache.resize(nsend_active);
     }
 
 } // namespace HALO_OWNER

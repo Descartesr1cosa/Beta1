@@ -71,14 +71,19 @@ namespace HALO_OWNER
                                       int ncomp,
                                       std::vector<std::vector<double>> &send_buf)
         {
-            int nrank = static_cast<int>(pattern.send_counts.size());
-            send_buf.assign(nrank, {});
+            const int nrank = static_cast<int>(pattern.send_counts.size());
+
+            if (static_cast<int>(send_buf.size()) != nrank)
+                throw std::runtime_error("pack_send_buffers: send_buf_cache size mismatch.");
 
             for (int r = 0; r < nrank; ++r)
             {
                 const int nitem = pattern.send_counts[r];
-                if (nitem > 0)
-                    send_buf[r].resize(static_cast<std::size_t>(nitem) * ncomp);
+                const std::size_t need =
+                    static_cast<std::size_t>(nitem) * static_cast<std::size_t>(ncomp);
+
+                if (send_buf[r].size() < need)
+                    send_buf[r].resize(need);
             }
 
             for (int r = 0; r < nrank; ++r)
@@ -134,7 +139,7 @@ namespace HALO_OWNER
 
         void sync_edge_common(Field &fld,
                               const IdTriplet &field_id,
-                              const HALO_OWNER::EdgeOwnerSyncPattern &pattern,
+                              HALO_OWNER::EdgeOwnerSyncPattern &pattern,
                               bool use_sign,
                               int comm_flag)
         {
@@ -154,61 +159,66 @@ namespace HALO_OWNER
             int nrank = 1;
             PARALLEL::mpi_size(&nrank);
 
-            std::vector<std::vector<double>> send_buf;
-            std::vector<std::vector<double>> recv_buf(nrank);
+            auto &send_buf = pattern.send_buf_cache;
+            auto &recv_buf = pattern.recv_buf_cache;
+
+            if (static_cast<int>(recv_buf.size()) != nrank ||
+                static_cast<int>(send_buf.size()) != nrank)
+            {
+                throw std::runtime_error("sync_edge_common: cache rank size mismatch.");
+            }
 
             pack_send_buffers(fld, field_id, pattern, ncomp, send_buf);
 
             for (int r = 0; r < nrank; ++r)
             {
                 const int nitem = pattern.recv_counts[r];
-                if (nitem > 0)
-                    recv_buf[r].resize(static_cast<std::size_t>(nitem) * ncomp);
+                const std::size_t need =
+                    static_cast<std::size_t>(nitem) * static_cast<std::size_t>(ncomp);
+
+                if (recv_buf[r].size() < need)
+                    recv_buf[r].resize(need);
             }
 
             // ------------------------------------------------------------
             // 3) post recv
             // ------------------------------------------------------------
-            std::vector<MPI_Request> req_recv;
-            std::vector<MPI_Status> stat_recv;
-            req_recv.reserve(nrank);
-            stat_recv.resize(nrank); // 够大即可，后面按实际 count 用
+            auto &req_recv = pattern.req_recv_cache;
+            auto &stat_recv = pattern.stat_recv_cache;
 
+            int irecv = 0;
             for (int r = 0; r < nrank; ++r)
             {
                 const int len = pattern.recv_counts[r] * ncomp;
                 if (len <= 0)
                     continue;
 
-                MPI_Request req{};
-                PARALLEL::mpi_data_recv(r, comm_flag, recv_buf[r].data(), len, &req);
-                req_recv.push_back(req);
+                PARALLEL::mpi_data_recv(r, comm_flag, recv_buf[r].data(), len, &req_recv[irecv]);
+                ++irecv;
             }
 
             // ------------------------------------------------------------
             // 4) post send
             // ------------------------------------------------------------
-            std::vector<MPI_Request> req_send;
-            std::vector<MPI_Status> stat_send;
-            req_send.reserve(nrank);
-            stat_send.resize(nrank);
+            auto &req_send = pattern.req_send_cache;
+            auto &stat_send = pattern.stat_send_cache;
 
+            int isend = 0;
             for (int r = 0; r < nrank; ++r)
             {
                 const int len = pattern.send_counts[r] * ncomp;
                 if (len <= 0)
                     continue;
 
-                MPI_Request req{};
-                PARALLEL::mpi_data_send(r, comm_flag, send_buf[r].data(), len, &req);
-                req_send.push_back(req);
+                PARALLEL::mpi_data_send(r, comm_flag, send_buf[r].data(), len, &req_send[isend]);
+                ++isend;
             }
 
             // ------------------------------------------------------------
             // 5) wait
             // ------------------------------------------------------------
-            int nrecv = static_cast<int>(req_recv.size());
-            int nsend = static_cast<int>(req_send.size());
+            int nrecv = irecv;
+            int nsend = isend;
 
             if (nrecv > 0)
                 PARALLEL::mpi_wait(nrecv, req_recv.data(), stat_recv.data());
@@ -262,7 +272,7 @@ namespace HALO_OWNER
     void sync_edge_1form(
         Field &fld,
         const IdTriplet &field_id,
-        const EdgeOwnerSyncPattern &pattern)
+        EdgeOwnerSyncPattern &pattern)
     {
         sync_edge_common(
             fld,
@@ -275,7 +285,7 @@ namespace HALO_OWNER
     void sync_edge_vec(
         Field &fld,
         const IdTriplet &field_id,
-        const EdgeOwnerSyncPattern &pattern)
+        EdgeOwnerSyncPattern &pattern)
     {
         sync_edge_common(
             fld,
@@ -328,7 +338,7 @@ namespace HALO_OWNER
         const IdTriplet &field_id,
         const TOPO::TopologyEquiv &equiv,
         const std::vector<TOPO::EdgeLocalID> &owner_edges_sorted,
-        const EdgeOwnerSyncPattern &pattern)
+        EdgeOwnerSyncPattern &pattern)
     {
         const int ncomp = check_edge_triplet_and_get_ncomp(fld, field_id);
 
