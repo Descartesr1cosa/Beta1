@@ -95,6 +95,19 @@ private:
     double inver_MA2{0.0};
     double inver_Rem{0.0};
 
+#ifdef HALL_IMPLICIT
+    struct HallFaceScratchBlock_ // For Rusanov Scheme
+    {
+        Int3 clo{}, chi{};
+        int ni = 0, nj = 0, nk = 0;
+
+        Vector Ehc;  // vec_length = 3, 分别存 x/y/z
+        Scalar beta; // 标量 beta_hall
+    };
+    std::vector<HallFaceScratchBlock_> hall_face_scratch_;
+    void SetupHallFaceScratch_();
+#endif
+
 private:
     //=========================================================================
     // TOOLS

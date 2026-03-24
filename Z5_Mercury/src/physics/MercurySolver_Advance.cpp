@@ -3,7 +3,9 @@
 
 void MercurySolver::Time_Advance()
 {
-    double Emag0 = ComputeMagEnergy_Cell_();
+    double Emag0, Emag1;
+    if (control_.if_outres)
+        Emag0 = ComputeMagEnergy_Cell_();
 
     // 1) dq/db set to ZERO
     ZeroRHS_();
@@ -36,12 +38,11 @@ void MercurySolver::Time_Advance()
     hall_implicit_.SolveOneStep(dt, control_.if_outres);
     calc_Bcell();
 
-    double Emag1 = ComputeMagEnergy_Cell_();
-    double dE = Emag1 - Emag0;
-    double rel = dE / std::max(std::abs(Emag0), 1e-300);
-
     if (par_->GetInt("myid") == 0 && control_.if_outres)
     {
+        Emag1 = ComputeMagEnergy_Cell_();
+        double dE = Emag1 - Emag0;
+        double rel = dE / std::max(std::abs(Emag0), 1e-300);
         std::cout << "[HallOnlyEnergy] dt=" << dt
                   << " Emag0=" << Emag0
                   << " Emag1=" << Emag1
