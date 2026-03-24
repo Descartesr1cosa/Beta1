@@ -457,7 +457,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // const double us2 = uN * uN + vN * vN + wN * wN;
                         // const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
 
-                        // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
+                        RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
                         // RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoNa_nd * uN * vst;
                         // RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoNa_nd * vN * vst;
                         // RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoNa_nd * wN * vst;
@@ -474,6 +474,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * nNa / ne * sjby; // - a4 * rhoNa_nd * vN * vst;
                         RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * nNa / ne * sjbz; // - a4 * rhoNa_nd * wN * vst;
                         RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * nNa / ne * sjbu; // + a4 * rhoNa_nd * us2 * vst;
+                        RHS_Na(i, j, k, 4) += a6 * sss * Tn0;
                     }
                 }
     }
