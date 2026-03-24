@@ -57,7 +57,7 @@ void ImplicitHallSolver::CheckReady_() const
 {
     if (!fld_ || !bound_)
         throw std::runtime_error("ImplicitHallSolver not setup.");
-    if (!cb_.sync_Bface || !cb_.sync_Eedge || !cb_.calc_PV ||
+    if (!cb_.sync_Bface || !cb_.sync_Ehalledge || !cb_.calc_PV ||
         !cb_.calc_Uplus || !cb_.build_Ehall_from_current_B)
         throw std::runtime_error("ImplicitHallSolver callbacks are not fully bound.");
 }
@@ -167,17 +167,17 @@ void ImplicitHallSolver::SolveOneStep(double dt, bool if_outres)
     // 5) 用最终 Ehall 做整步 CT 更新：
     //    B^{n+1} = B* + dt * RHS(Ehall), RHS=-curl(Ehall)
     RestoreCurrentBfaceFromSnapshot_();
-    CopyEhallToE_();
-    cb_.sync_Eedge();
+
+    cb_.sync_Ehalledge();
 
     ClearFaceTriplet_(fid_.fid_RHS_b);
 
     const int nb = fld_->num_blocks();
     for (int ib = 0; ib < nb; ++ib)
     {
-        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-        auto &Eet = fld_->field(fid_.fid_E.eta, ib);
-        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
         auto &Rxi = fld_->field(fid_.fid_RHS_b.xi, ib);
         auto &Ret = fld_->field(fid_.fid_RHS_b.eta, ib);
         auto &Rze = fld_->field(fid_.fid_RHS_b.zeta, ib);

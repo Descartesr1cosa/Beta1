@@ -35,7 +35,7 @@ public:
         std::function<void()> sync_Bface;
 
         // 把当前 Eedge 补齐到可用于 curl(E)
-        std::function<void()> sync_Eedge;
+        std::function<void()> sync_Ehalledge;
 
         // 从当前 Bface 计算派生量
         std::function<void()> calc_PV;

@@ -42,9 +42,7 @@ void ImplicitHallSolver::BuildTrialBfaceFromUnknownE_()
     // 从 snapshot 的 B* 开始
     RestoreCurrentBfaceFromSnapshot_();
 
-    // E = Ehall
-    CopyEhallToE_();
-    cb_.sync_Eedge();
+    cb_.sync_Ehalledge();
 
     // RHS_B = -curl(E)
     ClearFaceTriplet_(fid_.fid_RHS_b);
@@ -52,9 +50,9 @@ void ImplicitHallSolver::BuildTrialBfaceFromUnknownE_()
     const int nb = fld_->num_blocks();
     for (int ib = 0; ib < nb; ++ib)
     {
-        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-        auto &Eet = fld_->field(fid_.fid_E.eta, ib);
-        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
 
         auto &Rxi = fld_->field(fid_.fid_RHS_b.xi, ib);
         auto &Ret = fld_->field(fid_.fid_RHS_b.eta, ib);

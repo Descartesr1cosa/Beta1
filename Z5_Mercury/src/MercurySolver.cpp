@@ -151,9 +151,9 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     {
         mercury_bound_.Sync("Bface");
     };
-    cb.sync_Eedge = [this]()
+    cb.sync_Ehalledge = [this]()
     {
-        mercury_bound_.Sync("Eedge");
+        mercury_bound_.Sync("Ehall");
     };
     cb.calc_PV = [this]()
     {
