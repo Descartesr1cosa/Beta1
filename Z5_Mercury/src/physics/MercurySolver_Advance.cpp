@@ -30,8 +30,8 @@ void MercurySolver::Time_Advance()
         calc_PV();
         calc_Uplus();
         calc_Bcell();
-        Calc_J_Edge();
-        calc_Jcell();
+        // Calc_J_Edge();
+        // calc_Jcell();
     }
 #ifdef HALL_IMPLICIT
 
