@@ -55,6 +55,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
 {
     constexpr double eps = 1e-14;
     const double Cwh = 0.5;
+    const double hall_coef_abs = std::abs(hall_coef);
 
     auto norm3 = [](double x, double y, double z) -> double
     {
@@ -69,7 +70,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
         auto &Binduce = fld_->field(fid_.fid_Bindcell, ib);
         auto &Jc = fld_->field(fid_.fid_Jcell, ib);
 
-        auto &UH = fld_->field(fid_.fid_U_H, ib); // rho_H etc.
+        auto &UH = fld_->field(fid_.fid_U_H, ib);
         auto &UNa = fld_->field(fid_.fid_U_Na, ib);
 
         auto &Efxi = fld_->field(fid_.fid_Eface.xi, ib);
@@ -91,43 +92,20 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
             continue;
         }
 
+        auto &buf = hall_face_scratch_[ib];
+        auto &Ehc = buf.Ehc;        // Ehc(i,j,k,comp)
+        auto &beta_hall = buf.beta; // beta_hall(i,j,k)
+
+        const Int3 clo = Bc.get_lo();
+        const Int3 chi = Bc.get_hi();
+
         // ============================================================
-        // 1) 先在 cell 上预计算：
-        //    Ehc = alpha * (J x B), beta_hall = |hall_coef|*|B|/ne_lim
+        // 1) cell 上预计算 Ehc = alpha * (J x B), beta_hall
         // ============================================================
-
-        Int3 clo = Bc.get_lo();
-        Int3 chi = Bc.get_hi();
-
-        const int ni = chi.i - clo.i;
-        const int nj = chi.j - clo.j;
-        const int nk = chi.k - clo.k;
-
-        if (ni <= 0 || nj <= 0 || nk <= 0)
-            continue;
-
-        const std::size_t nc =
-            static_cast<std::size_t>(ni) *
-            static_cast<std::size_t>(nj) *
-            static_cast<std::size_t>(nk);
-
-        std::vector<double> Ehc_x(nc), Ehc_y(nc), Ehc_z(nc);
-        std::vector<double> beta_hall(nc);
-
-        auto idx = [&](int i, int j, int k) -> std::size_t
-        {
-            return (static_cast<std::size_t>(i - clo.i) * nj +
-                    static_cast<std::size_t>(j - clo.j)) *
-                       nk +
-                   static_cast<std::size_t>(k - clo.k);
-        };
-
         for (int i = clo.i; i < chi.i; ++i)
             for (int j = clo.j; j < chi.j; ++j)
                 for (int k = clo.k; k < chi.k; ++k)
                 {
-                    const std::size_t id = idx(i, j, k);
-
                     double num[3];
                     Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
                     const double ne = num[2];
@@ -141,11 +119,11 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                     const double By = Bc(i, j, k, 1);
                     const double Bz = Bc(i, j, k, 2);
 
-                    Ehc_x[id] = alpha * (Jy * Bz - Jz * By);
-                    Ehc_y[id] = alpha * (Jz * Bx - Jx * Bz);
-                    Ehc_z[id] = alpha * (Jx * By - Jy * Bx);
+                    Ehc(i, j, k, 0) = alpha * (Jy * Bz - Jz * By);
+                    Ehc(i, j, k, 1) = alpha * (Jz * Bx - Jx * Bz);
+                    Ehc(i, j, k, 2) = alpha * (Jx * By - Jy * Bx);
 
-                    beta_hall[id] = std::abs(hall_coef) * norm3(Bx, By, Bz) / ne;
+                    beta_hall(i, j, k) = hall_coef_abs * norm3(Bx, By, Bz) / ne;
                 }
 
         // ============================================================
@@ -162,14 +140,14 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         const int iL = i - 1;
                         const int iR = i;
 
-                        const std::size_t idL = idx(iL, j, k);
-                        const std::size_t idR = idx(iR, j, k);
+                        double ELx = Ehc(iL, j, k, 0);
+                        double ELy = Ehc(iL, j, k, 1);
+                        double ELz = Ehc(iL, j, k, 2);
 
-                        // 左右 cell 的 Hall central EMF
-                        double ELx = Ehc_x[idL], ELy = Ehc_y[idL], ELz = Ehc_z[idL];
-                        double ERx = Ehc_x[idR], ERy = Ehc_y[idR], ERz = Ehc_z[idR];
+                        double ERx = Ehc(iR, j, k, 0);
+                        double ERy = Ehc(iR, j, k, 1);
+                        double ERz = Ehc(iR, j, k, 2);
 
-                        // 面法向：n = S/|S|
                         const double Sx = JDxi(i, j, k, 0);
                         const double Sy = JDxi(i, j, k, 1);
                         const double Sz = JDxi(i, j, k, 2);
@@ -179,7 +157,6 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         const double ny = Sy / Smag;
                         const double nz = Sz / Smag;
 
-                        // 切向投影
                         {
                             const double En = ELx * nx + ELy * ny + ELz * nz;
                             ELx -= En * nx;
@@ -193,11 +170,9 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                             ERz -= En * nz;
                         }
 
-                        // Rusanov Hall speed
                         const double h_n = std::max(dlst_xi(i, j, k, 0), eps);
-                        const double sH = Cwh * std::max(beta_hall[idL], beta_hall[idR]) / h_n;
+                        const double sH = Cwh * std::max(beta_hall(iL, j, k), beta_hall(iR, j, k)) / h_n;
 
-                        // induced B jump
                         const double BLx = Binduce(iL, j, k, 0);
                         const double BLy = Binduce(iL, j, k, 1);
                         const double BLz = Binduce(iL, j, k, 2);
@@ -210,7 +185,6 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         const double dBy = BRy - BLy;
                         const double dBz = BRz - BLz;
 
-                        // cross(n, dB)
                         const double cx = ny * dBz - nz * dBy;
                         const double cy = nz * dBx - nx * dBz;
                         const double cz = nx * dBy - ny * dBx;
@@ -235,11 +209,13 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         const int jL = j - 1;
                         const int jR = j;
 
-                        const std::size_t idL = idx(i, jL, k);
-                        const std::size_t idR = idx(i, jR, k);
+                        double ELx = Ehc(i, jL, k, 0);
+                        double ELy = Ehc(i, jL, k, 1);
+                        double ELz = Ehc(i, jL, k, 2);
 
-                        double ELx = Ehc_x[idL], ELy = Ehc_y[idL], ELz = Ehc_z[idL];
-                        double ERx = Ehc_x[idR], ERy = Ehc_y[idR], ERz = Ehc_z[idR];
+                        double ERx = Ehc(i, jR, k, 0);
+                        double ERy = Ehc(i, jR, k, 1);
+                        double ERz = Ehc(i, jR, k, 2);
 
                         const double Sx = JDet(i, j, k, 0);
                         const double Sy = JDet(i, j, k, 1);
@@ -264,7 +240,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         }
 
                         const double h_n = std::max(dlst_et(i, j, k, 0), eps);
-                        const double sH = Cwh * std::max(beta_hall[idL], beta_hall[idR]) / h_n;
+                        const double sH = Cwh * std::max(beta_hall(i, jL, k), beta_hall(i, jR, k)) / h_n;
 
                         const double BLx = Binduce(i, jL, k, 0);
                         const double BLy = Binduce(i, jL, k, 1);
@@ -302,11 +278,13 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         const int kL = k - 1;
                         const int kR = k;
 
-                        const std::size_t idL = idx(i, j, kL);
-                        const std::size_t idR = idx(i, j, kR);
+                        double ELx = Ehc(i, j, kL, 0);
+                        double ELy = Ehc(i, j, kL, 1);
+                        double ELz = Ehc(i, j, kL, 2);
 
-                        double ELx = Ehc_x[idL], ELy = Ehc_y[idL], ELz = Ehc_z[idL];
-                        double ERx = Ehc_x[idR], ERy = Ehc_y[idR], ERz = Ehc_z[idR];
+                        double ERx = Ehc(i, j, kR, 0);
+                        double ERy = Ehc(i, j, kR, 1);
+                        double ERz = Ehc(i, j, kR, 2);
 
                         const double Sx = JDze(i, j, k, 0);
                         const double Sy = JDze(i, j, k, 1);
@@ -331,7 +309,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
                         }
 
                         const double h_n = std::max(dlst_ze(i, j, k, 0), eps);
-                        const double sH = Cwh * std::max(beta_hall[idL], beta_hall[idR]) / h_n;
+                        const double sH = Cwh * std::max(beta_hall(i, j, kL), beta_hall(i, j, kR)) / h_n;
 
                         const double BLx = Binduce(i, j, kL, 0);
                         const double BLy = Binduce(i, j, kL, 1);

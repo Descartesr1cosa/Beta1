@@ -173,5 +173,47 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     hall_implicit_.SetCallbacks(cb);
     hall_implicit_.SetTheta(1.0); // midpoint
     hall_implicit_.InitializePetsc();
+
+    SetupHallFaceScratch_(); // setup temp block data for Rusanov Scheme
 #endif
 }
+
+#ifdef HALL_IMPLICIT
+void MercurySolver::SetupHallFaceScratch_()
+{
+    const int nb = fld_->num_blocks();
+    hall_face_scratch_.clear();
+    hall_face_scratch_.resize(nb);
+
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        auto &Bc = fld_->field(fid_.fid_Bcell, ib);
+        if (!Bc.is_allocated())
+            continue;
+
+        Int3 clo = Bc.get_lo();
+        Int3 chi = Bc.get_hi();
+
+        const int ghost = -clo.i; // 前提：三个方向一致，且 clo = (-g,-g,-g)
+        if (clo.i != -ghost || clo.j != -ghost || clo.k != -ghost)
+        {
+            throw std::runtime_error(
+                "SetupHallFaceScratch_: Bcell lo is not compatible with Field_Array ghost indexing.");
+        }
+
+        const int dim1 = chi.i - clo.i;
+        const int dim2 = chi.j - clo.j;
+        const int dim3 = chi.k - clo.k;
+
+        auto &buf = hall_face_scratch_[ib];
+        buf.clo = clo;
+        buf.chi = chi;
+        buf.ni = dim1;
+        buf.nj = dim2;
+        buf.nk = dim3;
+
+        buf.Ehc.SetSize(dim1, dim2, dim3, ghost, 3);
+        buf.beta.SetSize(dim1, dim2, dim3, ghost);
+    }
+}
+#endif
