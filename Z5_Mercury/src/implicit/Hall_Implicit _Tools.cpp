@@ -70,11 +70,8 @@ void ImplicitHallSolver::CopyEhallToE_()
     }
 }
 
-void ImplicitHallSolver::PackFaceInner_(int fid, std::vector<std::vector<double>> &buf)
+void ImplicitHallSolver::PackFaceInner_(int fid, std::vector<Scalar> &buf)
 {
-    buf.clear();
-    buf.resize(static_cast<size_t>(fld_->num_blocks()));
-
     for (int ib = 0; ib < fld_->num_blocks(); ++ib)
     {
         auto &F = fld_->field(fid, ib);
@@ -82,23 +79,18 @@ void ImplicitHallSolver::PackFaceInner_(int fid, std::vector<std::vector<double>
             continue;
 
         Int3 lo = F.inner_lo(), hi = F.inner_hi();
-        const size_t n =
-            static_cast<size_t>(hi.i - lo.i) *
-            static_cast<size_t>(hi.j - lo.j) *
-            static_cast<size_t>(hi.k - lo.k);
 
-        auto &v = buf[static_cast<size_t>(ib)];
-        v.resize(n);
+        auto &v = buf[ib];
 
         size_t t = 0;
         for (int i = lo.i; i < hi.i; ++i)
             for (int j = lo.j; j < hi.j; ++j)
-                for (int k = lo.k; k < hi.k; ++k, ++t)
-                    v[t] = F(i, j, k, 0);
+                for (int k = lo.k; k < hi.k; ++k)
+                    v(i, j, k) = F(i, j, k, 0);
     }
 }
 
-void ImplicitHallSolver::RestoreFaceInner_(int fid, const std::vector<std::vector<double>> &buf)
+void ImplicitHallSolver::RestoreFaceInner_(int fid, std::vector<Scalar> &buf)
 {
     for (int ib = 0; ib < fld_->num_blocks(); ++ib)
     {
@@ -107,13 +99,13 @@ void ImplicitHallSolver::RestoreFaceInner_(int fid, const std::vector<std::vecto
             continue;
 
         Int3 lo = F.inner_lo(), hi = F.inner_hi();
-        const auto &v = buf[static_cast<size_t>(ib)];
+        auto &v = buf[static_cast<size_t>(ib)];
 
         size_t t = 0;
         for (int i = lo.i; i < hi.i; ++i)
             for (int j = lo.j; j < hi.j; ++j)
-                for (int k = lo.k; k < hi.k; ++k, ++t)
-                    F(i, j, k, 0) = v[t];
+                for (int k = lo.k; k < hi.k; ++k)
+                    F(i, j, k, 0) = v(i, j, k);
     }
 }
 

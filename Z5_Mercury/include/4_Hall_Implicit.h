@@ -99,9 +99,9 @@ private:
     std::vector<double> eh_pred_local_;
 
     // B* snapshot + RHS scratch
-    std::vector<std::vector<double>> Bstar_xi_;
-    std::vector<std::vector<double>> Bstar_eta_;
-    std::vector<std::vector<double>> Bstar_ze_;
+    std::vector<Scalar> Bstar_xi_;
+    std::vector<Scalar> Bstar_eta_;
+    std::vector<Scalar> Bstar_ze_;
 
     std::vector<TOPO::EdgeLocalID> owner_edges_sorted_;
 
@@ -127,8 +127,8 @@ private:
     void WriteResidual_(Vec X, Vec F);
 
     // helpers
-    void PackFaceInner_(int fid, std::vector<std::vector<double>> &buf);
-    void RestoreFaceInner_(int fid, const std::vector<std::vector<double>> &buf);
+    void PackFaceInner_(int fid, std::vector<Scalar> &buf);
+    void RestoreFaceInner_(int fid, std::vector<Scalar> &buf);
     void AddFaceInnerFromRHS_(int fid_B, int fid_RHS, double factor);
 
 public:

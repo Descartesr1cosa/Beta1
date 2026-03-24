@@ -51,6 +51,51 @@ void ImplicitHallSolver::Setup(Grid *grd,
         throw std::runtime_error(
             "ImplicitHallSolver::Setup: owner_edges_sorted_ size mismatch.");
     }
+
+    // Setup B* snapshot
+    {
+        const int nb = fld_->num_blocks();
+        Bstar_xi_.resize(nb);
+        Bstar_eta_.resize(nb);
+        Bstar_ze_.resize(nb);
+
+        auto setup_like_face = [](Scalar &buf, auto &F)
+        {
+            if (!F.is_allocated())
+                return false;
+
+            const Int3 lo = F.get_lo();
+            const Int3 hi = F.get_hi();
+
+            const int ghost = -lo.i;
+            if (lo.i != -ghost || lo.j != -ghost || lo.k != -ghost)
+            {
+                throw std::runtime_error(
+                    "SetupBfaceSnapshotScratch_: face field not in standard ghost form.");
+            }
+
+            const int dim1 = hi.i - lo.i;
+            const int dim2 = hi.j - lo.j;
+            const int dim3 = hi.k - lo.k;
+
+            buf.SetSize(dim1, dim2, dim3, ghost);
+            return true;
+        };
+
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &bxi = fld_->field(fid_.fid_B.xi, ib);
+            auto &bet = fld_->field(fid_.fid_B.eta, ib);
+            auto &bze = fld_->field(fid_.fid_B.zeta, ib);
+
+            auto &xi = Bstar_xi_[ib];
+            auto &eta = Bstar_eta_[ib];
+            auto &zeta = Bstar_ze_[ib];
+            setup_like_face(xi, bxi);
+            setup_like_face(eta, bet);
+            setup_like_face(zeta, bze);
+        }
+    }
 }
 
 void ImplicitHallSolver::CheckReady_() const
@@ -198,7 +243,7 @@ void ImplicitHallSolver::SolveOneStep(double dt, bool if_outres)
         SNESGetFunctionNorm(snes_, &fnorm);
 
         auto max_abs_face_delta = [&](int fid,
-                                      const std::vector<std::vector<double>> &snap) -> double
+                                      std::vector<Scalar> &snap) -> double
         {
             double local_max = 0.0;
 
@@ -209,13 +254,13 @@ void ImplicitHallSolver::SolveOneStep(double dt, bool if_outres)
                     continue;
 
                 Int3 lo = F.inner_lo(), hi = F.inner_hi();
-                const auto &buf = snap[static_cast<size_t>(ib)];
+                auto &buf = snap[static_cast<size_t>(ib)];
 
                 size_t t = 0;
                 for (int i = lo.i; i < hi.i; ++i)
                     for (int j = lo.j; j < hi.j; ++j)
                         for (int k = lo.k; k < hi.k; ++k, ++t)
-                            local_max = std::max(local_max, std::abs(F(i, j, k, 0) - buf[t]));
+                            local_max = std::max(local_max, std::abs(F(i, j, k, 0) - buf(i, j, k)));
             }
 
             double global_max = 0.0;
