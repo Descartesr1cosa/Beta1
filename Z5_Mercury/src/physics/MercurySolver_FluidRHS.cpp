@@ -396,7 +396,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     const double vst = (cx(i, j, k) >= 0) ? sk1 : sk2;
 
                     // b2 = (sm2/(sm1+sm2))*vst ;  b1 = (Tn0 - Ts0)*sm1/(sm1+sm2)
-                    const double b2 = (m_Na / (m_H + m_Na)) * vst;
+                    const double b2 = (M_Na / (M_H + M_Na)) * vst;
 
                     // sse = qm1 (Fortran), here Photo is already (cm^-3 s^-1) For electrics
                     const double sse = Photo(i, j, k, 0);
@@ -405,9 +405,11 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     // species H+  (ls=1)
                     // =====================
                     {
+                        const double rho = std::max(UH(i, j, k, 0), 0.0);
                         const double u = PVH(i, j, k, 0);
                         const double v = PVH(i, j, k, 1);
                         const double w = PVH(i, j, k, 2);
+                        const double u2 = u * u + v * v + w * w;
 
                         const double subx = (v - upy) * Bz - (w - upz) * By;
                         const double suby = (w - upz) * Bx - (u - upx) * Bz;
@@ -430,20 +432,23 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
 
-                        RHS_H(i, j, k, 0) += 0.0;                                                                      // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH * subx + momentum_hall_coeff * nH / ne * sjbx; //- a4 * rhoH_nd * uH * vst;
-                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH * suby + momentum_hall_coeff * nH / ne * sjby; //- a4 * rhoH_nd * vH * vst;
-                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH * subz + momentum_hall_coeff * nH / ne * sjbz; // - a4 * rhoH_nd * wH * vst;
-                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH * subu + momentum_hall_coeff * nH / ne * sjbu; // + a4 * rhoH_nd * us2 * b2; // work term for species energy
+                        RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
+                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH * subx + momentum_hall_coeff * nH / ne * sjbx - a4 * rho * u * vst;
+                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH * suby + momentum_hall_coeff * nH / ne * sjby - a4 * rho * v * vst;
+                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH * subz + momentum_hall_coeff * nH / ne * sjbz - a4 * rho * w * vst;
+                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH * subu + momentum_hall_coeff * nH / ne * sjbu + a4 * rho * u2 * b2; // work term for species energy
+                        // RHS_H(i, j, k, 4) += a6 * nH * sse * Tn0 / ne;
                     }
 
                     // =====================
                     // species Na+ (ls=2)
                     // =====================
                     {
+                        const double rho = std::max(UNa(i, j, k, 0), 0.0);
                         const double u = PVN(i, j, k, 0);
                         const double v = PVN(i, j, k, 1);
                         const double w = PVN(i, j, k, 2);
+                        const double u2 = u * u + v * v + w * w;
 
                         const double subx = (v - upy) * Bz - (w - upz) * By;
                         const double suby = (w - upz) * Bx - (u - upx) * Bz;
@@ -464,17 +469,11 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoNa_nd * us2 * vst;
 
                         // RHS_Na(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm + a6 * sss * Tn0;
-
-                        // RHS_Na(i, j, k, 1) += -a1_Na * sss * uN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
-                        // RHS_Na(i, j, k, 2) += -a1_Na * sss * vN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
-                        // RHS_Na(i, j, k, 3) += -a1_Na * sss * wN; // 光致电力产生速度为零，相对流动的Na离子产生动量源项
-
-                        // RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa * subx + momentum_hall_coeff * nNa / ne * sjbx; // - a4 * rhoNa_nd * uN * vst;
-                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * nNa / ne * sjby; // - a4 * rhoNa_nd * vN * vst;
-                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * nNa / ne * sjbz; // - a4 * rhoNa_nd * wN * vst;
-                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * nNa / ne * sjbu; // + a4 * rhoNa_nd * us2 * vst;
-                        RHS_Na(i, j, k, 4) += a6 * sss * Tn0;
+                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa * subx + momentum_hall_coeff * nNa / ne * sjbx - a4 * rho * u * vst;
+                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * nNa / ne * sjby - a4 * rho * v * vst;
+                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * nNa / ne * sjbz - a4 * rho * w * vst;
+                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * nNa / ne * sjbu + a4 * rho * u2 * vst;
+                        RHS_Na(i, j, k, 4) += a6 * sss * Tn0; //+ a6 * nNa * sss * Tn0 / ne;
                     }
                 }
     }
