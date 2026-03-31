@@ -2,39 +2,39 @@
 void MercurySolver::AddHallEdgeEMF_()
 {
     // 0) 清零 Ehall_edge / Ehall_face
-    for (int ib = 0; ib < fld_->num_blocks(); ++ib)
-    {
-        auto zero_scalar_edge = [&](FieldBlock &F)
-        {
-            if (!F.is_allocated())
-                return;
-            Int3 lo = F.inner_lo(), hi = F.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        F(i, j, k, 0) = 0.0;
-        };
+    // for (int ib = 0; ib < fld_->num_blocks(); ++ib)
+    // {
+    //     auto zero_scalar_edge = [&](FieldBlock &F)
+    //     {
+    //         if (!F.is_allocated())
+    //             return;
+    //         Int3 lo = F.inner_lo(), hi = F.inner_hi();
+    //         for (int i = lo.i; i < hi.i; ++i)
+    //             for (int j = lo.j; j < hi.j; ++j)
+    //                 for (int k = lo.k; k < hi.k; ++k)
+    //                     F(i, j, k, 0) = 0.0;
+    //     };
 
-        auto zero_vec_face = [&](FieldBlock &F)
-        {
-            if (!F.is_allocated())
-                return;
-            Int3 lo = F.inner_lo(), hi = F.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        for (int m = 0; m < 3; ++m)
-                            F(i, j, k, m) = 0.0;
-        };
+    //     auto zero_vec_face = [&](FieldBlock &F)
+    //     {
+    //         if (!F.is_allocated())
+    //             return;
+    //         Int3 lo = F.inner_lo(), hi = F.inner_hi();
+    //         for (int i = lo.i; i < hi.i; ++i)
+    //             for (int j = lo.j; j < hi.j; ++j)
+    //                 for (int k = lo.k; k < hi.k; ++k)
+    //                     for (int m = 0; m < 3; ++m)
+    //                         F(i, j, k, m) = 0.0;
+    //     };
 
-        zero_scalar_edge(fld_->field(fid_.fid_Ehall.xi, ib));
-        zero_scalar_edge(fld_->field(fid_.fid_Ehall.eta, ib));
-        zero_scalar_edge(fld_->field(fid_.fid_Ehall.zeta, ib));
+    //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.xi, ib));
+    //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.eta, ib));
+    //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.zeta, ib));
 
-        zero_vec_face(fld_->field(fid_.fid_Eface.xi, ib));
-        zero_vec_face(fld_->field(fid_.fid_Eface.eta, ib));
-        zero_vec_face(fld_->field(fid_.fid_Eface.zeta, ib));
-    }
+    //     zero_vec_face(fld_->field(fid_.fid_Eface.xi, ib));
+    //     zero_vec_face(fld_->field(fid_.fid_Eface.eta, ib));
+    //     zero_vec_face(fld_->field(fid_.fid_Eface.zeta, ib));
+    // }
 
     // 2) face 上做 Hall-Rusanov
     BuildHallFaceEMF_Rusanov_();
