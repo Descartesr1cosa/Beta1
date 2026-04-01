@@ -96,16 +96,63 @@ private:
     double inver_Rem{0.0};
 
 #ifdef HALL_IMPLICIT
-    struct HallFaceScratchBlock_ // For Rusanov Scheme
-    {
-        Int3 clo{}, chi{};
-        int ni = 0, nj = 0, nk = 0;
 
-        Vector Ehc;  // vec_length = 3, 分别存 x/y/z
-        Scalar beta; // 标量 beta_hall
-    };
     std::vector<HallFaceScratchBlock_> hall_face_scratch_;
     void SetupHallFaceScratch_();
+
+    void FillFrozenBflatFromCurrentBcell_()
+    {
+        const int nb = fld_->num_blocks();
+
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &Bc = fld_->field(fid_.fid_Bcell, ib);
+            if (!Bc.is_allocated())
+                continue;
+
+            auto &buf = hall_face_scratch_[ib];
+            const Int3 clo = buf.clo;
+            const Int3 chi = buf.chi;
+
+            for (int i = clo.i; i < chi.i; ++i)
+                for (int j = clo.j; j < chi.j; ++j)
+                    for (int k = clo.k; k < chi.k; ++k)
+                    {
+                        buf.Bflat(i, j, k, 0) = Bc(i, j, k, 0);
+                        buf.Bflat(i, j, k, 1) = Bc(i, j, k, 1);
+                        buf.Bflat(i, j, k, 2) = Bc(i, j, k, 2);
+                    }
+        }
+    }
+    void FillFrozenAlphaFlatCell_()
+    {
+        constexpr double eps = 1e-14;
+        const int nb = fld_->num_blocks();
+
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            auto &UH = fld_->field(fid_.fid_U_H, ib);
+            auto &UNa = fld_->field(fid_.fid_U_Na, ib);
+
+            if (!UH.is_allocated() || !UNa.is_allocated())
+                continue;
+
+            auto &buf = hall_face_scratch_[ib];
+            const Int3 clo = buf.clo;
+            const Int3 chi = buf.chi;
+
+            for (int i = clo.i; i < chi.i; ++i)
+                for (int j = clo.j; j < chi.j; ++j)
+                    for (int k = clo.k; k < chi.k; ++k)
+                    {
+                        double num[3];
+                        Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+
+                        const double ne = std::max(num[2], eps);
+                        buf.alpha_flat(i, j, k) = hall_coef / ne;
+                    }
+        }
+    }
 #endif
 
 private:

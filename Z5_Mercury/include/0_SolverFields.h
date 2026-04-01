@@ -63,6 +63,12 @@ struct SolverFields
     // IdTriplet fid_RHS_Bface;     // RHS_xi/eta/zeta (face,1)
     // IdTriplet fid_RHShall_Bface; // RHShall_xi/eta/zeta
 
+    IdTriplet fid_dJ;
+    IdTriplet fid_dE;
+    IdTriplet fid_dB;
+    IdTriplet fid_dEpre;
+    int fid_dJcell;
+
     void Init(Field *fld_in)
     {
         fld = fld_in;
@@ -165,6 +171,20 @@ struct SolverFields
         // fid_RHS_Bface.xi = fld->field_id("RHS_xi");
         // fid_RHS_Bface.eta = fld->field_id("RHS_eta");
         // fid_RHS_Bface.zeta = fld->field_id("RHS_zeta");
+
+        fid_dJ.xi = fld->field_id("dJ_xi");
+        fid_dJ.eta = fld->field_id("dJ_eta");
+        fid_dJ.zeta = fld->field_id("dJ_zeta");
+        fid_dB.xi = fld->field_id("dB_xi");
+        fid_dB.eta = fld->field_id("dB_eta");
+        fid_dB.zeta = fld->field_id("dB_zeta");
+        fid_dE.xi = fld->field_id("dE_xi");
+        fid_dE.eta = fld->field_id("dE_eta");
+        fid_dE.zeta = fld->field_id("dE_zeta");
+        fid_dEpre.xi = fld->field_id("dEpre_xi");
+        fid_dEpre.eta = fld->field_id("dEpre_eta");
+        fid_dEpre.zeta = fld->field_id("dEpre_zeta");
+        fid_dJcell = fld->field_id("dJ_cell");
 
         // -------- Check --------
         Validate();

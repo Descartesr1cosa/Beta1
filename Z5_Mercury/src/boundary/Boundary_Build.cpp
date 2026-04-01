@@ -284,6 +284,56 @@ void MercuryBoundary::InstallDefaultGroups()
     gJc.halo_level = HaloLevel::Vertex;
     gJc.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gJc);
+
+    BoundGroup gdE;
+    gdE.name = "dE";
+    gdE.fields = {"dE_xi", "dE_eta", "dE_zeta"};
+    gdE.do_coupling = true;
+    gdE.do_physical = true;
+    gdE.do_halo = true;
+    gdE.halo_level = HaloLevel::Vertex;
+    gdE.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gdE);
+
+    BoundGroup gdB;
+    gdB.name = "dB";
+    gdB.fields = {"dB_xi", "dB_eta", "dB_zeta"};
+    gdB.do_coupling = true;
+    gdB.do_physical = true;
+    gdB.do_halo = true;
+    gdB.halo_level = HaloLevel::Vertex;
+    gdB.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gdB);
+
+    BoundGroup gdJ;
+    gdJ.name = "dJ";
+    gdJ.fields = {"dJ_xi", "dJ_eta", "dJ_zeta"};
+    gdJ.do_coupling = true;
+    gdJ.do_physical = true;
+    gdJ.do_halo = true;
+    gdJ.halo_level = HaloLevel::Vertex;
+    gdJ.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gdJ);
+
+    BoundGroup gdJcell;
+    gdJcell.name = "dJcell";
+    gdJcell.fields = {"dJ_cell"};
+    gdJcell.do_coupling = true;
+    gdJcell.do_physical = true;
+    gdJcell.do_halo = true;
+    gdJcell.halo_level = HaloLevel::Vertex;
+    gdJcell.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gdJcell);
+
+    BoundGroup gdEpre;
+    gdEpre.name = "dEpre";
+    gdEpre.fields = {"dEpre_xi", "dEpre_eta", "dEpre_zeta"};
+    gdEpre.do_coupling = true;
+    gdEpre.do_physical = true;
+    gdEpre.do_halo = true;
+    gdEpre.halo_level = HaloLevel::Vertex;
+    gdEpre.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gdEpre);
 }
 
 void MercuryBoundary::Build(bool strict_check)

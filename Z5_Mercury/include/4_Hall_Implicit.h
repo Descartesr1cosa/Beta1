@@ -13,6 +13,7 @@
 #include "2_topology/2_MPCNS_Topology_Equiv.h"
 #include "4_halo/1_MPCNS_Halo_EdgeOwner.h"
 #include "operators/CTOperators.h"
+#include "4_Hall_Implicit_Type.h"
 
 // forward decl
 class Grid;
@@ -44,6 +45,16 @@ public:
         // 当前 Bface -> Jedge/Jcell -> Ehall
         // 约定：执行后，fid_.fid_Ehall 中存放预测的 Hall edge EMF
         std::function<void()> build_Ehall_from_current_B;
+
+        std::function<void()> calc_Bcell_from_current_Bface;
+        std::function<void()> FillFrozenBflatFromCurrentBcell_;
+        std::function<void()> FillFrozenAlphaFlatCell_;
+
+        std::function<void()> sync_dEedge;
+        std::function<void()> sync_dBface;
+        std::function<void()> sync_dJedge;
+        std::function<void()> sync_dJcell;
+        std::function<void()> sync_dEface;
     };
 
 public:
@@ -58,7 +69,8 @@ public:
                MercuryBoundary *bound,
                const SolverFields &fid,
                const TOPO::TopologyEquiv &equiv,
-               const HALO_OWNER::EdgeOwnerSyncPattern &owner_pat);
+               const HALO_OWNER::EdgeOwnerSyncPattern &owner_pat,
+               std::vector<HallFaceScratchBlock_> *hall_face_scratch);
 
     void SetCallbacks(const Callbacks &cb) { cb_ = cb; }
 
@@ -130,6 +142,55 @@ private:
     void PackFaceInner_(int fid, std::vector<Scalar> &buf);
     void RestoreFaceInner_(int fid, std::vector<Scalar> &buf);
     void AddFaceInnerFromRHS_(int fid_B, int fid_RHS, double factor);
+
+    std::vector<HallFaceScratchBlock_> *hall_face_scratch_;
+    PetscErrorCode ApplyWhistlerP0ApproxInverse_(Vec in, Vec out);
+    PetscErrorCode ApplyWhistlerP0Operator_(Vec in, Vec out);
+    static PetscErrorCode PCApplyWhistlerP0_Shell_(PC pc, Vec in, Vec out);
+
+    void PrepareWhistlerP0FrozenState_()
+    {
+        // 1) 恢复 snapshot B* 到当前 Bface
+        RestoreCurrentBfaceFromSnapshot_();
+        cb_.sync_Bface();
+
+        // 2) 从当前 Bface 重新构造当前 Bcell / Bindcell
+        //    这一步要复用你真实路径里已有的 Bface -> Bcell 逻辑
+        cb_.calc_Bcell_from_current_Bface(); // 名字你自己对应真实代码
+
+        // 3) 把当前 Bcell 拷到 scratch.Bflat
+        cb_.FillFrozenBflatFromCurrentBcell_();
+
+        // 4) 用当前 UH / UNa 计算 alpha_flat(cell)
+        cb_.FillFrozenAlphaFlatCell_();
+
+        p0_frozen_ready_ = true;
+    }
+
+    void WriteP0Action_(Vec in, Vec out);
+    void BuildDeltaBFromDeltaE_(Vec in);
+    void Calc_DeltaJ_Edge_FromDeltaB_();
+    void Calc_DeltaJcell_FromDeltaJedge_Frozen_();
+    void BuildLinearHallCellEMF_();
+    void BuildLinearHallFaceEMF_();
+    void AssembleLinearHallEdgeEMF_();
+    void SubtractPackedTempDEpreFromVec_(Vec out);
+
+    void UnpackVecToTempDEdgeField_(Vec X);
+
+private:
+    // 非 owning，只是为了方便，不单独 destroy
+    KSP ksp_{nullptr};
+    PC pc_{nullptr};
+    bool use_shell_pc_{true};
+
+    bool p0_frozen_ready_ = false;
+    // Richardson 参数（先从最保守的开始）
+    int p0_nsweeps_ = 1;    // 先做 1 步
+    double p0_omega_ = 0.8; // 先取 0.8
+    // PCShell 内部工作向量
+    Vec pc_q_ = nullptr;   // q = P0 z
+    Vec pc_res_ = nullptr; // residual = r - q
 
 public:
     double MaxAbsTriplet_(const IdTriplet &fid_triplet);

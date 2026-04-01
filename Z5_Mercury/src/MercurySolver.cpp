@@ -99,7 +99,20 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
             "Ehall_eta",
             "Ehall_zeta",
             "Bind_cell",
-            "J_cell"};
+            "J_cell",
+            "dJ_xi",
+            "dJ_eta",
+            "dJ_zeta",
+            "dE_xi",
+            "dE_eta",
+            "dE_zeta",
+            "dB_xi",
+            "dB_eta",
+            "dB_zeta",
+            "dJ_cell",
+            "dEpre_xi",
+            "dEpre_eta",
+            "dEpre_zeta"};
 
         // 1) 初始化 Mercury Boundary
         mercury_bound_.Setup(grd_, fld_, topo_, halo_, par_, bnd_fields);
@@ -144,7 +157,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
         throw std::runtime_error("MercurySolver: hall implicit topology/pattern is null.");
 
     hall_implicit_.Setup(grd_, topo_, fld_, halo_, par_, &mercury_bound_,
-                         fid_, *topo_equiv_, *edge_owner_pat_);
+                         fid_, *topo_equiv_, *edge_owner_pat_, &hall_face_scratch_);
 
     ImplicitHallSolver::Callbacks cb;
     cb.sync_Bface = [this]()
@@ -168,6 +181,36 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
         Calc_J_Edge();
         calc_Jcell();
         AddHallEdgeEMF_();
+    };
+    cb.calc_Bcell_from_current_Bface = [this]()
+    {
+        calc_Bcell();
+    };
+    cb.FillFrozenBflatFromCurrentBcell_ = [this]()
+    { FillFrozenBflatFromCurrentBcell_(); };
+    cb.FillFrozenAlphaFlatCell_ = [this]()
+    { FillFrozenAlphaFlatCell_(); };
+    cb.sync_dEedge = [this]()
+    {
+        mercury_bound_.Sync("dE");
+    };
+
+    cb.sync_dBface = [this]()
+    {
+        mercury_bound_.Sync("dB");
+    };
+
+    cb.sync_dJedge = [this]()
+    {
+        mercury_bound_.Sync("dJ");
+    };
+    cb.sync_dJcell = [this]()
+    {
+        mercury_bound_.Sync("dJcell");
+    };
+    cb.sync_dEface = [this]()
+    {
+        mercury_bound_.Sync("Eface");
     };
 
     hall_implicit_.SetCallbacks(cb);
@@ -214,6 +257,11 @@ void MercurySolver::SetupHallFaceScratch_()
 
         buf.Ehc.SetSize(dim1, dim2, dim3, ghost, 3);
         buf.beta.SetSize(dim1, dim2, dim3, ghost);
+
+        buf.Bflat.SetSize(dim1, dim2, dim3, ghost, 3);
+        buf.alpha_flat.SetSize(dim1, dim2, dim3, ghost);
+        buf.dEhc.SetSize(dim1, dim2, dim3, ghost, 3);
+        // buf.beta_flat.SetSize(dim1, dim2, dim3, ghost);
     }
 }
 #endif
