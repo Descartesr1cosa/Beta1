@@ -238,9 +238,9 @@ void MercuryBoundary::InstallDefaultGroups()
     BoundGroup gEhall;
     gEhall.name = "Ehall";
     gEhall.fields = {"Ehall_xi", "Ehall_eta", "Ehall_zeta"};
-    gEhall.do_coupling = false;
+    gEhall.do_coupling = true;
     gEhall.do_physical = true;
-    gEhall.do_halo = false;
+    gEhall.do_halo = true;
     gEhall.halo_level = HaloLevel::Vertex;
     gEhall.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gEhall);

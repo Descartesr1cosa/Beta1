@@ -105,6 +105,7 @@ private:
     SNES snes_{nullptr};
     Vec X_{nullptr}, F_{nullptr};
     Mat Jmf_{nullptr};
+    Mat Jshell_{nullptr};
 
     // local owner-edge buffers
     std::vector<double> x_local_;
@@ -177,6 +178,11 @@ private:
     void SubtractPackedTempDEpreFromVec_(Vec out);
 
     void UnpackVecToTempDEdgeField_(Vec X);
+
+    // Jacobi
+    static PetscErrorCode FormJacobian_(SNES snes, Vec X, Mat A, Mat P, void *ctx);
+    static PetscErrorCode MatMult_WhistlerShell_(Mat A, Vec in, Vec out);
+    PetscErrorCode ApplyWhistlerJv_(Vec in, Vec out);
 
 private:
     // 非 owning，只是为了方便，不单独 destroy

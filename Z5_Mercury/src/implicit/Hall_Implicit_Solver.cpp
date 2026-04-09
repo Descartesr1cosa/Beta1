@@ -162,8 +162,15 @@ void ImplicitHallSolver::CreatePetscObjects_()
     SNESCreate(PETSC_COMM_WORLD, &snes_);
     SNESSetFunction(snes_, F_, &ImplicitHallSolver::FormFunction_, this);
 
-    MatCreateSNESMF(snes_, &Jmf_);
-    SNESSetJacobian(snes_, Jmf_, Jmf_, MatMFFDComputeJacobian, nullptr);
+    // MatCreateSNESMF(snes_, &Jmf_);
+    // SNESSetJacobian(snes_, Jmf_, Jmf_, MatMFFDComputeJacobian, nullptr);
+
+    // const PetscInt nloc = static_cast<PetscInt>(equiv_.n_local_edge_owner);
+    // const PetscInt nglb = static_cast<PetscInt>(equiv_.n_global_edge_owner);
+    MatCreateShell(PETSC_COMM_WORLD, nloc, nloc, nglb, nglb, this, &Jshell_);
+    MatShellSetOperation(Jshell_, MATOP_MULT,
+                         (void (*)(void))&ImplicitHallSolver::MatMult_WhistlerShell_);
+    SNESSetJacobian(snes_, Jshell_, Jshell_, &ImplicitHallSolver::FormJacobian_, this);
 
     SNESSetType(snes_, SNESNEWTONLS);
 
@@ -250,6 +257,11 @@ void ImplicitHallSolver::DestroyPetscObjects_()
     {
         SNESDestroy(&snes_);
         snes_ = nullptr;
+    }
+    if (Jshell_)
+    {
+        MatDestroy(&Jshell_);
+        Jshell_ = nullptr;
     }
 }
 
@@ -649,8 +661,6 @@ void ImplicitHallSolver::Calc_DeltaJcell_FromDeltaJedge_Frozen_()
 {
     const int nblock = fld_->num_blocks();
 
-    constexpr double eps = 1e-25;
-
     for (int ib = 0; ib < nblock; ++ib)
     {
         auto &Jcell = fld_->field(fid_.fid_dJcell, ib);
@@ -659,56 +669,11 @@ void ImplicitHallSolver::Calc_DeltaJcell_FromDeltaJedge_Frozen_()
         auto &Jeta = fld_->field(fid_.fid_dJ.eta, ib);
         auto &Jzeta = fld_->field(fid_.fid_dJ.zeta, ib);
 
-        auto &dl_xi = fld_->field("dl_xi", ib);
-        auto &dl_eta = fld_->field("dl_eta", ib);
-        auto &dl_zeta = fld_->field("dl_zeta", ib);
+        auto &W = (*hall_face_scratch_)[ib].dJcell_w;
 
-        auto &x = grd_->grids(ib).x;
-        auto &y = grd_->grids(ib).y;
-        auto &z = grd_->grids(ib).z;
-
-        if (!Jcell.is_allocated() || !Jxi.is_allocated() || !Jeta.is_allocated() || !Jzeta.is_allocated())
+        if (!Jcell.is_allocated() || !Jxi.is_allocated() ||
+            !Jeta.is_allocated() || !Jzeta.is_allocated())
             continue;
-
-        auto dot3 = [&](double ax, double ay, double az,
-                        double bx, double by, double bz) -> double
-        {
-            return ax * bx + ay * by + az * bz;
-        };
-
-        auto unit_t_xi = [&](int i, int j, int k,
-                             double &tx, double &ty, double &tz)
-        {
-            const double L = std::max(dl_xi(i, j, k, 0), eps);
-            tx = (x(i + 1, j, k) - x(i, j, k)) / L;
-            ty = (y(i + 1, j, k) - y(i, j, k)) / L;
-            tz = (z(i + 1, j, k) - z(i, j, k)) / L;
-        };
-
-        auto unit_t_eta = [&](int i, int j, int k,
-                              double &tx, double &ty, double &tz)
-        {
-            const double L = std::max(dl_eta(i, j, k, 0), eps);
-            tx = (x(i, j + 1, k) - x(i, j, k)) / L;
-            ty = (y(i, j + 1, k) - y(i, j, k)) / L;
-            tz = (z(i, j + 1, k) - z(i, j, k)) / L;
-        };
-
-        auto unit_t_zeta = [&](int i, int j, int k,
-                               double &tx, double &ty, double &tz)
-        {
-            const double L = std::max(dl_zeta(i, j, k, 0), eps);
-            tx = (x(i, j, k + 1) - x(i, j, k)) / L;
-            ty = (y(i, j, k + 1) - y(i, j, k)) / L;
-            tz = (z(i, j, k + 1) - z(i, j, k)) / L;
-        };
-
-        struct Eq
-        {
-            double tx, ty, tz; // unit tangent
-            double rhs;        // J_edge / |dl|
-            double w;          // weight
-        };
 
         Int3 lo = Jcell.inner_lo();
         Int3 hi = Jcell.inner_hi();
@@ -717,135 +682,242 @@ void ImplicitHallSolver::Calc_DeltaJcell_FromDeltaJedge_Frozen_()
             for (int j = lo.j; j < hi.j; ++j)
                 for (int k = lo.k; k < hi.k; ++k)
                 {
-                    Eq eqs[12];
-                    int K = 0;
+                    const double s0 = Jxi(i, j, k, 0);
+                    const double s1 = Jxi(i, j + 1, k, 0);
+                    const double s2 = Jxi(i, j, k + 1, 0);
+                    const double s3 = Jxi(i, j + 1, k + 1, 0);
 
-                    auto push = [&](double tx, double ty, double tz,
-                                    double Jint, double L, double w = 1.0)
+                    const double s4 = Jeta(i, j, k, 0);
+                    const double s5 = Jeta(i + 1, j, k, 0);
+                    const double s6 = Jeta(i, j, k + 1, 0);
+                    const double s7 = Jeta(i + 1, j, k + 1, 0);
+
+                    const double s8 = Jzeta(i, j, k, 0);
+                    const double s9 = Jzeta(i + 1, j, k, 0);
+                    const double s10 = Jzeta(i, j + 1, k, 0);
+                    const double s11 = Jzeta(i + 1, j + 1, k, 0);
+
+                    const double s[12] = {s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11};
+
+                    double Jx = 0.0, Jy = 0.0, Jz = 0.0;
+                    for (int n = 0; n < 12; ++n)
                     {
-                        L = std::max(L, eps);
-                        eqs[K++] = {tx, ty, tz, Jint / L, w};
-                    };
-
-                    double tx, ty, tz;
-
-                    // =====================================================
-                    // 4 xi-edges around cell(i,j,k)
-                    // =====================================================
-                    unit_t_xi(i, j, k, tx, ty, tz);
-                    push(tx, ty, tz, Jxi(i, j, k, 0), dl_xi(i, j, k, 0));
-
-                    unit_t_xi(i, j + 1, k, tx, ty, tz);
-                    push(tx, ty, tz, Jxi(i, j + 1, k, 0), dl_xi(i, j + 1, k, 0));
-
-                    unit_t_xi(i, j, k + 1, tx, ty, tz);
-                    push(tx, ty, tz, Jxi(i, j, k + 1, 0), dl_xi(i, j, k + 1, 0));
-
-                    unit_t_xi(i, j + 1, k + 1, tx, ty, tz);
-                    push(tx, ty, tz, Jxi(i, j + 1, k + 1, 0), dl_xi(i, j + 1, k + 1, 0));
-
-                    // =====================================================
-                    // 4 eta-edges
-                    // =====================================================
-                    unit_t_eta(i, j, k, tx, ty, tz);
-                    push(tx, ty, tz, Jeta(i, j, k, 0), dl_eta(i, j, k, 0));
-
-                    unit_t_eta(i + 1, j, k, tx, ty, tz);
-                    push(tx, ty, tz, Jeta(i + 1, j, k, 0), dl_eta(i + 1, j, k, 0));
-
-                    unit_t_eta(i, j, k + 1, tx, ty, tz);
-                    push(tx, ty, tz, Jeta(i, j, k + 1, 0), dl_eta(i, j, k + 1, 0));
-
-                    unit_t_eta(i + 1, j, k + 1, tx, ty, tz);
-                    push(tx, ty, tz, Jeta(i + 1, j, k + 1, 0), dl_eta(i + 1, j, k + 1, 0));
-
-                    // =====================================================
-                    // 4 zeta-edges
-                    // =====================================================
-                    unit_t_zeta(i, j, k, tx, ty, tz);
-                    push(tx, ty, tz, Jzeta(i, j, k, 0), dl_zeta(i, j, k, 0));
-
-                    unit_t_zeta(i + 1, j, k, tx, ty, tz);
-                    push(tx, ty, tz, Jzeta(i + 1, j, k, 0), dl_zeta(i + 1, j, k, 0));
-
-                    unit_t_zeta(i, j + 1, k, tx, ty, tz);
-                    push(tx, ty, tz, Jzeta(i, j + 1, k, 0), dl_zeta(i, j + 1, k, 0));
-
-                    unit_t_zeta(i + 1, j + 1, k, tx, ty, tz);
-                    push(tx, ty, tz, Jzeta(i + 1, j + 1, k, 0), dl_zeta(i + 1, j + 1, k, 0));
-
-                    // =====================================================
-                    // Weighted least squares:
-                    //   minimize sum w | t·Jcell - J_edge/|dl| |^2
-                    // =====================================================
-                    double N00 = 0.0, N01 = 0.0, N02 = 0.0;
-                    double N11 = 0.0, N12 = 0.0, N22 = 0.0;
-                    double r0 = 0.0, r1 = 0.0, r2 = 0.0;
-
-                    for (int n = 0; n < K; ++n)
-                    {
-                        const double w = eqs[n].w;
-                        const double tx = eqs[n].tx;
-                        const double ty = eqs[n].ty;
-                        const double tz = eqs[n].tz;
-                        const double b = eqs[n].rhs;
-
-                        N00 += w * tx * tx;
-                        N01 += w * tx * ty;
-                        N02 += w * tx * tz;
-                        N11 += w * ty * ty;
-                        N12 += w * ty * tz;
-                        N22 += w * tz * tz;
-
-                        r0 += w * tx * b;
-                        r1 += w * ty * b;
-                        r2 += w * tz * b;
+                        const double sn = s[n];
+                        Jx += W(i, j, k, n) * sn;
+                        Jy += W(i, j, k, 12 + n) * sn;
+                        Jz += W(i, j, k, 24 + n) * sn;
                     }
-
-                    auto det3 = [&](double a, double b, double c,
-                                    double d, double e, double f) -> double
-                    {
-                        // | a b c |
-                        // | b d e |
-                        // | c e f |
-                        return a * (d * f - e * e) - b * (b * f - c * e) + c * (b * e - c * d);
-                    };
-
-                    double det = det3(N00, N01, N02, N11, N12, N22);
-                    const double reg = 1e-14 * (N00 + N11 + N22 + 1.0);
-
-                    if (std::abs(det) < reg)
-                    {
-                        N00 += reg;
-                        N11 += reg;
-                        N22 += reg;
-                        det = det3(N00, N01, N02, N11, N12, N22);
-                    }
-
-                    // inverse of symmetric 3x3 normal matrix
-                    const double C00 = (N11 * N22 - N12 * N12);
-                    const double C01 = (N02 * N12 - N01 * N22);
-                    const double C02 = (N01 * N12 - N02 * N11);
-                    const double C11 = (N00 * N22 - N02 * N02);
-                    const double C12 = (N01 * N02 - N00 * N12);
-                    const double C22 = (N00 * N11 - N01 * N01);
-
-                    const double invdet = 1.0 / det;
-
-                    const double Jx =
-                        invdet * (C00 * r0 + C01 * r1 + C02 * r2);
-                    const double Jy =
-                        invdet * (C01 * r0 + C11 * r1 + C12 * r2);
-                    const double Jz =
-                        invdet * (C02 * r0 + C12 * r1 + C22 * r2);
 
                     Jcell(i, j, k, 0) = Jx;
                     Jcell(i, j, k, 1) = Jy;
                     Jcell(i, j, k, 2) = Jz;
                 }
     }
+
     cb_.sync_dJcell();
 }
+
+// void ImplicitHallSolver::Calc_DeltaJcell_FromDeltaJedge_Frozen_()
+// {
+//     const int nblock = fld_->num_blocks();
+
+//     constexpr double eps = 1e-25;
+
+//     for (int ib = 0; ib < nblock; ++ib)
+//     {
+//         auto &Jcell = fld_->field(fid_.fid_dJcell, ib);
+
+//         auto &Jxi = fld_->field(fid_.fid_dJ.xi, ib);
+//         auto &Jeta = fld_->field(fid_.fid_dJ.eta, ib);
+//         auto &Jzeta = fld_->field(fid_.fid_dJ.zeta, ib);
+
+//         auto &dl_xi = fld_->field("dl_xi", ib);
+//         auto &dl_eta = fld_->field("dl_eta", ib);
+//         auto &dl_zeta = fld_->field("dl_zeta", ib);
+
+//         auto &x = grd_->grids(ib).x;
+//         auto &y = grd_->grids(ib).y;
+//         auto &z = grd_->grids(ib).z;
+
+//         if (!Jcell.is_allocated() || !Jxi.is_allocated() || !Jeta.is_allocated() || !Jzeta.is_allocated())
+//             continue;
+
+//         auto dot3 = [&](double ax, double ay, double az,
+//                         double bx, double by, double bz) -> double
+//         {
+//             return ax * bx + ay * by + az * bz;
+//         };
+
+//         auto unit_t_xi = [&](int i, int j, int k,
+//                              double &tx, double &ty, double &tz)
+//         {
+//             const double L = std::max(dl_xi(i, j, k, 0), eps);
+//             tx = (x(i + 1, j, k) - x(i, j, k)) / L;
+//             ty = (y(i + 1, j, k) - y(i, j, k)) / L;
+//             tz = (z(i + 1, j, k) - z(i, j, k)) / L;
+//         };
+
+//         auto unit_t_eta = [&](int i, int j, int k,
+//                               double &tx, double &ty, double &tz)
+//         {
+//             const double L = std::max(dl_eta(i, j, k, 0), eps);
+//             tx = (x(i, j + 1, k) - x(i, j, k)) / L;
+//             ty = (y(i, j + 1, k) - y(i, j, k)) / L;
+//             tz = (z(i, j + 1, k) - z(i, j, k)) / L;
+//         };
+
+//         auto unit_t_zeta = [&](int i, int j, int k,
+//                                double &tx, double &ty, double &tz)
+//         {
+//             const double L = std::max(dl_zeta(i, j, k, 0), eps);
+//             tx = (x(i, j, k + 1) - x(i, j, k)) / L;
+//             ty = (y(i, j, k + 1) - y(i, j, k)) / L;
+//             tz = (z(i, j, k + 1) - z(i, j, k)) / L;
+//         };
+
+//         struct Eq
+//         {
+//             double tx, ty, tz; // unit tangent
+//             double rhs;        // J_edge / |dl|
+//             double w;          // weight
+//         };
+
+//         Int3 lo = Jcell.inner_lo();
+//         Int3 hi = Jcell.inner_hi();
+
+//         for (int i = lo.i; i < hi.i; ++i)
+//             for (int j = lo.j; j < hi.j; ++j)
+//                 for (int k = lo.k; k < hi.k; ++k)
+//                 {
+//                     Eq eqs[12];
+//                     int K = 0;
+
+//                     auto push = [&](double tx, double ty, double tz,
+//                                     double Jint, double L, double w = 1.0)
+//                     {
+//                         L = std::max(L, eps);
+//                         eqs[K++] = {tx, ty, tz, Jint / L, w};
+//                     };
+
+//                     double tx, ty, tz;
+
+//                     // =====================================================
+//                     // 4 xi-edges around cell(i,j,k)
+//                     // =====================================================
+//                     unit_t_xi(i, j, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jxi(i, j, k, 0), dl_xi(i, j, k, 0));
+
+//                     unit_t_xi(i, j + 1, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jxi(i, j + 1, k, 0), dl_xi(i, j + 1, k, 0));
+
+//                     unit_t_xi(i, j, k + 1, tx, ty, tz);
+//                     push(tx, ty, tz, Jxi(i, j, k + 1, 0), dl_xi(i, j, k + 1, 0));
+
+//                     unit_t_xi(i, j + 1, k + 1, tx, ty, tz);
+//                     push(tx, ty, tz, Jxi(i, j + 1, k + 1, 0), dl_xi(i, j + 1, k + 1, 0));
+
+//                     // =====================================================
+//                     // 4 eta-edges
+//                     // =====================================================
+//                     unit_t_eta(i, j, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jeta(i, j, k, 0), dl_eta(i, j, k, 0));
+
+//                     unit_t_eta(i + 1, j, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jeta(i + 1, j, k, 0), dl_eta(i + 1, j, k, 0));
+
+//                     unit_t_eta(i, j, k + 1, tx, ty, tz);
+//                     push(tx, ty, tz, Jeta(i, j, k + 1, 0), dl_eta(i, j, k + 1, 0));
+
+//                     unit_t_eta(i + 1, j, k + 1, tx, ty, tz);
+//                     push(tx, ty, tz, Jeta(i + 1, j, k + 1, 0), dl_eta(i + 1, j, k + 1, 0));
+
+//                     // =====================================================
+//                     // 4 zeta-edges
+//                     // =====================================================
+//                     unit_t_zeta(i, j, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jzeta(i, j, k, 0), dl_zeta(i, j, k, 0));
+
+//                     unit_t_zeta(i + 1, j, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jzeta(i + 1, j, k, 0), dl_zeta(i + 1, j, k, 0));
+
+//                     unit_t_zeta(i, j + 1, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jzeta(i, j + 1, k, 0), dl_zeta(i, j + 1, k, 0));
+
+//                     unit_t_zeta(i + 1, j + 1, k, tx, ty, tz);
+//                     push(tx, ty, tz, Jzeta(i + 1, j + 1, k, 0), dl_zeta(i + 1, j + 1, k, 0));
+
+//                     // =====================================================
+//                     // Weighted least squares:
+//                     //   minimize sum w | t·Jcell - J_edge/|dl| |^2
+//                     // =====================================================
+//                     double N00 = 0.0, N01 = 0.0, N02 = 0.0;
+//                     double N11 = 0.0, N12 = 0.0, N22 = 0.0;
+//                     double r0 = 0.0, r1 = 0.0, r2 = 0.0;
+
+//                     for (int n = 0; n < K; ++n)
+//                     {
+//                         const double w = eqs[n].w;
+//                         const double tx = eqs[n].tx;
+//                         const double ty = eqs[n].ty;
+//                         const double tz = eqs[n].tz;
+//                         const double b = eqs[n].rhs;
+
+//                         N00 += w * tx * tx;
+//                         N01 += w * tx * ty;
+//                         N02 += w * tx * tz;
+//                         N11 += w * ty * ty;
+//                         N12 += w * ty * tz;
+//                         N22 += w * tz * tz;
+
+//                         r0 += w * tx * b;
+//                         r1 += w * ty * b;
+//                         r2 += w * tz * b;
+//                     }
+
+//                     auto det3 = [&](double a, double b, double c,
+//                                     double d, double e, double f) -> double
+//                     {
+//                         // | a b c |
+//                         // | b d e |
+//                         // | c e f |
+//                         return a * (d * f - e * e) - b * (b * f - c * e) + c * (b * e - c * d);
+//                     };
+
+//                     double det = det3(N00, N01, N02, N11, N12, N22);
+//                     const double reg = 1e-14 * (N00 + N11 + N22 + 1.0);
+
+//                     if (std::abs(det) < reg)
+//                     {
+//                         N00 += reg;
+//                         N11 += reg;
+//                         N22 += reg;
+//                         det = det3(N00, N01, N02, N11, N12, N22);
+//                     }
+
+//                     // inverse of symmetric 3x3 normal matrix
+//                     const double C00 = (N11 * N22 - N12 * N12);
+//                     const double C01 = (N02 * N12 - N01 * N22);
+//                     const double C02 = (N01 * N12 - N02 * N11);
+//                     const double C11 = (N00 * N22 - N02 * N02);
+//                     const double C12 = (N01 * N02 - N00 * N12);
+//                     const double C22 = (N00 * N11 - N01 * N01);
+
+//                     const double invdet = 1.0 / det;
+
+//                     const double Jx =
+//                         invdet * (C00 * r0 + C01 * r1 + C02 * r2);
+//                     const double Jy =
+//                         invdet * (C01 * r0 + C11 * r1 + C12 * r2);
+//                     const double Jz =
+//                         invdet * (C02 * r0 + C12 * r1 + C22 * r2);
+
+//                     Jcell(i, j, k, 0) = Jx;
+//                     Jcell(i, j, k, 1) = Jy;
+//                     Jcell(i, j, k, 2) = Jz;
+//                 }
+//     }
+//     cb_.sync_dJcell();
+// }
 
 void ImplicitHallSolver::BuildLinearHallCellEMF_()
 {
@@ -891,33 +963,27 @@ void ImplicitHallSolver::BuildLinearHallCellEMF_()
 
 void ImplicitHallSolver::BuildLinearHallFaceEMF_()
 {
-    constexpr double eps = 1e-14;
-
-    auto norm3 = [](double x, double y, double z) -> double
-    {
-        return std::sqrt(x * x + y * y + z * z);
-    };
-
     ClearFaceTriplet_(fid_.fid_Eface);
 
     const int nb = fld_->num_blocks();
     for (int ib = 0; ib < nb; ++ib)
     {
-        auto &dEhc = (*hall_face_scratch_)[ib].dEhc; // 3-comp cell
+        auto &scratch = (*hall_face_scratch_)[ib];
+
+        auto &dEhc = scratch.dEhc;  // 3-comp cell
+        auto &Pxi = scratch.P_xi;   // 6-comp xi-face projector
+        auto &Pet = scratch.P_eta;  // 6-comp eta-face projector
+        auto &Pze = scratch.P_zeta; // 6-comp zeta-face projector
 
         auto &Efxi = fld_->field(fid_.fid_Eface.xi, ib); // 3-comp face
         auto &Efet = fld_->field(fid_.fid_Eface.eta, ib);
         auto &Efze = fld_->field(fid_.fid_Eface.zeta, ib);
 
-        auto &JDxi = fld_->field(fid_.fid_metric.xi, ib); // face normal vectors
-        auto &JDet = fld_->field(fid_.fid_metric.eta, ib);
-        auto &JDze = fld_->field(fid_.fid_metric.zeta, ib);
-
         if (!Efxi.is_allocated() || !Efet.is_allocated() || !Efze.is_allocated())
             continue;
 
         // ============================================================
-        // xi-face : average adjacent cells, then remove normal component
+        // xi-face : average adjacent cells, then apply cached projector
         // ============================================================
         {
             Int3 lo = Efxi.inner_lo();
@@ -930,27 +996,20 @@ void ImplicitHallSolver::BuildLinearHallFaceEMF_()
                         const int iL = i - 1;
                         const int iR = i;
 
-                        double Ex = 0.5 * (dEhc(iL, j, k, 0) + dEhc(iR, j, k, 0));
-                        double Ey = 0.5 * (dEhc(iL, j, k, 1) + dEhc(iR, j, k, 1));
-                        double Ez = 0.5 * (dEhc(iL, j, k, 2) + dEhc(iR, j, k, 2));
+                        const double Ex0 = 0.5 * (dEhc(iL, j, k, 0) + dEhc(iR, j, k, 0));
+                        const double Ey0 = 0.5 * (dEhc(iL, j, k, 1) + dEhc(iR, j, k, 1));
+                        const double Ez0 = 0.5 * (dEhc(iL, j, k, 2) + dEhc(iR, j, k, 2));
 
-                        const double Sx = JDxi(i, j, k, 0);
-                        const double Sy = JDxi(i, j, k, 1);
-                        const double Sz = JDxi(i, j, k, 2);
+                        const double Pxx = Pxi(i, j, k, 0);
+                        const double Pxy = Pxi(i, j, k, 1);
+                        const double Pxz = Pxi(i, j, k, 2);
+                        const double Pyy = Pxi(i, j, k, 3);
+                        const double Pyz = Pxi(i, j, k, 4);
+                        const double Pzz = Pxi(i, j, k, 5);
 
-                        const double Smag = norm3(Sx, Sy, Sz) + eps;
-                        const double nx = Sx / Smag;
-                        const double ny = Sy / Smag;
-                        const double nz = Sz / Smag;
-
-                        const double En = Ex * nx + Ey * ny + Ez * nz;
-                        Ex -= En * nx;
-                        Ey -= En * ny;
-                        Ez -= En * nz;
-
-                        Efxi(i, j, k, 0) = Ex;
-                        Efxi(i, j, k, 1) = Ey;
-                        Efxi(i, j, k, 2) = Ez;
+                        Efxi(i, j, k, 0) = Pxx * Ex0 + Pxy * Ey0 + Pxz * Ez0;
+                        Efxi(i, j, k, 1) = Pxy * Ex0 + Pyy * Ey0 + Pyz * Ez0;
+                        Efxi(i, j, k, 2) = Pxz * Ex0 + Pyz * Ey0 + Pzz * Ez0;
                     }
         }
 
@@ -968,27 +1027,20 @@ void ImplicitHallSolver::BuildLinearHallFaceEMF_()
                         const int jL = j - 1;
                         const int jR = j;
 
-                        double Ex = 0.5 * (dEhc(i, jL, k, 0) + dEhc(i, jR, k, 0));
-                        double Ey = 0.5 * (dEhc(i, jL, k, 1) + dEhc(i, jR, k, 1));
-                        double Ez = 0.5 * (dEhc(i, jL, k, 2) + dEhc(i, jR, k, 2));
+                        const double Ex0 = 0.5 * (dEhc(i, jL, k, 0) + dEhc(i, jR, k, 0));
+                        const double Ey0 = 0.5 * (dEhc(i, jL, k, 1) + dEhc(i, jR, k, 1));
+                        const double Ez0 = 0.5 * (dEhc(i, jL, k, 2) + dEhc(i, jR, k, 2));
 
-                        const double Sx = JDet(i, j, k, 0);
-                        const double Sy = JDet(i, j, k, 1);
-                        const double Sz = JDet(i, j, k, 2);
+                        const double Pxx = Pet(i, j, k, 0);
+                        const double Pxy = Pet(i, j, k, 1);
+                        const double Pxz = Pet(i, j, k, 2);
+                        const double Pyy = Pet(i, j, k, 3);
+                        const double Pyz = Pet(i, j, k, 4);
+                        const double Pzz = Pet(i, j, k, 5);
 
-                        const double Smag = norm3(Sx, Sy, Sz) + eps;
-                        const double nx = Sx / Smag;
-                        const double ny = Sy / Smag;
-                        const double nz = Sz / Smag;
-
-                        const double En = Ex * nx + Ey * ny + Ez * nz;
-                        Ex -= En * nx;
-                        Ey -= En * ny;
-                        Ez -= En * nz;
-
-                        Efet(i, j, k, 0) = Ex;
-                        Efet(i, j, k, 1) = Ey;
-                        Efet(i, j, k, 2) = Ez;
+                        Efet(i, j, k, 0) = Pxx * Ex0 + Pxy * Ey0 + Pxz * Ez0;
+                        Efet(i, j, k, 1) = Pxy * Ex0 + Pyy * Ey0 + Pyz * Ez0;
+                        Efet(i, j, k, 2) = Pxz * Ex0 + Pyz * Ey0 + Pzz * Ez0;
                     }
         }
 
@@ -1006,33 +1058,171 @@ void ImplicitHallSolver::BuildLinearHallFaceEMF_()
                         const int kL = k - 1;
                         const int kR = k;
 
-                        double Ex = 0.5 * (dEhc(i, j, kL, 0) + dEhc(i, j, kR, 0));
-                        double Ey = 0.5 * (dEhc(i, j, kL, 1) + dEhc(i, j, kR, 1));
-                        double Ez = 0.5 * (dEhc(i, j, kL, 2) + dEhc(i, j, kR, 2));
+                        const double Ex0 = 0.5 * (dEhc(i, j, kL, 0) + dEhc(i, j, kR, 0));
+                        const double Ey0 = 0.5 * (dEhc(i, j, kL, 1) + dEhc(i, j, kR, 1));
+                        const double Ez0 = 0.5 * (dEhc(i, j, kL, 2) + dEhc(i, j, kR, 2));
 
-                        const double Sx = JDze(i, j, k, 0);
-                        const double Sy = JDze(i, j, k, 1);
-                        const double Sz = JDze(i, j, k, 2);
+                        const double Pxx = Pze(i, j, k, 0);
+                        const double Pxy = Pze(i, j, k, 1);
+                        const double Pxz = Pze(i, j, k, 2);
+                        const double Pyy = Pze(i, j, k, 3);
+                        const double Pyz = Pze(i, j, k, 4);
+                        const double Pzz = Pze(i, j, k, 5);
 
-                        const double Smag = norm3(Sx, Sy, Sz) + eps;
-                        const double nx = Sx / Smag;
-                        const double ny = Sy / Smag;
-                        const double nz = Sz / Smag;
-
-                        const double En = Ex * nx + Ey * ny + Ez * nz;
-                        Ex -= En * nx;
-                        Ey -= En * ny;
-                        Ez -= En * nz;
-
-                        Efze(i, j, k, 0) = Ex;
-                        Efze(i, j, k, 1) = Ey;
-                        Efze(i, j, k, 2) = Ez;
+                        Efze(i, j, k, 0) = Pxx * Ex0 + Pxy * Ey0 + Pxz * Ez0;
+                        Efze(i, j, k, 1) = Pxy * Ex0 + Pyy * Ey0 + Pyz * Ez0;
+                        Efze(i, j, k, 2) = Pxz * Ex0 + Pyz * Ey0 + Pzz * Ez0;
                     }
         }
     }
 
     cb_.sync_dEface();
 }
+
+// void ImplicitHallSolver::BuildLinearHallFaceEMF_()
+// {
+//     constexpr double eps = 1e-14;
+
+//     auto norm3 = [](double x, double y, double z) -> double
+//     {
+//         return std::sqrt(x * x + y * y + z * z);
+//     };
+
+//     ClearFaceTriplet_(fid_.fid_Eface);
+
+//     const int nb = fld_->num_blocks();
+//     for (int ib = 0; ib < nb; ++ib)
+//     {
+//         auto &dEhc = (*hall_face_scratch_)[ib].dEhc; // 3-comp cell
+
+//         auto &Efxi = fld_->field(fid_.fid_Eface.xi, ib); // 3-comp face
+//         auto &Efet = fld_->field(fid_.fid_Eface.eta, ib);
+//         auto &Efze = fld_->field(fid_.fid_Eface.zeta, ib);
+
+//         auto &JDxi = fld_->field(fid_.fid_metric.xi, ib); // face normal vectors
+//         auto &JDet = fld_->field(fid_.fid_metric.eta, ib);
+//         auto &JDze = fld_->field(fid_.fid_metric.zeta, ib);
+
+//         if (!Efxi.is_allocated() || !Efet.is_allocated() || !Efze.is_allocated())
+//             continue;
+
+//         // ============================================================
+//         // xi-face : average adjacent cells, then remove normal component
+//         // ============================================================
+//         {
+//             Int3 lo = Efxi.inner_lo();
+//             Int3 hi = Efxi.inner_hi();
+
+//             for (int i = lo.i; i < hi.i; ++i)
+//                 for (int j = lo.j; j < hi.j; ++j)
+//                     for (int k = lo.k; k < hi.k; ++k)
+//                     {
+//                         const int iL = i - 1;
+//                         const int iR = i;
+
+//                         double Ex = 0.5 * (dEhc(iL, j, k, 0) + dEhc(iR, j, k, 0));
+//                         double Ey = 0.5 * (dEhc(iL, j, k, 1) + dEhc(iR, j, k, 1));
+//                         double Ez = 0.5 * (dEhc(iL, j, k, 2) + dEhc(iR, j, k, 2));
+
+//                         const double Sx = JDxi(i, j, k, 0);
+//                         const double Sy = JDxi(i, j, k, 1);
+//                         const double Sz = JDxi(i, j, k, 2);
+
+//                         const double Smag = norm3(Sx, Sy, Sz) + eps;
+//                         const double nx = Sx / Smag;
+//                         const double ny = Sy / Smag;
+//                         const double nz = Sz / Smag;
+
+//                         const double En = Ex * nx + Ey * ny + Ez * nz;
+//                         Ex -= En * nx;
+//                         Ey -= En * ny;
+//                         Ez -= En * nz;
+
+//                         Efxi(i, j, k, 0) = Ex;
+//                         Efxi(i, j, k, 1) = Ey;
+//                         Efxi(i, j, k, 2) = Ez;
+//                     }
+//         }
+
+//         // ============================================================
+//         // eta-face
+//         // ============================================================
+//         {
+//             Int3 lo = Efet.inner_lo();
+//             Int3 hi = Efet.inner_hi();
+
+//             for (int i = lo.i; i < hi.i; ++i)
+//                 for (int j = lo.j; j < hi.j; ++j)
+//                     for (int k = lo.k; k < hi.k; ++k)
+//                     {
+//                         const int jL = j - 1;
+//                         const int jR = j;
+
+//                         double Ex = 0.5 * (dEhc(i, jL, k, 0) + dEhc(i, jR, k, 0));
+//                         double Ey = 0.5 * (dEhc(i, jL, k, 1) + dEhc(i, jR, k, 1));
+//                         double Ez = 0.5 * (dEhc(i, jL, k, 2) + dEhc(i, jR, k, 2));
+
+//                         const double Sx = JDet(i, j, k, 0);
+//                         const double Sy = JDet(i, j, k, 1);
+//                         const double Sz = JDet(i, j, k, 2);
+
+//                         const double Smag = norm3(Sx, Sy, Sz) + eps;
+//                         const double nx = Sx / Smag;
+//                         const double ny = Sy / Smag;
+//                         const double nz = Sz / Smag;
+
+//                         const double En = Ex * nx + Ey * ny + Ez * nz;
+//                         Ex -= En * nx;
+//                         Ey -= En * ny;
+//                         Ez -= En * nz;
+
+//                         Efet(i, j, k, 0) = Ex;
+//                         Efet(i, j, k, 1) = Ey;
+//                         Efet(i, j, k, 2) = Ez;
+//                     }
+//         }
+
+//         // ============================================================
+//         // zeta-face
+//         // ============================================================
+//         {
+//             Int3 lo = Efze.inner_lo();
+//             Int3 hi = Efze.inner_hi();
+
+//             for (int i = lo.i; i < hi.i; ++i)
+//                 for (int j = lo.j; j < hi.j; ++j)
+//                     for (int k = lo.k; k < hi.k; ++k)
+//                     {
+//                         const int kL = k - 1;
+//                         const int kR = k;
+
+//                         double Ex = 0.5 * (dEhc(i, j, kL, 0) + dEhc(i, j, kR, 0));
+//                         double Ey = 0.5 * (dEhc(i, j, kL, 1) + dEhc(i, j, kR, 1));
+//                         double Ez = 0.5 * (dEhc(i, j, kL, 2) + dEhc(i, j, kR, 2));
+
+//                         const double Sx = JDze(i, j, k, 0);
+//                         const double Sy = JDze(i, j, k, 1);
+//                         const double Sz = JDze(i, j, k, 2);
+
+//                         const double Smag = norm3(Sx, Sy, Sz) + eps;
+//                         const double nx = Sx / Smag;
+//                         const double ny = Sy / Smag;
+//                         const double nz = Sz / Smag;
+
+//                         const double En = Ex * nx + Ey * ny + Ez * nz;
+//                         Ex -= En * nx;
+//                         Ey -= En * ny;
+//                         Ez -= En * nz;
+
+//                         Efze(i, j, k, 0) = Ex;
+//                         Efze(i, j, k, 1) = Ey;
+//                         Efze(i, j, k, 2) = Ez;
+//                     }
+//         }
+//     }
+
+//     cb_.sync_dEface();
+// }
 
 void ImplicitHallSolver::AssembleLinearHallEdgeEMF_()
 {
@@ -1147,4 +1337,44 @@ void ImplicitHallSolver::SubtractPackedTempDEpreFromVec_(Vec out)
     VecRestoreArray(out, &outarr);
 }
 
+// Jacobi
+
+PetscErrorCode ImplicitHallSolver::FormJacobian_(SNES, Vec X, Mat, Mat, void *ctx)
+{
+    auto *S = static_cast<ImplicitHallSolver *>(ctx);
+    // 最简单版本：直接沿用当前 time-step 冻结状态
+    // 如果还没准备，就准备一次
+    if (!S->p0_frozen_ready_)
+        S->PrepareWhistlerP0FrozenState_();
+    return 0;
+
+    // auto *S = static_cast<ImplicitHallSolver *>(ctx);
+    // // 用当前 X 形成 trial E / trial B
+    // S->UnpackVecToEhallField_(X);
+    // S->BuildTrialBfaceFromUnknownE_();
+    // // 基于当前 trial B 冻结线性化状态
+    // S->cb_.calc_Bcell_from_current_Bface();
+    // S->cb_.FillFrozenBflatFromCurrentBcell_();
+    // S->cb_.FillFrozenAlphaFlatCell_();
+    // S->p0_frozen_ready_ = true;
+    // return 0;
+}
+PetscErrorCode ImplicitHallSolver::MatMult_WhistlerShell_(Mat A, Vec in, Vec out)
+{
+    void *ctx = nullptr;
+    PetscCall(MatShellGetContext(A, &ctx));
+
+    auto *S = static_cast<ImplicitHallSolver *>(ctx);
+    PetscCheck(S, PETSC_COMM_WORLD, PETSC_ERR_ARG_NULL,
+               "Null ImplicitHallSolver context in shell MatMult");
+
+    PetscCall(S->ApplyWhistlerJv_(in, out));
+    return 0;
+}
+
+PetscErrorCode ImplicitHallSolver::ApplyWhistlerJv_(Vec in, Vec out)
+{
+    // 先直接把你现有的 P0 operator 拿来当 Jacobian-vector
+    return ApplyWhistlerP0Operator_(in, out);
+}
 #endif

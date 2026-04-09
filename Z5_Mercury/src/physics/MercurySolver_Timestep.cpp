@@ -118,6 +118,7 @@ void MercurySolver::Compute_Timestep()
     };
 
     scan_one(fid_.fid_U_H);
+    scan_one(fid_.fid_U_Na);
 
     // MPI 全局最小 dt
     double dt_global = dt_local;
