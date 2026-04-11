@@ -195,6 +195,9 @@ private:
     void AddAmbipolarEdgeEMF_();
     void Calc_J_Edge();
 
+    void AddHyperResistiveEdgeEMF_();
+    void AddSecondResistiveEdgeEMF_();
+
     // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
     void AssembleRHS_Induction_CT_HallOnly_();
     // 只更新 Bface: Bface += dt_sub * RHS_b
