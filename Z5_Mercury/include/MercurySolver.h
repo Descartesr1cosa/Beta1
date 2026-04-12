@@ -204,6 +204,7 @@ private:
     void ApplyUpdate_Euler_BfaceOnly_(double dt_sub);
 
     void BuildHallFaceEMF_Rusanov_();
+    void BuildHallFaceEMF_Rusanov_diff_();
     void AssembleEdgeEMF_FromFaceE_Hall_();
     //--------------------------------
     //  For Ideal

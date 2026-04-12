@@ -27,6 +27,7 @@ struct SolverFields
     IdTriplet Edge_Astar;  // Edge: |S*_xi|  |S*_eta| |S*_ze| ncomp = 1
     IdTriplet Edge_dl;     // Edge: |e_xi|  |e_eta| |e_ze| ncomp = 1
     IdTriplet Edge_alpha;  // Edge: beta=  |l*_|/|S_| ncomp = 1
+    IdTriplet Edge_dr;     // Edge: dr_xi  dr_eta dr_zeta  ncomp = 3
 
     // ---- field ids ----
     int fid_U_H = -1;
@@ -114,6 +115,10 @@ struct SolverFields
         Edge_alpha.xi = fld->field_id("alpha_xi");
         Edge_alpha.eta = fld->field_id("alpha_eta");
         Edge_alpha.zeta = fld->field_id("alpha_zeta");
+
+        Edge_dr.xi = fld->field_id("dr_xi");
+        Edge_dr.eta = fld->field_id("dr_eta");
+        Edge_dr.zeta = fld->field_id("dr_zeta");
 
         // ---- field ids ----
         fid_U_H = fld->field_id("U_H");
@@ -222,6 +227,8 @@ struct SolverFields
         Edge_Astar.require_all("Edge_Astar");
         Edge_dl.require_all("Edge_dl");
         Edge_alpha.require_all("Edge_alpha");
+
+        Edge_dr.require_all("Edge_dr");
 
         // ---- field ids ----
         require_id(fid_U_H, "U_H");

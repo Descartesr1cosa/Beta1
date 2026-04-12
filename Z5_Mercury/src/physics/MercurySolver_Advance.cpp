@@ -33,7 +33,7 @@ void MercurySolver::Time_Advance()
         // Calc_J_Edge();
         // calc_Jcell();
     }
-#ifdef HALL_IMPLICIT
+#if HALL_IMPLICIT == 1
 
     hall_implicit_.SolveOneStep(dt, control_.if_outres);
     calc_Bcell();
@@ -55,8 +55,45 @@ void MercurySolver::Time_Advance()
                       << std::endl;
         }
     }
-#else
+#elif HALL_IMPLICIT == 0
+    const int nsub_max = par_->GetInt("hall_subcycle_max_steps");
+    double dt_hall_min = dt / (double)(nsub_max + 0.0);
+    for (int nsub = 0; nsub < nsub_max; nsub++)
+    {
+        AddHallEdgeEMF_();
 
+        AddHyperResistiveEdgeEMF_();
+
+        AddSecondResistiveEdgeEMF_();
+
+        // 2) E_edge 也要进边界/halo（否则 curl 更新 B_face 时边界附近会乱）
+        mercury_bound_.Sync("Ehall"); // 你需要加一个 group：fields={E_xi,E_eta,E_zeta}
+
+        // 3) curl(E_edge) -> RHS_Bface，然后 Bface += dt*RHS
+        for (int ib = 0; ib < fld_->num_blocks(); ++ib)
+        {
+            auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+            auto &Eeta = fld_->field(fid_.fid_Ehall.eta, ib);
+            auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
+
+            auto &RHSBxi = fld_->field(fid_.fid_RHS_b.xi, ib);
+            auto &RHSBeta = fld_->field(fid_.fid_RHS_b.eta, ib);
+            auto &RHSBze = fld_->field(fid_.fid_RHS_b.zeta, ib);
+            if (!Exi.is_allocated())
+                continue;
+
+            // multiper 的符号你要和你的取向一致：
+            // 一般 CT 是 B^{n+1} = B^n - dt * curl(E)
+            CTOperators::CurlEdgeToFace(ib, Exi, Eeta, Eze, RHSBxi, RHSBeta, RHSBze, /*multiper=*/-1.0);
+        }
+
+        ApplyUpdate_Euler_BfaceOnly_(dt_hall_min);
+
+        mercury_bound_.Sync("Bface");
+        calc_Bcell();
+        Calc_J_Edge();
+        calc_Jcell();
+    }
 #endif
 }
 

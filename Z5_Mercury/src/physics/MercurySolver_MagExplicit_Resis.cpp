@@ -144,9 +144,9 @@ void MercurySolver::AddSecondResistiveEdgeEMF_()
 
     for (int ib = 0; ib < nb; ++ib)
     {
-        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-        auto &Eet = fld_->field(fid_.fid_E.eta, ib);
-        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
 
         auto &Jxi = fld_->field(fid_.fid_J.xi, ib);
         auto &Jet = fld_->field(fid_.fid_J.eta, ib);
@@ -311,9 +311,9 @@ void MercurySolver::AddHyperResistiveEdgeEMF_()
 
     for (int ib = 0; ib < nb; ++ib)
     {
-        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-        auto &Eet = fld_->field(fid_.fid_E.eta, ib);
-        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
 
         auto &Jxi = fld_->field(fid_.fid_J.xi, ib);
         auto &Jet = fld_->field(fid_.fid_J.eta, ib);

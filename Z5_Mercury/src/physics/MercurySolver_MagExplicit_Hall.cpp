@@ -1,54 +1,357 @@
 #include "MercurySolver.h"
 void MercurySolver::AddHallEdgeEMF_()
 {
-    // 0) 清零 Ehall_edge / Ehall_face
-    // for (int ib = 0; ib < fld_->num_blocks(); ++ib)
-    // {
-    //     auto zero_scalar_edge = [&](FieldBlock &F)
-    //     {
-    //         if (!F.is_allocated())
-    //             return;
-    //         Int3 lo = F.inner_lo(), hi = F.inner_hi();
-    //         for (int i = lo.i; i < hi.i; ++i)
-    //             for (int j = lo.j; j < hi.j; ++j)
-    //                 for (int k = lo.k; k < hi.k; ++k)
-    //                     F(i, j, k, 0) = 0.0;
-    //     };
+    BuildHallFaceEMF_Rusanov_diff_();
 
-    //     auto zero_vec_face = [&](FieldBlock &F)
-    //     {
-    //         if (!F.is_allocated())
-    //             return;
-    //         Int3 lo = F.inner_lo(), hi = F.inner_hi();
-    //         for (int i = lo.i; i < hi.i; ++i)
-    //             for (int j = lo.j; j < hi.j; ++j)
-    //                 for (int k = lo.k; k < hi.k; ++k)
-    //                     for (int m = 0; m < 3; ++m)
-    //                         F(i, j, k, m) = 0.0;
-    //     };
+    // // 0) 清零 Ehall_edge / Ehall_face
+    // // for (int ib = 0; ib < fld_->num_blocks(); ++ib)
+    // // {
+    // //     auto zero_scalar_edge = [&](FieldBlock &F)
+    // //     {
+    // //         if (!F.is_allocated())
+    // //             return;
+    // //         Int3 lo = F.inner_lo(), hi = F.inner_hi();
+    // //         for (int i = lo.i; i < hi.i; ++i)
+    // //             for (int j = lo.j; j < hi.j; ++j)
+    // //                 for (int k = lo.k; k < hi.k; ++k)
+    // //                     F(i, j, k, 0) = 0.0;
+    // //     };
 
-    //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.xi, ib));
-    //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.eta, ib));
-    //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.zeta, ib));
+    // //     auto zero_vec_face = [&](FieldBlock &F)
+    // //     {
+    // //         if (!F.is_allocated())
+    // //             return;
+    // //         Int3 lo = F.inner_lo(), hi = F.inner_hi();
+    // //         for (int i = lo.i; i < hi.i; ++i)
+    // //             for (int j = lo.j; j < hi.j; ++j)
+    // //                 for (int k = lo.k; k < hi.k; ++k)
+    // //                     for (int m = 0; m < 3; ++m)
+    // //                         F(i, j, k, m) = 0.0;
+    // //     };
 
-    //     zero_vec_face(fld_->field(fid_.fid_Eface.xi, ib));
-    //     zero_vec_face(fld_->field(fid_.fid_Eface.eta, ib));
-    //     zero_vec_face(fld_->field(fid_.fid_Eface.zeta, ib));
-    // }
+    // //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.xi, ib));
+    // //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.eta, ib));
+    // //     zero_scalar_edge(fld_->field(fid_.fid_Ehall.zeta, ib));
 
-    // 2) face 上做 Hall-Rusanov
-    BuildHallFaceEMF_Rusanov_();
+    // //     zero_vec_face(fld_->field(fid_.fid_Eface.xi, ib));
+    // //     zero_vec_face(fld_->field(fid_.fid_Eface.eta, ib));
+    // //     zero_vec_face(fld_->field(fid_.fid_Eface.zeta, ib));
+    // // }
 
-    // 3) sync Hall face field
-    mercury_bound_.Sync("Eface");
+    // // 2) face 上做 Hall-Rusanov
+    // BuildHallFaceEMF_Rusanov_();
 
-    // 4) face -> edge
-    AssembleEdgeEMF_FromFaceE_Hall_();
+    // // 3) sync Hall face field
+    // mercury_bound_.Sync("Eface");
 
-    // 5) sync edge Hall EMF
-    mercury_bound_.Sync("Ehall");
+    // // 4) face -> edge
+    // AssembleEdgeEMF_FromFaceE_Hall_();
 
-    // 6) 加到总 E 上
+    // // 5) sync edge Hall EMF
+    // mercury_bound_.Sync("Ehall");
+
+    // // 6) 加到总 E 上
+}
+
+void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
+{
+    constexpr double eps = 1e-14;
+    const double Cwh = 0.5; // 先沿用你原来的 whistler-LLF 系数
+
+    auto avg4 = [](double a, double b, double c, double d) -> double
+    {
+        return 0.25 * (a + b + c + d);
+    };
+
+    auto max4 = [](double a, double b, double c, double d) -> double
+    {
+        return std::max(std::max(a, b), std::max(c, d));
+    };
+
+    auto norm3 = [](double x, double y, double z) -> double
+    {
+        return std::sqrt(x * x + y * y + z * z);
+    };
+
+    const int nb = fld_->num_blocks();
+
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        // ---------- cell-centered total B / J / plasma ----------
+        auto &Bc = fld_->field(fid_.fid_Bcell, ib); // total B on cell (Bind + Badd)
+        auto &Jc = fld_->field(fid_.fid_Jcell, ib);
+
+        auto &UH = fld_->field(fid_.fid_U_H, ib);
+        auto &UNa = fld_->field(fid_.fid_U_Na, ib);
+
+        // ---------- face 2-form magnetic flux DOFs (induced only) ----------
+        auto &Bxi = fld_->field(fid_.fid_B.xi, ib);
+        auto &Bet = fld_->field(fid_.fid_B.eta, ib);
+        auto &Bze = fld_->field(fid_.fid_B.zeta, ib);
+
+        // ---------- edge 1-form Hall EMF DOFs ----------
+        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
+
+        // ---------- static geometry fields ----------
+        auto &Axi = fld_->field(fid_.Face_Area.xi, ib);
+        auto &Aet = fld_->field(fid_.Face_Area.eta, ib);
+        auto &Aze = fld_->field(fid_.Face_Area.zeta, ib);
+
+        auto &dl_xi = fld_->field(fid_.Edge_dl.xi, ib);
+        auto &dl_et = fld_->field(fid_.Edge_dl.eta, ib);
+        auto &dl_ze = fld_->field(fid_.Edge_dl.zeta, ib);
+
+        auto &dr_xi = fld_->field(fid_.Edge_dr.xi, ib);
+        auto &dr_et = fld_->field(fid_.Edge_dr.eta, ib);
+        auto &dr_ze = fld_->field(fid_.Edge_dr.zeta, ib);
+
+        if (!Bc.is_allocated() || !Jc.is_allocated() ||
+            !UH.is_allocated() || !UNa.is_allocated() ||
+            !Bxi.is_allocated() || !Bet.is_allocated() || !Bze.is_allocated() ||
+            !Exi.is_allocated() || !Eet.is_allocated() || !Eze.is_allocated() ||
+            !Axi.is_allocated() || !Aet.is_allocated() || !Aze.is_allocated() ||
+            !dl_xi.is_allocated() || !dl_et.is_allocated() || !dl_ze.is_allocated())
+        {
+            continue;
+        }
+
+        auto &buf = hall_face_scratch_[ib];
+        auto &Ehc = buf.Ehc;   // cell-centered physical Hall E = alpha (J x B)
+        auto &beta = buf.beta; // cell-centered Hall diffusivity scale = |alpha| |B|
+
+        // ============================================================
+        // 1) cell 上预计算:
+        //    Ehc = alpha * (J x B), beta = |alpha| |B|
+        // ============================================================
+        {
+            const Int3 clo = Bc.get_lo();
+            const Int3 chi = Bc.get_hi();
+
+            for (int i = clo.i; i < chi.i; ++i)
+                for (int j = clo.j; j < chi.j; ++j)
+                    for (int k = clo.k; k < chi.k; ++k)
+                    {
+                        double num[3];
+                        Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                        const double ne = std::max(num[2], eps);
+                        const double alpha = hall_coef / ne;
+
+                        const double Jx = Jc(i, j, k, 0);
+                        const double Jy = Jc(i, j, k, 1);
+                        const double Jz = Jc(i, j, k, 2);
+
+                        const double Bx = Bc(i, j, k, 0);
+                        const double By = Bc(i, j, k, 1);
+                        const double Bz = Bc(i, j, k, 2);
+
+                        Ehc(i, j, k, 0) = alpha * (Jy * Bz - Jz * By);
+                        Ehc(i, j, k, 1) = alpha * (Jz * Bx - Jx * Bz);
+                        Ehc(i, j, k, 2) = alpha * (Jx * By - Jy * Bx);
+
+                        beta(i, j, k) = std::abs(alpha) * norm3(Bx, By, Bz);
+                    }
+        }
+
+        // ============================================================
+        // 2) xi-edge:
+        //
+        // Exi(i,j,k) = <Ehc>_4cell · dr_xi
+        //            - 0.5 * mu_eta  * (Bzeta(i,j,k)-Bzeta(i,j-1,k))
+        //            + 0.5 * mu_zeta * (Beta (i,j,k)-Beta (i,j,k-1))
+        //
+        // surrounding 4 cells:
+        // (i, j-1, k-1), (i, j-1, k), (i, j, k-1), (i, j, k)
+        // ============================================================
+        {
+            Int3 lo = Exi.inner_lo();
+            Int3 hi = Exi.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        // ---- central Hall EMF: average 4 cells then line-integrate ----
+                        const double Ecx = avg4(Ehc(i, j - 1, k - 1, 0),
+                                                Ehc(i, j - 1, k, 0),
+                                                Ehc(i, j, k - 1, 0),
+                                                Ehc(i, j, k, 0));
+
+                        const double Ecy = avg4(Ehc(i, j - 1, k - 1, 1),
+                                                Ehc(i, j - 1, k, 1),
+                                                Ehc(i, j, k - 1, 1),
+                                                Ehc(i, j, k, 1));
+
+                        const double Ecz = avg4(Ehc(i, j - 1, k - 1, 2),
+                                                Ehc(i, j - 1, k, 2),
+                                                Ehc(i, j, k - 1, 2),
+                                                Ehc(i, j, k, 2));
+
+                        const double Ecen =
+                            Ecx * dr_xi(i, j, k, 0) +
+                            Ecy * dr_xi(i, j, k, 1) +
+                            Ecz * dr_xi(i, j, k, 2);
+
+                        // ---- edge-local Hall diffusivity scale ----
+                        const double beta_e = max4(beta(i, j - 1, k - 1),
+                                                   beta(i, j - 1, k),
+                                                   beta(i, j, k - 1),
+                                                   beta(i, j, k));
+
+                        const double L = std::max(dl_xi(i, j, k, 0), eps);
+
+                        // h_eta 由周围 zeta-face area / L_xi 给出
+                        const double Abar_zeta = 0.5 * (Aze(i, j, k, 0) +
+                                                        Aze(i, j - 1, k, 0));
+                        const double inv_h_eta = L / std::max(Abar_zeta, eps);
+                        const double mu_eta = Cwh * beta_e * inv_h_eta * inv_h_eta;
+
+                        // h_zeta 由周围 eta-face area / L_xi 给出
+                        const double Abar_eta = 0.5 * (Aet(i, j, k, 0) +
+                                                       Aet(i, j, k - 1, 0));
+                        const double inv_h_zeta = L / std::max(Abar_eta, eps);
+                        const double mu_zeta = Cwh * beta_e * inv_h_zeta * inv_h_zeta;
+
+                        // ---- jumps of face 2-form magnetic flux DOFs ----
+                        const double dBzeta_eta = Bze(i, j, k, 0) - Bze(i, j - 1, k, 0);
+                        const double dBeta_zeta = Bet(i, j, k, 0) - Bet(i, j, k - 1, 0);
+
+                        Exi(i, j, k, 0) =
+                            Ecen - 0.5 * mu_eta * dBzeta_eta + 0.5 * mu_zeta * dBeta_zeta;
+                    }
+        }
+
+        // ============================================================
+        // 3) eta-edge:
+        //
+        // Eeta(i,j,k) = <Ehc>_4cell · dr_eta
+        //             - 0.5 * mu_zeta * (Bxi(i,j,k)-Bxi(i,j,k-1))
+        //             + 0.5 * mu_xi   * (Bzeta(i,j,k)-Bzeta(i-1,j,k))
+        //
+        // surrounding 4 cells:
+        // (i-1, j, k-1), (i-1, j, k), (i, j, k-1), (i, j, k)
+        // ============================================================
+        {
+            Int3 lo = Eet.inner_lo();
+            Int3 hi = Eet.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        const double Ecx = avg4(Ehc(i - 1, j, k - 1, 0),
+                                                Ehc(i - 1, j, k, 0),
+                                                Ehc(i, j, k - 1, 0),
+                                                Ehc(i, j, k, 0));
+
+                        const double Ecy = avg4(Ehc(i - 1, j, k - 1, 1),
+                                                Ehc(i - 1, j, k, 1),
+                                                Ehc(i, j, k - 1, 1),
+                                                Ehc(i, j, k, 1));
+
+                        const double Ecz = avg4(Ehc(i - 1, j, k - 1, 2),
+                                                Ehc(i - 1, j, k, 2),
+                                                Ehc(i, j, k - 1, 2),
+                                                Ehc(i, j, k, 2));
+
+                        const double Ecen =
+                            Ecx * dr_et(i, j, k, 0) +
+                            Ecy * dr_et(i, j, k, 1) +
+                            Ecz * dr_et(i, j, k, 2);
+
+                        const double beta_e = max4(beta(i - 1, j, k - 1),
+                                                   beta(i - 1, j, k),
+                                                   beta(i, j, k - 1),
+                                                   beta(i, j, k));
+
+                        const double L = std::max(dl_et(i, j, k, 0), eps);
+
+                        // h_zeta from xi-face area / L_eta
+                        const double Abar_xi = 0.5 * (Axi(i, j, k, 0) +
+                                                      Axi(i, j, k - 1, 0));
+                        const double inv_h_zeta = L / std::max(Abar_xi, eps);
+                        const double mu_zeta = Cwh * beta_e * inv_h_zeta * inv_h_zeta;
+
+                        // h_xi from zeta-face area / L_eta
+                        const double Abar_zeta = 0.5 * (Aze(i, j, k, 0) +
+                                                        Aze(i - 1, j, k, 0));
+                        const double inv_h_xi = L / std::max(Abar_zeta, eps);
+                        const double mu_xi = Cwh * beta_e * inv_h_xi * inv_h_xi;
+
+                        const double dBxi_zeta = Bxi(i, j, k, 0) - Bxi(i, j, k - 1, 0);
+                        const double dBzeta_xi = Bze(i, j, k, 0) - Bze(i - 1, j, k, 0);
+
+                        Eet(i, j, k, 0) =
+                            Ecen - 0.5 * mu_zeta * dBxi_zeta + 0.5 * mu_xi * dBzeta_xi;
+                    }
+        }
+
+        // ============================================================
+        // 4) zeta-edge:
+        //
+        // Ezeta(i,j,k) = <Ehc>_4cell · dr_zeta
+        //              - 0.5 * mu_xi  * (Beta(i,j,k)-Beta(i-1,j,k))
+        //              + 0.5 * mu_eta * (Bxi (i,j,k)-Bxi (i,j-1,k))
+        //
+        // surrounding 4 cells:
+        // (i-1, j-1, k), (i-1, j, k), (i, j-1, k), (i, j, k)
+        // ============================================================
+        {
+            Int3 lo = Eze.inner_lo();
+            Int3 hi = Eze.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        const double Ecx = avg4(Ehc(i - 1, j - 1, k, 0),
+                                                Ehc(i - 1, j, k, 0),
+                                                Ehc(i, j - 1, k, 0),
+                                                Ehc(i, j, k, 0));
+
+                        const double Ecy = avg4(Ehc(i - 1, j - 1, k, 1),
+                                                Ehc(i - 1, j, k, 1),
+                                                Ehc(i, j - 1, k, 1),
+                                                Ehc(i, j, k, 1));
+
+                        const double Ecz = avg4(Ehc(i - 1, j - 1, k, 2),
+                                                Ehc(i - 1, j, k, 2),
+                                                Ehc(i, j - 1, k, 2),
+                                                Ehc(i, j, k, 2));
+
+                        const double Ecen =
+                            Ecx * dr_ze(i, j, k, 0) +
+                            Ecy * dr_ze(i, j, k, 1) +
+                            Ecz * dr_ze(i, j, k, 2);
+
+                        const double beta_e = max4(beta(i - 1, j - 1, k),
+                                                   beta(i - 1, j, k),
+                                                   beta(i, j - 1, k),
+                                                   beta(i, j, k));
+
+                        const double L = std::max(dl_ze(i, j, k, 0), eps);
+
+                        // h_xi from eta-face area / L_zeta
+                        const double Abar_eta = 0.5 * (Aet(i, j, k, 0) +
+                                                       Aet(i - 1, j, k, 0));
+                        const double inv_h_xi = L / std::max(Abar_eta, eps);
+                        const double mu_xi = Cwh * beta_e * inv_h_xi * inv_h_xi;
+
+                        // h_eta from xi-face area / L_zeta
+                        const double Abar_xi = 0.5 * (Axi(i, j, k, 0) +
+                                                      Axi(i, j - 1, k, 0));
+                        const double inv_h_eta = L / std::max(Abar_xi, eps);
+                        const double mu_eta = Cwh * beta_e * inv_h_eta * inv_h_eta;
+
+                        const double dBeta_xi = Bet(i, j, k, 0) - Bet(i - 1, j, k, 0);
+                        const double dBxi_eta = Bxi(i, j, k, 0) - Bxi(i, j - 1, k, 0);
+
+                        Eze(i, j, k, 0) =
+                            Ecen - 0.5 * mu_xi * dBeta_xi + 0.5 * mu_eta * dBxi_eta;
+                    }
+        }
+    }
 }
 
 void MercurySolver::BuildHallFaceEMF_Rusanov_()
@@ -429,6 +732,46 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Hall_()
 
                         Eze(i, j, k, 0) = E * dr;
                     }
+        }
+    }
+}
+
+void MercurySolver::ApplyUpdate_Euler_BfaceOnly_(double dt_sub)
+{
+    const int nb = fld_->num_blocks();
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        auto &Ub_xi = fld_->field(fid_.fid_B.xi, ib);
+        auto &Ub_eta = fld_->field(fid_.fid_B.eta, ib);
+        auto &Ub_zeta = fld_->field(fid_.fid_B.zeta, ib);
+
+        auto &RHSB_xi = fld_->field(fid_.fid_RHS_b.xi, ib);
+        auto &RHSB_eta = fld_->field(fid_.fid_RHS_b.eta, ib);
+        auto &RHSB_zeta = fld_->field(fid_.fid_RHS_b.zeta, ib);
+
+        if (!Ub_xi.is_allocated())
+            continue;
+
+        {
+            Int3 lo = Ub_xi.inner_lo(), hi = Ub_xi.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ub_xi(i, j, k, 0) += dt_sub * RHSB_xi(i, j, k, 0);
+        }
+        {
+            Int3 lo = Ub_eta.inner_lo(), hi = Ub_eta.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ub_eta(i, j, k, 0) += dt_sub * RHSB_eta(i, j, k, 0);
+        }
+        {
+            Int3 lo = Ub_zeta.inner_lo(), hi = Ub_zeta.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Ub_zeta(i, j, k, 0) += dt_sub * RHSB_zeta(i, j, k, 0);
         }
     }
 }
