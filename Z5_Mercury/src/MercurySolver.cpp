@@ -215,7 +215,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     };
 
     hall_implicit_.SetCallbacks(cb);
-    hall_implicit_.SetTheta(1.0); // midpoint
+    hall_implicit_.SetTheta(1.0); // BE //midpoint
     hall_implicit_.InitializePetsc();
 
     SetupHallFaceScratch_(); // setup temp block data for Rusanov Scheme

@@ -56,6 +56,8 @@ void MercurySolver::Time_Advance()
         }
     }
 #elif HALL_IMPLICIT == 0
+    Calc_J_Edge();
+    calc_Jcell();
     const int nsub_max = par_->GetInt("hall_subcycle_max_steps");
     double dt_hall_min = dt / (double)(nsub_max + 0.0);
     for (int nsub = 0; nsub < nsub_max; nsub++)
