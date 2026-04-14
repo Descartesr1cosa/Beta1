@@ -13,6 +13,10 @@ void Field::build_geometry(int geomtry_ghost_)
     register_field(FieldDescriptor{"a_eta", StaggerLocation::Cell, 3, 0});
     register_field(FieldDescriptor{"a_zeta", StaggerLocation::Cell, 3, 0});
 
+    register_field(FieldDescriptor{"dr_xi", StaggerLocation::EdgeXi, 3, geomtry_ghost_ - 1});   // primal edge vector Δr_xi
+    register_field(FieldDescriptor{"dr_eta", StaggerLocation::EdgeEt, 3, geomtry_ghost_ - 1});  // primal edge vector Δr_eta
+    register_field(FieldDescriptor{"dr_zeta", StaggerLocation::EdgeZe, 3, geomtry_ghost_ - 1}); // primal edge vector Δr_zeta
+
     register_field(FieldDescriptor{"pinvGT_xi", StaggerLocation::EdgeXi, 9, 0});
     register_field(FieldDescriptor{"pinvAT_xi", StaggerLocation::EdgeXi, 9, 0});
     register_field(FieldDescriptor{"pinvGT_eta", StaggerLocation::EdgeEt, 9, 0});
@@ -465,6 +469,66 @@ void Field::build_geometry(int geomtry_ghost_)
             // Edge: dl, Sstar, Astar, alpha
             // -------------------------
 
+            // ------------------------------------------------------------
+            // If the dual quad around an edge has a collapsed side,
+            // then this edge is treated as axis-touching in the dual sense,
+            // and alpha is set to zero directly.
+            //
+            // Geometric meaning:
+            // alpha = |e| / |*e| is singular when |*e| pinches at the axis.
+            // We therefore do NOT test whether the primal edge itself lies on axis,
+            // but whether its dual face is degenerate / touching the axis.
+            // ------------------------------------------------------------
+            constexpr double HALL_DUAL_COLLAPSE_RATIO = 1e-3;
+            constexpr double HALL_EDGE_ABS_TOL = 1e-12;
+
+            auto capped_alpha_from_dual =
+                [&](double L,
+                    const auto &p00, const auto &p10,
+                    const auto &p01, const auto &p11,
+                    double Amag, double eps_local) -> double
+            {
+                // raw geometric alpha
+                const double alpha_raw = (Amag < eps_local) ? 0.0 : (L / Amag);
+
+                // dual quad side lengths
+                const double d00_10 = norm3(minus(p10, p00));
+                const double d00_01 = norm3(minus(p01, p00));
+                const double d10_11 = norm3(minus(p11, p10));
+                const double d01_11 = norm3(minus(p11, p01));
+
+                // dual quad diagonals
+                const double d00_11 = norm3(minus(p11, p00));
+                const double d10_01 = norm3(minus(p01, p10));
+
+                // local geometric scale
+                const double href = std::max(
+                    std::max(std::max(d00_10, d00_01), std::max(d10_11, d01_11)),
+                    std::max(std::max(d00_11, d10_01), std::max(L, eps_local)));
+
+                const double side_min = std::min(
+                    std::min(d00_10, d00_01),
+                    std::min(d10_11, d01_11));
+
+                const double diag_min = std::min(d00_11, d10_01);
+
+                // dual-face touching axis / degenerate:
+                // 1) primal edge itself collapsed
+                // 2) one side of dual quad collapsed
+                // 3) dual quad diagonals collapsed
+                // 4) dual area collapsed relative to local geometric scale
+                const bool dual_touches_axis =
+                    (L < HALL_EDGE_ABS_TOL) ||
+                    (side_min < HALL_DUAL_COLLAPSE_RATIO * href) ||
+                    (diag_min < HALL_DUAL_COLLAPSE_RATIO * href) ||
+                    (Amag < HALL_DUAL_COLLAPSE_RATIO * href * href);
+
+                if (dual_touches_axis)
+                    return 0.0;
+
+                return alpha_raw;
+            };
+
             // EdgeXi: edge from node(i,j,k) to node(i+1,j,k)
             {
                 auto &dl = dl_xi_[ib];
@@ -500,7 +564,8 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Amag = norm3(Avec);
                             Astar(i, j, k, 0) = Amag;
 
-                            alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag; // alpha = |e|/|S*|
+                            // alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag; // alpha = |e|/|S*|
+                            alpha(i, j, k, 0) = capped_alpha_from_dual(L, p00, p10, p01, p11, Amag, eps);
                         }
             }
 
@@ -537,7 +602,8 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Amag = norm3(Avec);
                             Astar(i, j, k, 0) = Amag;
 
-                            alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag;
+                            // alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag;
+                            alpha(i, j, k, 0) = capped_alpha_from_dual(L, p00, p10, p01, p11, Amag, eps);
                         }
             }
 
@@ -574,7 +640,8 @@ void Field::build_geometry(int geomtry_ghost_)
                             double Amag = norm3(Avec);
                             Astar(i, j, k, 0) = Amag;
 
-                            alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag;
+                            // alpha(i, j, k, 0) = (Amag < eps) ? 0.0 : L / Amag;
+                            alpha(i, j, k, 0) = capped_alpha_from_dual(L, p00, p10, p01, p11, Amag, eps);
                         }
             }
         }
@@ -1167,6 +1234,74 @@ void Field::build_geometry(int geomtry_ghost_)
             }
         }
     }
+
+    {
+        auto &dr_xi_ = field("dr_xi");
+        auto &dr_eta_ = field("dr_eta");
+        auto &dr_zeta_ = field("dr_zeta");
+
+        for (int ib = 0; ib < grd->nblock; ++ib)
+        {
+            auto &x = grd->grids(ib).x;
+            auto &y = grd->grids(ib).y;
+            auto &z = grd->grids(ib).z;
+
+            // -------------------------
+            // EdgeXi: node(i,j,k) -> node(i+1,j,k)
+            // -------------------------
+            {
+                auto &dr = dr_xi_[ib];
+                Int3 lo = dr.get_lo();
+                Int3 hi = dr.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            dr(i, j, k, 0) = x(i + 1, j, k) - x(i, j, k);
+                            dr(i, j, k, 1) = y(i + 1, j, k) - y(i, j, k);
+                            dr(i, j, k, 2) = z(i + 1, j, k) - z(i, j, k);
+                        }
+            }
+
+            // -------------------------
+            // EdgeEta: node(i,j,k) -> node(i,j+1,k)
+            // -------------------------
+            {
+                auto &dr = dr_eta_[ib];
+                Int3 lo = dr.get_lo();
+                Int3 hi = dr.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            dr(i, j, k, 0) = x(i, j + 1, k) - x(i, j, k);
+                            dr(i, j, k, 1) = y(i, j + 1, k) - y(i, j, k);
+                            dr(i, j, k, 2) = z(i, j + 1, k) - z(i, j, k);
+                        }
+            }
+
+            // -------------------------
+            // EdgeZeta: node(i,j,k) -> node(i,j,k+1)
+            // -------------------------
+            {
+                auto &dr = dr_zeta_[ib];
+                Int3 lo = dr.get_lo();
+                Int3 hi = dr.get_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            dr(i, j, k, 0) = x(i, j, k + 1) - x(i, j, k);
+                            dr(i, j, k, 1) = y(i, j, k + 1) - y(i, j, k);
+                            dr(i, j, k, 2) = z(i, j, k + 1) - z(i, j, k);
+                        }
+            }
+        }
+    }
+
     // GCL Test
     // {
     //     auto &Jac_ = field("Jac");

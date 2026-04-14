@@ -255,5 +255,7 @@ private:
 
     void DebugPrintEdgeEquivClass_(int query_rank,
                                    int blk, int i, int j, int k, int dir) const;
+
+    void Debug_global_max_JB_Ehall_pH();
     //=========================================================================
 };

@@ -578,3 +578,327 @@ void MercurySolver::DebugPrintEdgeEquivClass_(int query_rank,
 
     MPI_Barrier(MPI_COMM_WORLD);
 }
+
+void MercurySolver::Debug_global_max_JB_Ehall_pH()
+{
+    struct MaxCellRec
+    {
+        double val = -1.0;
+        int ib = -1, i = -1, j = -1, k = -1;
+    };
+
+    struct MaxEdgeRec
+    {
+        double val = -1.0;
+        int ib = -1, i = -1, j = -1, k = -1;
+        int dir = 0; // 1=xi, 2=eta, 3=zeta
+    };
+
+    auto norm3 = [](double x, double y, double z) -> double
+    {
+        return std::sqrt(x * x + y * y + z * z);
+    };
+
+    auto upd_cell = [](MaxCellRec &m, double v, int ib, int i, int j, int k)
+    {
+        if (v > m.val)
+        {
+            m.val = v;
+            m.ib = ib;
+            m.i = i;
+            m.j = j;
+            m.k = k;
+        }
+    };
+
+    auto upd_edge = [](MaxEdgeRec &m, double v, int ib, int i, int j, int k, int dir)
+    {
+        if (v > m.val)
+        {
+            m.val = v;
+            m.ib = ib;
+            m.i = i;
+            m.j = j;
+            m.k = k;
+            m.dir = dir;
+        }
+    };
+
+    // ============================================================
+    // 这里以后可改成你的“只看近壁面前 N 层”的筛选
+    // 现在默认全场
+    // ============================================================
+    auto accept_cell = [&](int ib, int i, int j, int k) -> bool
+    {
+        return true;
+    };
+
+    auto accept_edge_xi = [&](int ib, int i, int j, int k) -> bool
+    {
+        return true;
+    };
+
+    auto accept_edge_eta = [&](int ib, int i, int j, int k) -> bool
+    {
+        return true;
+    };
+
+    auto accept_edge_zeta = [&](int ib, int i, int j, int k) -> bool
+    {
+        return true;
+    };
+
+    // ============================================================
+    // pH 访问器：请按你的实际字段改
+    // ============================================================
+    auto pH_at = [&](int ib, int i, int j, int k) -> double
+    {
+        // 例：如果 H 的 primitive variable 第4分量是压力
+        auto &PVH = fld_->field(fid_.fid_PV_H, ib);
+        return PVH(i, j, k, 3);
+
+        // 如果不是，请改这里
+    };
+
+    // ============================================================
+    // xyz 访问器：这里你需要按自己框架改
+    // 只需要把这几段替换成你实际的坐标读取方式
+    // ============================================================
+    auto xyz_of_cell = [&](int ib, int i, int j, int k,
+                           double &x, double &y, double &z)
+    {
+        // ===== 你需要改这里 =====
+        // 示例1：如果你有 cell-center 坐标场
+        // auto &Xc = fld_->field(fid_.fid_Xcell, ib);
+        // x = Xc(i,j,k,0); y = Xc(i,j,k,1); z = Xc(i,j,k,2);
+
+        // 示例2：如果 topo/grid/block 提供几何接口
+        // auto xc = topo_->blocks[ib].cell_center(i,j,k);
+        // x = xc[0]; y = xc[1]; z = xc[2];
+        x = grd_->grids(ib).x(i, j, k);
+        y = grd_->grids(ib).y(i, j, k);
+        z = grd_->grids(ib).z(i, j, k);
+    };
+
+    auto xyz_of_edge_xi = [&](int ib, int i, int j, int k,
+                              double &x, double &y, double &z)
+    {
+        x = 0.5 * (grd_->grids(ib).x(i, j, k) + grd_->grids(ib).x(i + 1, j, k));
+        y = 0.5 * (grd_->grids(ib).y(i, j, k) + grd_->grids(ib).y(i + 1, j, k));
+        z = 0.5 * (grd_->grids(ib).z(i, j, k) + grd_->grids(ib).z(i + 1, j, k));
+    };
+
+    auto xyz_of_edge_eta = [&](int ib, int i, int j, int k,
+                               double &x, double &y, double &z)
+    {
+        x = 0.5 * (grd_->grids(ib).x(i, j, k) + grd_->grids(ib).x(i, j + 1, k));
+        y = 0.5 * (grd_->grids(ib).y(i, j, k) + grd_->grids(ib).y(i, j + 1, k));
+        z = 0.5 * (grd_->grids(ib).z(i, j, k) + grd_->grids(ib).z(i, j + 1, k));
+    };
+
+    auto xyz_of_edge_zeta = [&](int ib, int i, int j, int k,
+                                double &x, double &y, double &z)
+    {
+        x = 0.5 * (grd_->grids(ib).x(i, j, k) + grd_->grids(ib).x(i, j, k + 1));
+        y = 0.5 * (grd_->grids(ib).y(i, j, k) + grd_->grids(ib).y(i, j, k + 1));
+        z = 0.5 * (grd_->grids(ib).z(i, j, k) + grd_->grids(ib).z(i, j, k + 1));
+    };
+
+    MaxCellRec maxJ, maxB, maxpH;
+    MaxEdgeRec maxEhall;
+
+    const int nblock = fld_->num_blocks();
+    const int myid = par_->GetInt("myid");
+
+    // ============================================================
+    // local scan
+    // ============================================================
+    for (int ib = 0; ib < nblock; ++ib)
+    {
+        auto &Jc = fld_->field(fid_.fid_Jcell, ib);
+        auto &Bc = fld_->field(fid_.fid_Bcell, ib);
+
+        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
+        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
+        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
+
+        auto &PVH = fld_->field(fid_.fid_PV_H, ib);
+
+        if (!Jc.is_allocated() || !Bc.is_allocated() ||
+            !Exi.is_allocated() || !Eet.is_allocated() || !Eze.is_allocated() ||
+            !PVH.is_allocated())
+            continue;
+
+        // cell-centered J, B, pH
+        {
+            Int3 lo = Jc.inner_lo();
+            Int3 hi = Jc.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        if (!accept_cell(ib, i, j, k))
+                            continue;
+
+                        const double Jn = norm3(Jc(i, j, k, 0),
+                                                Jc(i, j, k, 1),
+                                                Jc(i, j, k, 2));
+                        upd_cell(maxJ, Jn, ib, i, j, k);
+
+                        const double Bn = norm3(Bc(i, j, k, 0),
+                                                Bc(i, j, k, 1),
+                                                Bc(i, j, k, 2));
+                        upd_cell(maxB, Bn, ib, i, j, k);
+
+                        const double pH = pH_at(ib, i, j, k);
+                        upd_cell(maxpH, pH, ib, i, j, k);
+                    }
+        }
+
+        // edge-centered Ehall xi
+        {
+            Int3 lo = Exi.inner_lo();
+            Int3 hi = Exi.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        if (!accept_edge_xi(ib, i, j, k))
+                            continue;
+
+                        upd_edge(maxEhall, std::abs(Exi(i, j, k, 0)), ib, i, j, k, 1);
+                    }
+        }
+
+        // edge-centered Ehall eta
+        {
+            Int3 lo = Eet.inner_lo();
+            Int3 hi = Eet.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        if (!accept_edge_eta(ib, i, j, k))
+                            continue;
+
+                        upd_edge(maxEhall, std::abs(Eet(i, j, k, 0)), ib, i, j, k, 2);
+                    }
+        }
+
+        // edge-centered Ehall zeta
+        {
+            Int3 lo = Eze.inner_lo();
+            Int3 hi = Eze.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        if (!accept_edge_zeta(ib, i, j, k))
+                            continue;
+
+                        upd_edge(maxEhall, std::abs(Eze(i, j, k, 0)), ib, i, j, k, 3);
+                    }
+        }
+    }
+
+    // ============================================================
+    // global MAXLOC
+    // ============================================================
+    struct
+    {
+        double val;
+        int rank;
+    } inJ, outJ, inB, outB, inE, outE, inP, outP;
+
+    inJ.val = maxJ.val;
+    inJ.rank = myid;
+    inB.val = maxB.val;
+    inB.rank = myid;
+    inE.val = maxEhall.val;
+    inE.rank = myid;
+    inP.val = maxpH.val;
+    inP.rank = myid;
+
+    MPI_Comm comm = MPI_COMM_WORLD; // 如果你有自己的 communicator，就改这里
+
+    MPI_Allreduce(&inJ, &outJ, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
+    MPI_Allreduce(&inB, &outB, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
+    MPI_Allreduce(&inE, &outE, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
+    MPI_Allreduce(&inP, &outP, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
+
+    // ============================================================
+    // only owner rank prints
+    // ============================================================
+    if (myid == outJ.rank && maxJ.val == outJ.val)
+    {
+        double x, y, z;
+        xyz_of_cell(maxJ.ib, maxJ.i, maxJ.j, maxJ.k, x, y, z);
+
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(6);
+        oss << "\n[MaxDiag] max|J| owner-rank=" << myid
+            << "  val=" << maxJ.val
+            << "  at (block=" << maxJ.ib
+            << ", i=" << maxJ.i << ", j=" << maxJ.j << ", k=" << maxJ.k << ")"
+            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
+        std::cout << oss.str() << std::flush;
+    }
+
+    if (myid == outB.rank && maxB.val == outB.val)
+    {
+        double x, y, z;
+        xyz_of_cell(maxB.ib, maxB.i, maxB.j, maxB.k, x, y, z);
+
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(6);
+        oss << "\n[MaxDiag] max|B| owner-rank=" << myid
+            << "  val=" << maxB.val
+            << "  at (block=" << maxB.ib
+            << ", i=" << maxB.i << ", j=" << maxB.j << ", k=" << maxB.k << ")"
+            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
+        std::cout << oss.str() << std::flush;
+    }
+
+    if (myid == outP.rank && maxpH.val == outP.val)
+    {
+        double x, y, z;
+        xyz_of_cell(maxpH.ib, maxpH.i, maxpH.j, maxpH.k, x, y, z);
+
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(6);
+        oss << "\n[MaxDiag] max pH owner-rank=" << myid
+            << "  val=" << maxpH.val
+            << "  at (block=" << maxpH.ib
+            << ", i=" << maxpH.i << ", j=" << maxpH.j << ", k=" << maxpH.k << ")"
+            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
+        std::cout << oss.str() << std::flush;
+    }
+
+    if (myid == outE.rank && maxEhall.val == outE.val)
+    {
+        double x, y, z;
+
+        if (maxEhall.dir == 1)
+            xyz_of_edge_xi(maxEhall.ib, maxEhall.i, maxEhall.j, maxEhall.k, x, y, z);
+        else if (maxEhall.dir == 2)
+            xyz_of_edge_eta(maxEhall.ib, maxEhall.i, maxEhall.j, maxEhall.k, x, y, z);
+        else
+            xyz_of_edge_zeta(maxEhall.ib, maxEhall.i, maxEhall.j, maxEhall.k, x, y, z);
+
+        const char *dname = (maxEhall.dir == 1 ? "xi" : (maxEhall.dir == 2 ? "eta" : "zeta"));
+
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(6);
+        oss << "\n[MaxDiag] max|Ehall| owner-rank=" << myid
+            << "  val=" << maxEhall.val
+            << "  at (dir=" << dname
+            << ", block=" << maxEhall.ib
+            << ", i=" << maxEhall.i << ", j=" << maxEhall.j << ", k=" << maxEhall.k << ")"
+            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
+        std::cout << oss.str() << std::flush;
+    }
+}
