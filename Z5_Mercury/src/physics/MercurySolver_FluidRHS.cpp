@@ -223,7 +223,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
     // a4 = L_ref / U_ref(秒)，Fortran : a4 = sl8 / v8
     const double a4 = (L_ref / U_ref);
 
-    const double a5 = (3.0 * L_ref * k_Boltz) / (rho_ref * U_ref * U_ref * U_ref);
+    const double a5 = (3.0 * L_ref * k_Boltz * n_ref) / (rho_ref * U_ref * U_ref * U_ref);
 
     const double a6 = (1.0e6 * L_ref * k_Boltz) / (rho_ref * U_ref * U_ref * U_ref * (gamma_ - 1.0));
 
@@ -396,7 +396,6 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     const double vst = (cx(i, j, k) >= 0) ? sk1 : sk2;
 
                     // b2 = (sm2/(sm1+sm2))*vst ;  b1 = (Tn0 - Ts0)*sm1/(sm1+sm2)
-                    const double b2 = (M_Na / (M_H + M_Na)) * vst;
 
                     // sse = qm1 (Fortran), here Photo is already (cm^-3 s^-1) For electrics
                     const double sse = Photo(i, j, k, 0);
@@ -420,24 +419,43 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         // const double dpeu = dpex * u + dpey * v + dpez * w;
 
                         // Ts0 in Kelvin
-                        // const double Ts0 = PVH(i, j, k, 4) * T_ref;
-                        // const double us2 = uH * uH + vH * vH + wH * wH;
-                        // const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
+                        const double Ts0 = PVH(i, j, k, 4) * T_ref;
+                        const double b1 = vst * (Tn0 - Ts0) * (M_H / (M_H + M_Na));
+                        const double b2 = (M_Na / (M_H + M_Na)) * vst;
 
-                        // RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
-                        // RHS_H(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoH_nd * uH * vst;
-                        // RHS_H(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoH_nd * vH * vst;
-                        // RHS_H(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoH_nd * wH * vst;
-                        // RHS_H(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoH_nd * us2 * b2;
+                        //=============================================================================================
+                        // Electromagnetic Source Terms
+                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH * subx + momentum_hall_coeff * nH / ne * sjbx;
+                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH * suby + momentum_hall_coeff * nH / ne * sjby;
+                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH * subz + momentum_hall_coeff * nH / ne * sjbz;
+                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH * subu + momentum_hall_coeff * nH / ne * sjbu;
+                        // RHS_H(i, j, k, 1) -= sns0 * (dpex / ne_cm);
+                        // RHS_H(i, j, k, 2) -= sns0 * (dpey / ne_cm);
+                        // RHS_H(i, j, k, 3) -= sns0 * (dpez / ne_cm);
+                        // RHS_H(i, j, k, 4) -= sns0 * (dpeu / ne_cm);
+                        //=============================================================================================
 
-                        // RHS_H(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm; //+ a6 * 0.0 * Tn0 as sss = 0 For H+
+                        //=============================================================================================
+                        // Photoionization Source Terms
+                        // no source terms for H+
+                        RHS_H(i, j, k, 4) += a6 * sse * Tn0 * nH / ne;
+                        // This is the electron energy that has been divided into corresponding species
+                        // 光致电离产生电子的那一部分电子能量，按照组分数密度分配给对应组分
+                        //=============================================================================================
 
-                        RHS_H(i, j, k, 0) += 0.0; // H+ has no mass creation in Fortran here
-                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH * subx + momentum_hall_coeff * nH / ne * sjbx - a4 * rho * u * vst;
-                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH * suby + momentum_hall_coeff * nH / ne * sjby - a4 * rho * v * vst;
-                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH * subz + momentum_hall_coeff * nH / ne * sjbz - a4 * rho * w * vst;
-                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH * subu + momentum_hall_coeff * nH / ne * sjbu + a4 * rho * u2 * b2; // work term for species energy
-                        // RHS_H(i, j, k, 4) += a6 * nH * sse * Tn0 / ne;
+                        //=============================================================================================
+                        // Drag Related Source Terms
+                        RHS_H(i, j, k, 1) -= a4 * rho * u * vst;
+                        RHS_H(i, j, k, 2) -= a4 * rho * v * vst;
+                        RHS_H(i, j, k, 3) -= a4 * rho * w * vst;
+                        RHS_H(i, j, k, 4) -= a4 * rho * u2 * vst;
+                        //=============================================================================================
+
+                        //=============================================================================================
+                        // Temperature relation & Thermal Drift
+                        RHS_H(i, j, k, 4) += a5 * nH * b1;       // Temperature relation
+                        RHS_H(i, j, k, 4) += a4 * rho * u2 * b2; //  Thermal Drift
+                        //=============================================================================================
                     }
 
                     // =====================
@@ -458,22 +476,47 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         const double sjbu = sjbx * u + sjby * v + sjbz * w;
                         // const double dpeu = dpex * u + dpey * v + dpez * w;
 
-                        // const double Ts0 = PVN(i, j, k, 4) * T_ref;
+                        // Ts0 in Kelvin
+                        const double Ts0 = PVN(i, j, k, 4) * T_ref;
                         // const double us2 = uN * uN + vN * vN + wN * wN;
-                        // const double b1 = (Tn0 - Ts0) * (m_H / (m_H + m_Na));
+                        const double b1 = vst * (Tn0 - Ts0) * (M_Na / (M_Na + M_Na));
+                        const double b2 = (M_Na / (M_Na + M_Na)) * vst;
 
-                        RHS_Na(i, j, k, 0) += a1_Na * sss; // Na+ mass creation
-                        // RHS_Na(i, j, k, 1) += a2 * sns0 * subx + a3 * sns0 * (sjbx / ne_cm) - sns0 * (dpex / ne_cm) - a4 * rhoNa_nd * uN * vst;
-                        // RHS_Na(i, j, k, 2) += a2 * sns0 * suby + a3 * sns0 * (sjby / ne_cm) - sns0 * (dpey / ne_cm) - a4 * rhoNa_nd * vN * vst;
-                        // RHS_Na(i, j, k, 3) += a2 * sns0 * subz + a3 * sns0 * (sjbz / ne_cm) - sns0 * (dpez / ne_cm) - a4 * rhoNa_nd * wN * vst;
-                        // RHS_Na(i, j, k, 4) += a2 * sns0 * subu + a3 * sns0 * (sjbu / ne_cm) - sns0 * (dpeu / ne_cm) + a4 * rhoNa_nd * us2 * vst;
+                        //=============================================================================================
+                        // Electromagnetic Source Terms
+                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa * subx + momentum_hall_coeff * nNa / ne * sjbx;
+                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * nNa / ne * sjby;
+                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * nNa / ne * sjbz;
+                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * nNa / ne * sjbu;
+                        // RHS_Na(i, j, k, 1) -= sns0 * (dpex / ne_cm);
+                        // RHS_Na(i, j, k, 2) -= sns0 * (dpey / ne_cm);
+                        // RHS_Na(i, j, k, 3) -= sns0 * (dpez / ne_cm);
+                        // RHS_Na(i, j, k, 4) -= sns0 * (dpeu / ne_cm);
+                        //=============================================================================================
 
-                        // RHS_Na(i, j, k, 4) += a5 * sns0 * b1 + a6 * sns0 * sse * Tn0 / ne_cm + a6 * sss * Tn0;
-                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa * subx + momentum_hall_coeff * nNa / ne * sjbx - a4 * rho * u * vst;
-                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * nNa / ne * sjby - a4 * rho * v * vst;
-                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * nNa / ne * sjbz - a4 * rho * w * vst;
-                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * nNa / ne * sjbu + a4 * rho * u2 * vst;
-                        RHS_Na(i, j, k, 4) += a6 * sss * Tn0; //+ a6 * nNa * sss * Tn0 / ne;
+                        //=============================================================================================
+                        // Photoionization Source Terms
+                        RHS_Na(i, j, k, 0) += a1_Na * sss;    // Na+ mass creation
+                                                              // no Photoionization related source term for momentum eqs
+                        RHS_Na(i, j, k, 4) += a6 * sss * Tn0; // Photoionization energy (internal) pump into this species
+                        RHS_Na(i, j, k, 4) += a6 * sse * Tn0 * nNa / ne;
+                        // This is the electron energy that has been divided into corresponding species
+                        // 光致电离产生电子的那一部分电子能量，按照组分数密度分配给对应组分
+                        //=============================================================================================
+
+                        //=============================================================================================
+                        // Drag Related Source Terms
+                        RHS_Na(i, j, k, 1) -= a4 * rho * u * vst;
+                        RHS_Na(i, j, k, 2) -= a4 * rho * v * vst;
+                        RHS_Na(i, j, k, 3) -= a4 * rho * w * vst;
+                        RHS_Na(i, j, k, 4) -= a4 * rho * u2 * vst;
+                        //=============================================================================================
+
+                        //=============================================================================================
+                        // Temperature relation & Thermal Drift
+                        RHS_Na(i, j, k, 4) += a5 * nNa * b1;      // Temperature relation
+                        RHS_Na(i, j, k, 4) += a4 * rho * u2 * b2; //  Thermal Drift
+                        //=============================================================================================
                     }
                 }
     }
