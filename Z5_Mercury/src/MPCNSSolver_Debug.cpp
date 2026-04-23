@@ -9,23 +9,529 @@
 #include <iomanip>
 #include <string>
 #include <algorithm>
-
-void MercurySolver::DebugPrintFieldByTopo_(int query_rank,
-                                           int blk_num,
-                                           int i0, int j0, int k0,
-                                           std::string &field_name)
+void MercurySolver::DebugFindExtremaInner(const std::vector<int> &fids,
+                                          const std::vector<std::string> &names,
+                                          bool print_min,
+                                          bool print_max)
 {
-    struct QueryItem
+    static_assert(std::is_trivially_copyable<DebugItem>::value,
+                  "DebugItem must be trivially copyable for MPI byte transfer.");
+
+    const int myid = par_->GetInt("myid");
+    int nrank = 1;
+    MPI_Comm_size(MPI_COMM_WORLD, &nrank);
+
+    auto resolve_fields = [&]() -> std::vector<std::pair<int, std::string>>
     {
-        int rank;
-        int blk;
-        int i, j, k;
+        std::vector<std::pair<int, std::string>> out;
+        std::set<int> seen;
 
-        int src_rank;
-        int src_blk;
-        int src_i, src_j, src_k;
+        for (const auto &nm : names)
+        {
+            if (!fld_->has_field(nm))
+            {
+                if (myid == 0)
+                    std::cout << "[DebugFindExtremaInner] skip unknown field name: " << nm << "\n";
+                continue;
+            }
+            const int fid = fld_->field_id(nm);
+            if (seen.insert(fid).second)
+                out.push_back({fid, nm});
+        }
 
-        int patch_tag; // 0=SRC, 1=face-inner, 2=face-parallel, 3=edge-inner, 4=edge-parallel, 5=vertex-inner, 6=vertex-parallel
+        for (int fid : fids)
+        {
+            if (fid < 0)
+                continue;
+            if (seen.insert(fid).second)
+            {
+                std::ostringstream oss;
+                oss << "fid=" << fid;
+                out.push_back({fid, oss.str()});
+            }
+        }
+        return out;
+    };
+
+    auto get_xyz = [&](int fid, int ib, int i, int j, int k,
+                       double &x, double &y, double &z)
+    {
+        auto avg4 = [](double a, double b, double c, double d) -> double
+        {
+            return 0.25 * (a + b + c + d);
+        };
+        auto avg8 = [](double a0, double a1, double a2, double a3,
+                       double a4, double a5, double a6, double a7) -> double
+        {
+            return 0.125 * (a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7);
+        };
+
+        auto &gx = grd_->grids(ib).x;
+        auto &gy = grd_->grids(ib).y;
+        auto &gz = grd_->grids(ib).z;
+
+        const auto &desc = fld_->descriptor(fid);
+
+        switch (desc.location)
+        {
+        case StaggerLocation::Cell:
+            x = avg8(gx(i, j, k), gx(i + 1, j, k), gx(i, j + 1, k), gx(i + 1, j + 1, k),
+                     gx(i, j, k + 1), gx(i + 1, j, k + 1), gx(i, j + 1, k + 1), gx(i + 1, j + 1, k + 1));
+            y = avg8(gy(i, j, k), gy(i + 1, j, k), gy(i, j + 1, k), gy(i + 1, j + 1, k),
+                     gy(i, j, k + 1), gy(i + 1, j, k + 1), gy(i, j + 1, k + 1), gy(i + 1, j + 1, k + 1));
+            z = avg8(gz(i, j, k), gz(i + 1, j, k), gz(i, j + 1, k), gz(i + 1, j + 1, k),
+                     gz(i, j, k + 1), gz(i + 1, j, k + 1), gz(i, j + 1, k + 1), gz(i + 1, j + 1, k + 1));
+            break;
+
+        case StaggerLocation::Node:
+            x = gx(i, j, k);
+            y = gy(i, j, k);
+            z = gz(i, j, k);
+            break;
+
+        case StaggerLocation::FaceXi:
+            x = avg4(gx(i, j, k), gx(i, j + 1, k), gx(i, j, k + 1), gx(i, j + 1, k + 1));
+            y = avg4(gy(i, j, k), gy(i, j + 1, k), gy(i, j, k + 1), gy(i, j + 1, k + 1));
+            z = avg4(gz(i, j, k), gz(i, j + 1, k), gz(i, j, k + 1), gz(i, j + 1, k + 1));
+            break;
+
+        case StaggerLocation::FaceEt:
+            x = avg4(gx(i, j, k), gx(i + 1, j, k), gx(i, j, k + 1), gx(i + 1, j, k + 1));
+            y = avg4(gy(i, j, k), gy(i + 1, j, k), gy(i, j, k + 1), gy(i + 1, j, k + 1));
+            z = avg4(gz(i, j, k), gz(i + 1, j, k), gz(i, j, k + 1), gz(i + 1, j, k + 1));
+            break;
+
+        case StaggerLocation::FaceZe:
+            x = avg4(gx(i, j, k), gx(i + 1, j, k), gx(i, j + 1, k), gx(i + 1, j + 1, k));
+            y = avg4(gy(i, j, k), gy(i + 1, j, k), gy(i, j + 1, k), gy(i + 1, j + 1, k));
+            z = avg4(gz(i, j, k), gz(i + 1, j, k), gz(i, j + 1, k), gz(i + 1, j + 1, k));
+            break;
+
+        case StaggerLocation::EdgeXi:
+            x = 0.5 * (gx(i, j, k) + gx(i + 1, j, k));
+            y = 0.5 * (gy(i, j, k) + gy(i + 1, j, k));
+            z = 0.5 * (gz(i, j, k) + gz(i + 1, j, k));
+            break;
+
+        case StaggerLocation::EdgeEt:
+            x = 0.5 * (gx(i, j, k) + gx(i, j + 1, k));
+            y = 0.5 * (gy(i, j, k) + gy(i, j + 1, k));
+            z = 0.5 * (gz(i, j, k) + gz(i, j + 1, k));
+            break;
+
+        case StaggerLocation::EdgeZe:
+            x = 0.5 * (gx(i, j, k) + gx(i, j, k + 1));
+            y = 0.5 * (gy(i, j, k) + gy(i, j, k + 1));
+            z = 0.5 * (gz(i, j, k) + gz(i, j, k + 1));
+            break;
+
+        default:
+            x = y = z = 0.0;
+            break;
+        }
+    };
+
+    auto fields = resolve_fields();
+    if (fields.empty())
+    {
+        if (myid == 0)
+            std::cout << "[DebugFindExtremaInner] no valid fields selected.\n";
+        MPI_Barrier(MPI_COMM_WORLD);
+        return;
+    }
+
+    const int nblock = fld_->num_blocks();
+
+    for (const auto &it_field : fields)
+    {
+        const int fid = it_field.first;
+        const std::string label = it_field.second;
+
+        const auto &desc = fld_->descriptor(fid);
+        const int ncomp = desc.ncomp;
+
+        for (int m = 0; m < ncomp; ++m)
+        {
+            DebugItem loc_min, loc_max;
+            loc_min.val = std::numeric_limits<double>::max();
+            loc_max.val = -std::numeric_limits<double>::max();
+            loc_min.fid = fid;
+            loc_max.fid = fid;
+            loc_min.comp = m;
+            loc_max.comp = m;
+            loc_min.rank = myid;
+            loc_max.rank = myid;
+            loc_min.aux[0] = 0; // valid flag
+            loc_max.aux[0] = 0;
+
+            for (int ib = 0; ib < nblock; ++ib)
+            {
+                auto &F = fld_->field(fid, ib);
+                if (!F.is_allocated())
+                    continue;
+
+                Int3 lo = F.inner_lo();
+                Int3 hi = F.inner_hi();
+
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                        {
+                            const double v = F(i, j, k, m);
+
+                            if (!loc_min.aux[0] || v < loc_min.val)
+                            {
+                                loc_min.aux[0] = 1;
+                                loc_min.val = v;
+                                loc_min.blk = ib;
+                                loc_min.i = i;
+                                loc_min.j = j;
+                                loc_min.k = k;
+                                get_xyz(fid, ib, i, j, k,
+                                        loc_min.xyz[0], loc_min.xyz[1], loc_min.xyz[2]);
+                            }
+
+                            if (!loc_max.aux[0] || v > loc_max.val)
+                            {
+                                loc_max.aux[0] = 1;
+                                loc_max.val = v;
+                                loc_max.blk = ib;
+                                loc_max.i = i;
+                                loc_max.j = j;
+                                loc_max.k = k;
+                                get_xyz(fid, ib, i, j, k,
+                                        loc_max.xyz[0], loc_max.xyz[1], loc_max.xyz[2]);
+                            }
+                        }
+            }
+
+            std::vector<DebugItem> all_min(nrank), all_max(nrank);
+            MPI_Allgather(&loc_min, sizeof(DebugItem), MPI_BYTE,
+                          all_min.data(), sizeof(DebugItem), MPI_BYTE, MPI_COMM_WORLD);
+            MPI_Allgather(&loc_max, sizeof(DebugItem), MPI_BYTE,
+                          all_max.data(), sizeof(DebugItem), MPI_BYTE, MPI_COMM_WORLD);
+
+            DebugItem gmin, gmax;
+            gmin.aux[0] = 0;
+            gmax.aux[0] = 0;
+
+            for (const auto &q : all_min)
+            {
+                if (!q.aux[0])
+                    continue;
+                if (!gmin.aux[0] || q.val < gmin.val)
+                {
+                    gmin = q;
+                }
+            }
+
+            for (const auto &q : all_max)
+            {
+                if (!q.aux[0])
+                    continue;
+                if (!gmax.aux[0] || q.val > gmax.val)
+                {
+                    gmax = q;
+                }
+            }
+
+            if (myid == 0)
+            {
+                std::ostringstream oss;
+                oss << std::scientific << std::setprecision(16);
+
+                if (print_min && gmin.aux[0])
+                {
+                    oss << "\n[DebugExtrema][MIN] field=" << label
+                        << " comp=" << m
+                        << " val=" << gmin.val
+                        << " owner_rank=" << gmin.rank
+                        << " block=" << gmin.blk
+                        << " idx=(" << gmin.i << "," << gmin.j << "," << gmin.k << ")"
+                        << " xyz=(" << gmin.xyz[0] << "," << gmin.xyz[1] << "," << gmin.xyz[2] << ")";
+                }
+
+                if (print_max && gmax.aux[0])
+                {
+                    oss << "\n[DebugExtrema][MAX] field=" << label
+                        << " comp=" << m
+                        << " val=" << gmax.val
+                        << " owner_rank=" << gmax.rank
+                        << " block=" << gmax.blk
+                        << " idx=(" << gmax.i << "," << gmax.j << "," << gmax.k << ")"
+                        << " xyz=(" << gmax.xyz[0] << "," << gmax.xyz[1] << "," << gmax.xyz[2] << ")";
+                }
+
+                oss << "\n";
+                std::cout << oss.str() << std::flush;
+            }
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
+void MercurySolver::DebugDumpPointFields(int query_rank,
+                                         int blk, int i, int j, int k,
+                                         const std::vector<int> &fids,
+                                         const std::vector<std::string> &names)
+{
+    const int myid = par_->GetInt("myid");
+
+    auto resolve_fields = [&]() -> std::vector<std::pair<int, std::string>>
+    {
+        std::vector<std::pair<int, std::string>> out;
+        std::set<int> seen;
+
+        for (const auto &nm : names)
+        {
+            if (!fld_->has_field(nm))
+            {
+                if (myid == query_rank)
+                    std::cout << "[DebugDumpPointFields] skip unknown field name: " << nm << "\n";
+                continue;
+            }
+            const int fid = fld_->field_id(nm);
+            if (seen.insert(fid).second)
+                out.push_back({fid, nm});
+        }
+
+        for (int fid : fids)
+        {
+            if (fid < 0)
+                continue;
+            if (seen.insert(fid).second)
+            {
+                std::ostringstream oss;
+                oss << "fid=" << fid;
+                out.push_back({fid, oss.str()});
+            }
+        }
+
+        return out;
+    };
+
+    auto loc_name = [](StaggerLocation loc) -> const char *
+    {
+        switch (loc)
+        {
+        case StaggerLocation::Cell:
+            return "Cell";
+        case StaggerLocation::Node:
+            return "Node";
+        case StaggerLocation::FaceXi:
+            return "FaceXi";
+        case StaggerLocation::FaceEt:
+            return "FaceEt";
+        case StaggerLocation::FaceZe:
+            return "FaceZe";
+        case StaggerLocation::EdgeXi:
+            return "EdgeXi";
+        case StaggerLocation::EdgeEt:
+            return "EdgeEt";
+        case StaggerLocation::EdgeZe:
+            return "EdgeZe";
+        default:
+            return "Unknown";
+        }
+    };
+
+    auto get_xyz = [&](int fid, int ib, int ii, int jj, int kk,
+                       double &x, double &y, double &z)
+    {
+        auto avg4 = [](double a, double b, double c, double d) -> double
+        {
+            return 0.25 * (a + b + c + d);
+        };
+        auto avg8 = [](double a0, double a1, double a2, double a3,
+                       double a4, double a5, double a6, double a7) -> double
+        {
+            return 0.125 * (a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7);
+        };
+
+        auto &gx = grd_->grids(ib).x;
+        auto &gy = grd_->grids(ib).y;
+        auto &gz = grd_->grids(ib).z;
+
+        const auto &desc = fld_->descriptor(fid);
+
+        switch (desc.location)
+        {
+        case StaggerLocation::Cell:
+            x = avg8(gx(ii, jj, kk), gx(ii + 1, jj, kk), gx(ii, jj + 1, kk), gx(ii + 1, jj + 1, kk),
+                     gx(ii, jj, kk + 1), gx(ii + 1, jj, kk + 1), gx(ii, jj + 1, kk + 1), gx(ii + 1, jj + 1, kk + 1));
+            y = avg8(gy(ii, jj, kk), gy(ii + 1, jj, kk), gy(ii, jj + 1, kk), gy(ii + 1, jj + 1, kk),
+                     gy(ii, jj, kk + 1), gy(ii + 1, jj, kk + 1), gy(ii, jj + 1, kk + 1), gy(ii + 1, jj + 1, kk + 1));
+            z = avg8(gz(ii, jj, kk), gz(ii + 1, jj, kk), gz(ii, jj + 1, kk), gz(ii + 1, jj + 1, kk),
+                     gz(ii, jj, kk + 1), gz(ii + 1, jj, kk + 1), gz(ii, jj + 1, kk + 1), gz(ii + 1, jj + 1, kk + 1));
+            break;
+
+        case StaggerLocation::Node:
+            x = gx(ii, jj, kk);
+            y = gy(ii, jj, kk);
+            z = gz(ii, jj, kk);
+            break;
+
+        case StaggerLocation::FaceXi:
+            x = avg4(gx(ii, jj, kk), gx(ii, jj + 1, kk), gx(ii, jj, kk + 1), gx(ii, jj + 1, kk + 1));
+            y = avg4(gy(ii, jj, kk), gy(ii, jj + 1, kk), gy(ii, jj, kk + 1), gy(ii, jj + 1, kk + 1));
+            z = avg4(gz(ii, jj, kk), gz(ii, jj + 1, kk), gz(ii, jj, kk + 1), gz(ii, jj + 1, kk + 1));
+            break;
+
+        case StaggerLocation::FaceEt:
+            x = avg4(gx(ii, jj, kk), gx(ii + 1, jj, kk), gx(ii, jj, kk + 1), gx(ii + 1, jj, kk + 1));
+            y = avg4(gy(ii, jj, kk), gy(ii + 1, jj, kk), gy(ii, jj, kk + 1), gy(ii + 1, jj, kk + 1));
+            z = avg4(gz(ii, jj, kk), gz(ii + 1, jj, kk), gz(ii, jj, kk + 1), gz(ii + 1, jj, kk + 1));
+            break;
+
+        case StaggerLocation::FaceZe:
+            x = avg4(gx(ii, jj, kk), gx(ii + 1, jj, kk), gx(ii, jj + 1, kk), gx(ii + 1, jj + 1, kk));
+            y = avg4(gy(ii, jj, kk), gy(ii + 1, jj, kk), gy(ii, jj + 1, kk), gy(ii + 1, jj + 1, kk));
+            z = avg4(gz(ii, jj, kk), gz(ii + 1, jj, kk), gz(ii, jj + 1, kk), gz(ii + 1, jj + 1, kk));
+            break;
+
+        case StaggerLocation::EdgeXi:
+            x = 0.5 * (gx(ii, jj, kk) + gx(ii + 1, jj, kk));
+            y = 0.5 * (gy(ii, jj, kk) + gy(ii + 1, jj, kk));
+            z = 0.5 * (gz(ii, jj, kk) + gz(ii + 1, jj, kk));
+            break;
+
+        case StaggerLocation::EdgeEt:
+            x = 0.5 * (gx(ii, jj, kk) + gx(ii, jj + 1, kk));
+            y = 0.5 * (gy(ii, jj, kk) + gy(ii, jj + 1, kk));
+            z = 0.5 * (gz(ii, jj, kk) + gz(ii, jj + 1, kk));
+            break;
+
+        case StaggerLocation::EdgeZe:
+            x = 0.5 * (gx(ii, jj, kk) + gx(ii, jj, kk + 1));
+            y = 0.5 * (gy(ii, jj, kk) + gy(ii, jj, kk + 1));
+            z = 0.5 * (gz(ii, jj, kk) + gz(ii, jj, kk + 1));
+            break;
+
+        default:
+            x = y = z = 0.0;
+            break;
+        }
+    };
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if (myid == query_rank)
+    {
+        auto fields = resolve_fields();
+
+        std::cout << "\n[DebugDumpPointFields] rank=" << query_rank
+                  << " block=" << blk
+                  << " idx=(" << i << "," << j << "," << k << ")\n";
+
+        for (const auto &it_field : fields)
+        {
+            const int fid = it_field.first;
+            const std::string label = it_field.second;
+
+            if (blk < 0 || blk >= fld_->num_blocks())
+            {
+                std::cout << "  field=" << label << " : invalid block\n";
+                continue;
+            }
+
+            auto &F = fld_->field(fid, blk);
+            const auto &desc = fld_->descriptor(fid);
+
+            if (!F.is_allocated())
+            {
+                std::cout << "  field=" << label << " loc=" << loc_name(desc.location)
+                          << " : not allocated\n";
+                continue;
+            }
+
+            Int3 lo = F.get_lo();
+            Int3 hi = F.get_hi();
+
+            if (i < lo.i || i >= hi.i ||
+                j < lo.j || j >= hi.j ||
+                k < lo.k || k >= hi.k)
+            {
+                std::cout << "  field=" << label << " loc=" << loc_name(desc.location)
+                          << " : out_of_range, valid=[("
+                          << lo.i << "," << lo.j << "," << lo.k << "),("
+                          << hi.i << "," << hi.j << "," << hi.k << "))\n";
+                continue;
+            }
+
+            double x, y, z;
+            get_xyz(fid, blk, i, j, k, x, y, z);
+
+            std::ostringstream oss;
+            oss << std::scientific << std::setprecision(16);
+            oss << "  field=" << label
+                << " loc=" << loc_name(desc.location)
+                << " xyz=(" << x << "," << y << "," << z << ")"
+                << " : ";
+
+            for (int m = 0; m < desc.ncomp; ++m)
+            {
+                oss << F(i, j, k, m);
+                if (m + 1 < desc.ncomp)
+                    oss << ", ";
+            }
+            oss << "\n";
+
+            std::cout << oss.str();
+        }
+        std::cout.flush();
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+}
+
+void MercurySolver::DebugDumpPointPartners(int query_rank,
+                                           int blk, int i, int j, int k,
+                                           const std::vector<int> &fids,
+                                           const std::vector<std::string> &names,
+                                           int ngh,
+                                           bool include_topo,
+                                           bool include_halo,
+                                           bool include_physical)
+{
+    static_assert(std::is_trivially_copyable<DebugItem>::value,
+                  "DebugItem must be trivially copyable for MPI byte transfer.");
+
+    const int myid = par_->GetInt("myid");
+    int nrank = 1;
+    MPI_Comm_size(MPI_COMM_WORLD, &nrank);
+
+    auto resolve_fields = [&]() -> std::vector<std::pair<int, std::string>>
+    {
+        std::vector<std::pair<int, std::string>> out;
+        std::set<int> seen;
+
+        for (const auto &nm : names)
+        {
+            if (!fld_->has_field(nm))
+            {
+                if (myid == query_rank)
+                    std::cout << "[DebugDumpPointPartners] skip unknown field name: " << nm << "\n";
+                continue;
+            }
+            const int fid = fld_->field_id(nm);
+            if (seen.insert(fid).second)
+                out.push_back({fid, nm});
+        }
+
+        for (int fid : fids)
+        {
+            if (fid < 0)
+                continue;
+            if (seen.insert(fid).second)
+            {
+                std::ostringstream oss;
+                oss << "fid=" << fid;
+                out.push_back({fid, oss.str()});
+            }
+        }
+
+        return out;
     };
 
     auto get_comp = [](const Int3 &x, int d) -> int
@@ -79,12 +585,29 @@ void MercurySolver::DebugPrintFieldByTopo_(int query_rank,
         }
     };
 
+    auto rel_name = [](int rel) -> const char *
+    {
+        switch (rel)
+        {
+        case 0:
+            return "SELF";
+        case 1:
+            return "TOPO";
+        case 2:
+            return "HALO";
+        case 3:
+            return "PHYSICAL";
+        default:
+            return "UNKNOWN";
+        }
+    };
+
     auto patch_name = [](int tag) -> const char *
     {
         switch (tag)
         {
         case 0:
-            return "SRC";
+            return "SELF";
         case 1:
             return "FACE-INNER";
         case 2:
@@ -97,6 +620,8 @@ void MercurySolver::DebugPrintFieldByTopo_(int query_rank,
             return "VERT-INNER";
         case 6:
             return "VERT-PAR";
+        case 7:
+            return "PHYSICAL";
         default:
             return "UNKNOWN";
         }
@@ -127,7 +652,6 @@ void MercurySolver::DebugPrintFieldByTopo_(int query_rank,
         }
     };
 
-    // 把 topo 的 node-box 转成该 field/stagger 在“本块逻辑索引空间”里的 dof box
     auto make_dof_box_from_node_box = [&](StaggerLocation loc, const Box3 &node_box) -> Box3
     {
         Box3 box;
@@ -159,14 +683,14 @@ void MercurySolver::DebugPrintFieldByTopo_(int query_rank,
         case StaggerLocation::EdgeZe:
             box.hi = {node_box.hi.i, node_box.hi.j, node_box.hi.k - 1};
             break;
+        default:
+            box.hi = node_box.hi;
+            break;
         }
+
         return box;
     };
 
-    // 把某个 staggered DOF 的锚点索引映射到邻居块
-    // 公式：
-    //   nb[perm[a]] = sign[a] * local[a] + offset[a]
-    // 对 sign[a] = -1 的情况，要额外减去该 DOF 在该轴上的 support 长度 delta[a]
     auto map_dof_index = [&](const Int3 &p_local,
                              StaggerLocation loc,
                              const TOPO::IndexTransform &tr) -> Int3
@@ -190,715 +714,370 @@ void MercurySolver::DebugPrintFieldByTopo_(int query_rank,
         return p_nb;
     };
 
-    auto print_value = [&](const QueryItem &q)
+    auto get_xyz = [&](int fid, int ib, int ii, int jj, int kk,
+                       double &x, double &y, double &z)
     {
-        if (!fld_->has_field(field_name))
+        auto avg4 = [](double a, double b, double c, double d) -> double
         {
-            std::cout << "[rank " << par_->GetInt("myid") << "] "
-                      << "field \"" << field_name << "\" not registered\n";
-            return;
-        }
+            return 0.25 * (a + b + c + d);
+        };
+        auto avg8 = [](double a0, double a1, double a2, double a3,
+                       double a4, double a5, double a6, double a7) -> double
+        {
+            return 0.125 * (a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7);
+        };
 
-        const int fid = fld_->field_id(field_name);
+        auto &gx = grd_->grids(ib).x;
+        auto &gy = grd_->grids(ib).y;
+        auto &gz = grd_->grids(ib).z;
+
         const auto &desc = fld_->descriptor(fid);
 
-        if (q.blk < 0 || q.blk >= fld_->num_blocks())
+        switch (desc.location)
         {
-            std::cout << "[rank " << par_->GetInt("myid") << "] "
-                      << "[" << patch_name(q.patch_tag) << "] "
-                      << "invalid blk=" << q.blk
-                      << " for field=" << field_name << "\n";
-            return;
+        case StaggerLocation::Cell:
+            x = avg8(gx(ii, jj, kk), gx(ii + 1, jj, kk), gx(ii, jj + 1, kk), gx(ii + 1, jj + 1, kk),
+                     gx(ii, jj, kk + 1), gx(ii + 1, jj, kk + 1), gx(ii, jj + 1, kk + 1), gx(ii + 1, jj + 1, kk + 1));
+            y = avg8(gy(ii, jj, kk), gy(ii + 1, jj, kk), gy(ii, jj + 1, kk), gy(ii + 1, jj + 1, kk),
+                     gy(ii, jj, kk + 1), gy(ii + 1, jj, kk + 1), gy(ii, jj + 1, kk + 1), gy(ii + 1, jj + 1, kk + 1));
+            z = avg8(gz(ii, jj, kk), gz(ii + 1, jj, kk), gz(ii, jj + 1, kk), gz(ii + 1, jj + 1, kk),
+                     gz(ii, jj, kk + 1), gz(ii + 1, jj, kk + 1), gz(ii, jj + 1, kk + 1), gz(ii + 1, jj + 1, kk + 1));
+            break;
+
+        case StaggerLocation::Node:
+            x = gx(ii, jj, kk);
+            y = gy(ii, jj, kk);
+            z = gz(ii, jj, kk);
+            break;
+
+        case StaggerLocation::FaceXi:
+            x = avg4(gx(ii, jj, kk), gx(ii, jj + 1, kk), gx(ii, jj, kk + 1), gx(ii, jj + 1, kk + 1));
+            y = avg4(gy(ii, jj, kk), gy(ii, jj + 1, kk), gy(ii, jj, kk + 1), gy(ii, jj + 1, kk + 1));
+            z = avg4(gz(ii, jj, kk), gz(ii, jj + 1, kk), gz(ii, jj, kk + 1), gz(ii, jj + 1, kk + 1));
+            break;
+
+        case StaggerLocation::FaceEt:
+            x = avg4(gx(ii, jj, kk), gx(ii + 1, jj, kk), gx(ii, jj, kk + 1), gx(ii + 1, jj, kk + 1));
+            y = avg4(gy(ii, jj, kk), gy(ii + 1, jj, kk), gy(ii, jj, kk + 1), gy(ii + 1, jj, kk + 1));
+            z = avg4(gz(ii, jj, kk), gz(ii + 1, jj, kk), gz(ii, jj, kk + 1), gz(ii + 1, jj, kk + 1));
+            break;
+
+        case StaggerLocation::FaceZe:
+            x = avg4(gx(ii, jj, kk), gx(ii + 1, jj, kk), gx(ii, jj + 1, kk), gx(ii + 1, jj + 1, kk));
+            y = avg4(gy(ii, jj, kk), gy(ii + 1, jj, kk), gy(ii, jj + 1, kk), gy(ii + 1, jj + 1, kk));
+            z = avg4(gz(ii, jj, kk), gz(ii + 1, jj, kk), gz(ii, jj + 1, kk), gz(ii + 1, jj + 1, kk));
+            break;
+
+        case StaggerLocation::EdgeXi:
+            x = 0.5 * (gx(ii, jj, kk) + gx(ii + 1, jj, kk));
+            y = 0.5 * (gy(ii, jj, kk) + gy(ii + 1, jj, kk));
+            z = 0.5 * (gz(ii, jj, kk) + gz(ii + 1, jj, kk));
+            break;
+
+        case StaggerLocation::EdgeEt:
+            x = 0.5 * (gx(ii, jj, kk) + gx(ii, jj + 1, kk));
+            y = 0.5 * (gy(ii, jj, kk) + gy(ii, jj + 1, kk));
+            z = 0.5 * (gz(ii, jj, kk) + gz(ii, jj + 1, kk));
+            break;
+
+        case StaggerLocation::EdgeZe:
+            x = 0.5 * (gx(ii, jj, kk) + gx(ii, jj, kk + 1));
+            y = 0.5 * (gy(ii, jj, kk) + gy(ii, jj, kk + 1));
+            z = 0.5 * (gz(ii, jj, kk) + gz(ii, jj, kk + 1));
+            break;
+
+        default:
+            x = y = z = 0.0;
+            break;
         }
-
-        auto &F = fld_->field(fid, q.blk);
-        if (!F.is_allocated())
-        {
-            std::cout << "[rank " << par_->GetInt("myid") << "] "
-                      << "[" << patch_name(q.patch_tag) << "] "
-                      << "field=" << field_name
-                      << " blk=" << q.blk
-                      << " not allocated\n";
-            return;
-        }
-
-        const Int3 lo = F.get_lo();
-        const Int3 hi = F.get_hi();
-
-        if (q.i < lo.i || q.i >= hi.i ||
-            q.j < lo.j || q.j >= hi.j ||
-            q.k < lo.k || q.k >= hi.k)
-        {
-            std::cout << "[rank " << par_->GetInt("myid") << "] "
-                      << "[" << patch_name(q.patch_tag) << "] "
-                      << "field=" << field_name
-                      << " loc=" << loc_name(desc.location)
-                      << " blk=" << q.blk
-                      << " idx=(" << q.i << "," << q.j << "," << q.k << ") "
-                      << "out_of_range, valid=[("
-                      << lo.i << "," << lo.j << "," << lo.k << "),("
-                      << hi.i << "," << hi.j << "," << hi.k << "))\n";
-            return;
-        }
-
-        std::ostringstream oss;
-        oss << std::setprecision(16);
-        oss << "[rank " << par_->GetInt("myid") << "] "
-            << "[" << patch_name(q.patch_tag) << "] "
-            << "field=" << field_name
-            << " loc=" << loc_name(desc.location)
-            << " blk=" << q.blk
-            << " idx=(" << q.i << "," << q.j << "," << q.k << ")"
-            << " <- src(rank=" << q.src_rank
-            << ", blk=" << q.src_blk
-            << ", idx=(" << q.src_i << "," << q.src_j << "," << q.src_k << "))"
-            << " : ";
-
-        for (int m = 0; m < desc.ncomp; ++m)
-        {
-            oss << F(q.i, q.j, q.k, m);
-            if (m + 1 < desc.ncomp)
-                oss << ", ";
-        }
-        oss << "\n";
-
-        std::cout << oss.str();
     };
 
-    const int myrank = par_->GetInt("myid");
-    int nrank = 1;
-    MPI_Comm_size(MPI_COMM_WORLD, &nrank);
-
-    if (!fld_->has_field(field_name))
+    auto fields = resolve_fields();
+    if (fields.empty())
     {
-        if (myrank == query_rank)
-        {
-            std::cout << "[DebugPrintFieldByTopo_] field \"" << field_name
-                      << "\" not registered\n";
-        }
+        if (myid == query_rank)
+            std::cout << "[DebugDumpPointPartners] no valid fields selected.\n";
         MPI_Barrier(MPI_COMM_WORLD);
         return;
     }
 
-    const int fid = fld_->field_id(field_name);
-    const auto &desc = fld_->descriptor(fid);
-
-    std::vector<QueryItem> queries;
-    std::set<std::tuple<int, int, int, int, int, int>> uniq;
-
-    auto push_query = [&](int rank, int blk, int i, int j, int k, int patch_tag)
+    for (const auto &it_field : fields)
     {
-        auto key = std::make_tuple(rank, blk, i, j, k, patch_tag);
-        if (!uniq.insert(key).second)
-            return;
+        const int fid = it_field.first;
+        const std::string label = it_field.second;
+        const auto &desc = fld_->descriptor(fid);
 
-        QueryItem q;
-        q.rank = rank;
-        q.blk = blk;
-        q.i = i;
-        q.j = j;
-        q.k = k;
-        q.src_rank = query_rank;
-        q.src_blk = blk_num;
-        q.src_i = i0;
-        q.src_j = j0;
-        q.src_k = k0;
-        q.patch_tag = patch_tag;
-        queries.push_back(q);
-    };
+        std::vector<DebugItem> queries;
+        std::set<std::tuple<int, int, int, int, int, int, int>> uniq;
 
-    if (myrank == query_rank)
-    {
-        push_query(query_rank, blk_num, i0, j0, k0, 0);
-
-        const Int3 p0{i0, j0, k0};
-
-        auto scan_face_list = [&](const auto &plist, int patch_tag)
+        if (myid == query_rank)
         {
-            for (const auto &p : plist)
+            const Int3 p0{i, j, k};
+
+            auto push_query = [&](int rank_t, int blk_t, int i_t, int j_t, int k_t,
+                                  int relation, int patch_tag, int aux0 = 0)
             {
-                if (p.this_rank != query_rank)
-                    continue;
-                if (p.this_block != blk_num)
-                    continue;
+                auto key = std::make_tuple(rank_t, blk_t, i_t, j_t, k_t, relation, patch_tag);
+                if (!uniq.insert(key).second)
+                    return;
 
-                const Box3 dof_box = make_dof_box_from_node_box(desc.location, p.this_box_node);
-                if (!in_box(dof_box, p0))
-                    continue;
+                DebugItem q;
+                q.rank = rank_t;
+                q.blk = blk_t;
+                q.i = i_t;
+                q.j = j_t;
+                q.k = k_t;
+                q.src_rank = query_rank;
+                q.src_blk = blk;
+                q.src_i = i;
+                q.src_j = j;
+                q.src_k = k;
+                q.fid = fid;
+                q.relation = relation;
+                q.patch_tag = patch_tag;
+                q.aux[0] = aux0;
+                queries.push_back(q);
+            };
 
-                const Int3 p_nb = map_dof_index(p0, desc.location, p.trans);
-                push_query(p.nb_rank, p.nb_block, p_nb.i, p_nb.j, p_nb.k, patch_tag);
-            }
-        };
+            push_query(query_rank, blk, i, j, k, 0, 0);
 
-        auto scan_edge_list = [&](const auto &plist, int patch_tag)
-        {
-            for (const auto &p : plist)
+            auto scan_patch_list = [&](const auto &plist, int patch_tag)
             {
-                if (p.this_rank != query_rank)
-                    continue;
-                if (p.this_block != blk_num)
-                    continue;
+                for (const auto &p : plist)
+                {
+                    if (p.this_rank != query_rank)
+                        continue;
+                    if (p.this_block != blk)
+                        continue;
 
-                const Box3 dof_box = make_dof_box_from_node_box(desc.location, p.this_box_node);
-                if (!in_box(dof_box, p0))
-                    continue;
+                    const Box3 dof_box = make_dof_box_from_node_box(desc.location, p.this_box_node);
+                    const bool in_exact = in_box(dof_box, p0);
 
-                const Int3 p_nb = map_dof_index(p0, desc.location, p.trans);
-                push_query(p.nb_rank, p.nb_block, p_nb.i, p_nb.j, p_nb.k, patch_tag);
-            }
-        };
+                    bool in_ext = false;
+                    if (ngh > 0)
+                    {
+                        Box3 ext_box = dof_box;
+                        Int3 nspan{p.this_box_node.hi.i - p.this_box_node.lo.i,
+                                   p.this_box_node.hi.j - p.this_box_node.lo.j,
+                                   p.this_box_node.hi.k - p.this_box_node.lo.k};
 
-        auto scan_vertex_list = [&](const auto &plist, int patch_tag)
-        {
-            for (const auto &p : plist)
+                        if (nspan.i == 1)
+                        {
+                            ext_box.lo.i -= ngh;
+                            ext_box.hi.i += ngh;
+                        }
+                        if (nspan.j == 1)
+                        {
+                            ext_box.lo.j -= ngh;
+                            ext_box.hi.j += ngh;
+                        }
+                        if (nspan.k == 1)
+                        {
+                            ext_box.lo.k -= ngh;
+                            ext_box.hi.k += ngh;
+                        }
+
+                        in_ext = in_box(ext_box, p0);
+                    }
+
+                    if (include_topo && in_exact)
+                    {
+                        const Int3 p_nb = map_dof_index(p0, desc.location, p.trans);
+                        push_query(p.nb_rank, p.nb_block, p_nb.i, p_nb.j, p_nb.k, 1, patch_tag);
+                    }
+
+                    if (include_halo && ngh > 0 && !in_exact && in_ext)
+                    {
+                        const Int3 p_nb = map_dof_index(p0, desc.location, p.trans);
+                        push_query(p.nb_rank, p.nb_block, p_nb.i, p_nb.j, p_nb.k, 2, patch_tag);
+                    }
+                }
+            };
+
+            scan_patch_list(topo_->inner_patches, 1);
+            scan_patch_list(topo_->parallel_patches, 2);
+            scan_patch_list(topo_->inner_edge_patches, 3);
+            scan_patch_list(topo_->parallel_edge_patches, 4);
+            scan_patch_list(topo_->inner_vertex_patches, 5);
+            scan_patch_list(topo_->parallel_vertex_patches, 6);
+
+            if (include_physical)
             {
-                if (p.this_rank != query_rank)
-                    continue;
-                if (p.this_block != blk_num)
-                    continue;
+                for (const auto &p : topo_->physical_patches)
+                {
+                    if (p.this_rank != query_rank)
+                        continue;
+                    if (p.this_block != blk)
+                        continue;
 
-                const Box3 dof_box = make_dof_box_from_node_box(desc.location, p.this_box_node);
-                if (!in_box(dof_box, p0))
-                    continue;
+                    const Box3 dof_box = make_dof_box_from_node_box(desc.location, p.this_box_node);
+                    const bool in_exact = in_box(dof_box, p0);
 
-                const Int3 p_nb = map_dof_index(p0, desc.location, p.trans);
-                push_query(p.nb_rank, p.nb_block, p_nb.i, p_nb.j, p_nb.k, patch_tag);
+                    bool in_ext = false;
+                    if (ngh > 0)
+                    {
+                        Box3 ext_box = dof_box;
+                        Int3 nspan{p.this_box_node.hi.i - p.this_box_node.lo.i,
+                                   p.this_box_node.hi.j - p.this_box_node.lo.j,
+                                   p.this_box_node.hi.k - p.this_box_node.lo.k};
+
+                        if (nspan.i == 1)
+                        {
+                            ext_box.lo.i -= ngh;
+                            ext_box.hi.i += ngh;
+                        }
+                        if (nspan.j == 1)
+                        {
+                            ext_box.lo.j -= ngh;
+                            ext_box.hi.j += ngh;
+                        }
+                        if (nspan.k == 1)
+                        {
+                            ext_box.lo.k -= ngh;
+                            ext_box.hi.k += ngh;
+                        }
+
+                        in_ext = in_box(ext_box, p0);
+                    }
+
+                    if (in_exact || (ngh > 0 && in_ext))
+                    {
+                        std::cout << "[DebugDumpPointPartners][PHYSICAL] field=" << label
+                                  << " loc=" << loc_name(desc.location)
+                                  << " src(rank=" << query_rank
+                                  << ", blk=" << blk
+                                  << ", idx=(" << i << "," << j << "," << k << "))"
+                                  << " touches bc=\"" << p.bc_name
+                                  << "\" dir=" << p.direction
+                                  << " ngh=" << ngh << "\n";
+                    }
+                }
             }
-        };
-
-        scan_face_list(topo_->inner_patches, 1);
-        scan_face_list(topo_->parallel_patches, 2);
-        scan_edge_list(topo_->inner_edge_patches, 3);
-        scan_edge_list(topo_->parallel_edge_patches, 4);
-        scan_vertex_list(topo_->inner_vertex_patches, 5);
-        scan_vertex_list(topo_->parallel_vertex_patches, 6);
-
-        // 物理边界这里只做提示，不做对侧输出
-        for (const auto &p : topo_->physical_patches)
-        {
-            if (p.this_rank != query_rank)
-                continue;
-            if (p.this_block != blk_num)
-                continue;
-
-            const Box3 dof_box = make_dof_box_from_node_box(desc.location, p.this_box_node);
-            if (!in_box(dof_box, p0))
-                continue;
-
-            std::cout << "[rank " << myrank << "] "
-                      << "[PHYSICAL] "
-                      << "field=" << field_name
-                      << " loc=" << loc_name(desc.location)
-                      << " src blk=" << blk_num
-                      << " idx=(" << i0 << "," << j0 << "," << k0 << ") "
-                      << " touches physical bc \"" << p.bc_name
-                      << "\" dir=" << p.direction << "\n";
         }
-    }
 
-    int nquery = (myrank == query_rank) ? static_cast<int>(queries.size()) : 0;
-    MPI_Bcast(&nquery, 1, MPI_INT, query_rank, MPI_COMM_WORLD);
+        int nquery = (myid == query_rank) ? static_cast<int>(queries.size()) : 0;
+        MPI_Bcast(&nquery, 1, MPI_INT, query_rank, MPI_COMM_WORLD);
 
-    if (myrank != query_rank)
-        queries.resize(nquery);
+        if (myid != query_rank)
+            queries.resize(nquery);
 
-    if (nquery > 0)
-    {
-        MPI_Bcast(reinterpret_cast<void *>(queries.data()),
-                  nquery * static_cast<int>(sizeof(QueryItem)),
-                  MPI_BYTE,
-                  query_rank,
-                  MPI_COMM_WORLD);
-    }
-
-    // 按 rank 顺序串行打印，避免 stdout 打架
-    for (int r = 0; r < nrank; ++r)
-    {
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        if (myrank == r)
+        if (nquery > 0)
         {
-            for (const auto &q : queries)
-            {
-                if (q.rank != myrank)
-                    continue;
-                print_value(q);
-            }
+            MPI_Bcast(reinterpret_cast<void *>(queries.data()),
+                      nquery * static_cast<int>(sizeof(DebugItem)),
+                      MPI_BYTE,
+                      query_rank,
+                      MPI_COMM_WORLD);
+        }
+
+        if (myid == query_rank)
+        {
+            std::cout << "\n[DebugDumpPointPartners] field=" << label
+                      << " loc=" << loc_name(desc.location)
+                      << " src(rank=" << query_rank
+                      << ", blk=" << blk
+                      << ", idx=(" << i << "," << j << "," << k << "))"
+                      << " ngh=" << ngh
+                      << " include_topo=" << include_topo
+                      << " include_halo=" << include_halo
+                      << "\n";
             std::cout.flush();
         }
-    }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-}
-
-void MercurySolver::DebugPrintEdgeEquivClass_(int query_rank,
-                                              int blk, int i, int j, int k, int dir) const
-{
-    const int myrank = par_->GetInt("myid");
-    int nrank = 1;
-    MPI_Comm_size(MPI_COMM_WORLD, &nrank);
-
-    auto print_edge = [](const TOPO::EdgeLocalID &e) -> std::string
-    {
-        std::ostringstream oss;
-        oss << "("
-            << "rank=" << e.rank
-            << ", blk=" << e.gblock
-            << ", i=" << e.i
-            << ", j=" << e.j
-            << ", k=" << e.k
-            << ", dir=" << e.dir
-            << ")";
-        return oss.str();
-    };
-
-    auto print_node = [](const TOPO::NodeEqID &n) -> std::string
-    {
-        std::ostringstream oss;
-        oss << "("
-            << "rank=" << n.rank
-            << ", blk=" << n.gblock
-            << ", i=" << n.i
-            << ", j=" << n.j
-            << ", k=" << n.k
-            << ")";
-        return oss.str();
-    };
-
-    // 先由源 rank 构造查询 edge 和其 canonical key
-    TOPO::EdgeLocalID query_edge{};
-    TOPO::EdgeKey key{};
-    int found_on_src = 0;
-
-    if (myrank == query_rank)
-    {
-        query_edge = TOPO::EdgeLocalID{query_rank, blk, i, j, k, dir};
-
-        auto it = topo_equiv_->edge2key.find(query_edge);
-        if (it != topo_equiv_->edge2key.end())
+        for (int r = 0; r < nrank; ++r)
         {
-            key = it->second;
-            found_on_src = 1;
-        }
-    }
+            MPI_Barrier(MPI_COMM_WORLD);
 
-    MPI_Bcast(&found_on_src, 1, MPI_INT, query_rank, MPI_COMM_WORLD);
+            if (myid != r)
+                continue;
 
-    if (!found_on_src)
-    {
-        if (myrank == query_rank)
-        {
-            std::cout << "[DebugEdgeEquivClass] source edge not found in edge2key: "
-                      << "(rank=" << query_rank
-                      << ", blk=" << blk
-                      << ", i=" << i
-                      << ", j=" << j
-                      << ", k=" << k
-                      << ", dir=" << dir << ")\n";
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-        return;
-    }
-
-    // 广播 EdgeKey
-    MPI_Bcast(&key, sizeof(TOPO::EdgeKey), MPI_BYTE, query_rank, MPI_COMM_WORLD);
-
-    if (myrank == query_rank)
-    {
-        std::cout << "\n===== Edge equivalence class =====\n";
-        std::cout << "source = " << print_edge(query_edge) << "\n";
-        std::cout << "canonical key:\n";
-        std::cout << "  a = " << print_node(key.a) << "\n";
-        std::cout << "  b = " << print_node(key.b) << "\n";
-
-        auto it_owner = topo_equiv_->edge_owner.find(key);
-        if (it_owner != topo_equiv_->edge_owner.end())
-        {
-            const auto &eo = it_owner->second;
-            std::cout << "owner rep = " << print_edge(eo);
-
-            auto it_gid = topo_equiv_->edge_owner_gid.find(eo);
-            if (it_gid != topo_equiv_->edge_owner_gid.end())
-                std::cout << "  gid=" << it_gid->second;
-
-            std::cout << "\n";
-        }
-        else
-        {
-            std::cout << "owner rep = <not found>\n";
-        }
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // 各 rank 输出自己本地属于这个 equivalence class 的成员
-    for (int r = 0; r < nrank; ++r)
-    {
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        if (myrank != r)
-            continue;
-
-        auto it = topo_equiv_->edge_members.find(key);
-        if (it != topo_equiv_->edge_members.end())
-        {
-            auto members = it->second;
-            std::sort(members.begin(), members.end());
-
-            std::cout << "[rank " << myrank << "] local members for this edge class:\n";
-
-            for (const auto &e : members)
+            for (const auto &q : queries)
             {
-                int sign = 999;
-                auto it_sign = topo_equiv_->edge2sign.find(e);
-                if (it_sign != topo_equiv_->edge2sign.end())
-                    sign = static_cast<int>(it_sign->second);
+                if (q.rank != myid)
+                    continue;
 
-                bool is_owner = false;
-                auto it_owner_flag = topo_equiv_->edge_is_owner.find(e);
-                if (it_owner_flag != topo_equiv_->edge_is_owner.end())
-                    is_owner = it_owner_flag->second;
+                std::ostringstream oss;
+                oss << std::scientific << std::setprecision(16);
 
-                int gid = -1;
-                auto it_gid = topo_equiv_->edge_owner_gid.find(e);
-                if (it_gid != topo_equiv_->edge_owner_gid.end())
-                    gid = it_gid->second;
+                if (q.blk < 0 || q.blk >= fld_->num_blocks())
+                {
+                    oss << "[rank " << myid << "] "
+                        << "[" << rel_name(q.relation) << "/" << patch_name(q.patch_tag) << "] "
+                        << "field=" << label
+                        << " target blk invalid: " << q.blk
+                        << " <- src(rank=" << q.src_rank
+                        << ", blk=" << q.src_blk
+                        << ", idx=(" << q.src_i << "," << q.src_j << "," << q.src_k << "))\n";
+                    std::cout << oss.str();
+                    continue;
+                }
 
-                std::cout << "  " << print_edge(e)
-                          << "  sign_to_canonical=" << sign
-                          << "  is_owner=" << is_owner
-                          << "  gid=" << gid
-                          << "\n";
+                auto &F = fld_->field(fid, q.blk);
+                if (!F.is_allocated())
+                {
+                    oss << "[rank " << myid << "] "
+                        << "[" << rel_name(q.relation) << "/" << patch_name(q.patch_tag) << "] "
+                        << "field=" << label
+                        << " blk=" << q.blk
+                        << " not allocated"
+                        << " <- src(rank=" << q.src_rank
+                        << ", blk=" << q.src_blk
+                        << ", idx=(" << q.src_i << "," << q.src_j << "," << q.src_k << "))\n";
+                    std::cout << oss.str();
+                    continue;
+                }
+
+                Int3 lo = F.get_lo();
+                Int3 hi = F.get_hi();
+
+                if (q.i < lo.i || q.i >= hi.i ||
+                    q.j < lo.j || q.j >= hi.j ||
+                    q.k < lo.k || q.k >= hi.k)
+                {
+                    oss << "[rank " << myid << "] "
+                        << "[" << rel_name(q.relation) << "/" << patch_name(q.patch_tag) << "] "
+                        << "field=" << label
+                        << " blk=" << q.blk
+                        << " idx=(" << q.i << "," << q.j << "," << q.k << ") "
+                        << "out_of_range, valid=[("
+                        << lo.i << "," << lo.j << "," << lo.k << "),("
+                        << hi.i << "," << hi.j << "," << hi.k << "))"
+                        << " <- src(rank=" << q.src_rank
+                        << ", blk=" << q.src_blk
+                        << ", idx=(" << q.src_i << "," << q.src_j << "," << q.src_k << "))\n";
+                    std::cout << oss.str();
+                    continue;
+                }
+
+                double x, y, z;
+                get_xyz(fid, q.blk, q.i, q.j, q.k, x, y, z);
+
+                oss << "[rank " << myid << "] "
+                    << "[" << rel_name(q.relation) << "/" << patch_name(q.patch_tag) << "] "
+                    << "field=" << label
+                    << " loc=" << loc_name(desc.location)
+                    << " blk=" << q.blk
+                    << " idx=(" << q.i << "," << q.j << "," << q.k << ")"
+                    << " xyz=(" << x << "," << y << "," << z << ")"
+                    << " <- src(rank=" << q.src_rank
+                    << ", blk=" << q.src_blk
+                    << ", idx=(" << q.src_i << "," << q.src_j << "," << q.src_k << "))"
+                    << " : ";
+
+                for (int m = 0; m < desc.ncomp; ++m)
+                {
+                    oss << F(q.i, q.j, q.k, m);
+                    if (m + 1 < desc.ncomp)
+                        oss << ", ";
+                }
+                oss << "\n";
+
+                std::cout << oss.str();
             }
+
+            std::cout.flush();
         }
 
-        std::cout.flush();
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-}
-
-void MercurySolver::Debug_global_max_JB_Ehall_pH()
-{
-    struct MaxCellRec
-    {
-        double val = -1.0;
-        int ib = -1, i = -1, j = -1, k = -1;
-    };
-
-    struct MaxEdgeRec
-    {
-        double val = -1.0;
-        int ib = -1, i = -1, j = -1, k = -1;
-        int dir = 0; // 1=xi, 2=eta, 3=zeta
-    };
-
-    auto norm3 = [](double x, double y, double z) -> double
-    {
-        return std::sqrt(x * x + y * y + z * z);
-    };
-
-    auto upd_cell = [](MaxCellRec &m, double v, int ib, int i, int j, int k)
-    {
-        if (v > m.val)
-        {
-            m.val = v;
-            m.ib = ib;
-            m.i = i;
-            m.j = j;
-            m.k = k;
-        }
-    };
-
-    auto upd_edge = [](MaxEdgeRec &m, double v, int ib, int i, int j, int k, int dir)
-    {
-        if (v > m.val)
-        {
-            m.val = v;
-            m.ib = ib;
-            m.i = i;
-            m.j = j;
-            m.k = k;
-            m.dir = dir;
-        }
-    };
-
-    // ============================================================
-    // 这里以后可改成你的“只看近壁面前 N 层”的筛选
-    // 现在默认全场
-    // ============================================================
-    auto accept_cell = [&](int ib, int i, int j, int k) -> bool
-    {
-        return true;
-    };
-
-    auto accept_edge_xi = [&](int ib, int i, int j, int k) -> bool
-    {
-        return true;
-    };
-
-    auto accept_edge_eta = [&](int ib, int i, int j, int k) -> bool
-    {
-        return true;
-    };
-
-    auto accept_edge_zeta = [&](int ib, int i, int j, int k) -> bool
-    {
-        return true;
-    };
-
-    // ============================================================
-    // pH 访问器：请按你的实际字段改
-    // ============================================================
-    auto pH_at = [&](int ib, int i, int j, int k) -> double
-    {
-        // 例：如果 H 的 primitive variable 第4分量是压力
-        auto &PVH = fld_->field(fid_.fid_PV_H, ib);
-        return PVH(i, j, k, 3);
-
-        // 如果不是，请改这里
-    };
-
-    // ============================================================
-    // xyz 访问器：这里你需要按自己框架改
-    // 只需要把这几段替换成你实际的坐标读取方式
-    // ============================================================
-    auto xyz_of_cell = [&](int ib, int i, int j, int k,
-                           double &x, double &y, double &z)
-    {
-        // ===== 你需要改这里 =====
-        // 示例1：如果你有 cell-center 坐标场
-        // auto &Xc = fld_->field(fid_.fid_Xcell, ib);
-        // x = Xc(i,j,k,0); y = Xc(i,j,k,1); z = Xc(i,j,k,2);
-
-        // 示例2：如果 topo/grid/block 提供几何接口
-        // auto xc = topo_->blocks[ib].cell_center(i,j,k);
-        // x = xc[0]; y = xc[1]; z = xc[2];
-        x = grd_->grids(ib).x(i, j, k);
-        y = grd_->grids(ib).y(i, j, k);
-        z = grd_->grids(ib).z(i, j, k);
-    };
-
-    auto xyz_of_edge_xi = [&](int ib, int i, int j, int k,
-                              double &x, double &y, double &z)
-    {
-        x = 0.5 * (grd_->grids(ib).x(i, j, k) + grd_->grids(ib).x(i + 1, j, k));
-        y = 0.5 * (grd_->grids(ib).y(i, j, k) + grd_->grids(ib).y(i + 1, j, k));
-        z = 0.5 * (grd_->grids(ib).z(i, j, k) + grd_->grids(ib).z(i + 1, j, k));
-    };
-
-    auto xyz_of_edge_eta = [&](int ib, int i, int j, int k,
-                               double &x, double &y, double &z)
-    {
-        x = 0.5 * (grd_->grids(ib).x(i, j, k) + grd_->grids(ib).x(i, j + 1, k));
-        y = 0.5 * (grd_->grids(ib).y(i, j, k) + grd_->grids(ib).y(i, j + 1, k));
-        z = 0.5 * (grd_->grids(ib).z(i, j, k) + grd_->grids(ib).z(i, j + 1, k));
-    };
-
-    auto xyz_of_edge_zeta = [&](int ib, int i, int j, int k,
-                                double &x, double &y, double &z)
-    {
-        x = 0.5 * (grd_->grids(ib).x(i, j, k) + grd_->grids(ib).x(i, j, k + 1));
-        y = 0.5 * (grd_->grids(ib).y(i, j, k) + grd_->grids(ib).y(i, j, k + 1));
-        z = 0.5 * (grd_->grids(ib).z(i, j, k) + grd_->grids(ib).z(i, j, k + 1));
-    };
-
-    MaxCellRec maxJ, maxB, maxpH;
-    MaxEdgeRec maxEhall;
-
-    const int nblock = fld_->num_blocks();
-    const int myid = par_->GetInt("myid");
-
-    // ============================================================
-    // local scan
-    // ============================================================
-    for (int ib = 0; ib < nblock; ++ib)
-    {
-        auto &Jc = fld_->field(fid_.fid_Jcell, ib);
-        auto &Bc = fld_->field(fid_.fid_Bcell, ib);
-
-        auto &Exi = fld_->field(fid_.fid_Ehall.xi, ib);
-        auto &Eet = fld_->field(fid_.fid_Ehall.eta, ib);
-        auto &Eze = fld_->field(fid_.fid_Ehall.zeta, ib);
-
-        auto &PVH = fld_->field(fid_.fid_PV_H, ib);
-
-        if (!Jc.is_allocated() || !Bc.is_allocated() ||
-            !Exi.is_allocated() || !Eet.is_allocated() || !Eze.is_allocated() ||
-            !PVH.is_allocated())
-            continue;
-
-        // cell-centered J, B, pH
-        {
-            Int3 lo = Jc.inner_lo();
-            Int3 hi = Jc.inner_hi();
-
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        if (!accept_cell(ib, i, j, k))
-                            continue;
-
-                        const double Jn = norm3(Jc(i, j, k, 0),
-                                                Jc(i, j, k, 1),
-                                                Jc(i, j, k, 2));
-                        upd_cell(maxJ, Jn, ib, i, j, k);
-
-                        const double Bn = norm3(Bc(i, j, k, 0),
-                                                Bc(i, j, k, 1),
-                                                Bc(i, j, k, 2));
-                        upd_cell(maxB, Bn, ib, i, j, k);
-
-                        const double pH = pH_at(ib, i, j, k);
-                        upd_cell(maxpH, pH, ib, i, j, k);
-                    }
-        }
-
-        // edge-centered Ehall xi
-        {
-            Int3 lo = Exi.inner_lo();
-            Int3 hi = Exi.inner_hi();
-
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        if (!accept_edge_xi(ib, i, j, k))
-                            continue;
-
-                        upd_edge(maxEhall, std::abs(Exi(i, j, k, 0)), ib, i, j, k, 1);
-                    }
-        }
-
-        // edge-centered Ehall eta
-        {
-            Int3 lo = Eet.inner_lo();
-            Int3 hi = Eet.inner_hi();
-
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        if (!accept_edge_eta(ib, i, j, k))
-                            continue;
-
-                        upd_edge(maxEhall, std::abs(Eet(i, j, k, 0)), ib, i, j, k, 2);
-                    }
-        }
-
-        // edge-centered Ehall zeta
-        {
-            Int3 lo = Eze.inner_lo();
-            Int3 hi = Eze.inner_hi();
-
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        if (!accept_edge_zeta(ib, i, j, k))
-                            continue;
-
-                        upd_edge(maxEhall, std::abs(Eze(i, j, k, 0)), ib, i, j, k, 3);
-                    }
-        }
-    }
-
-    // ============================================================
-    // global MAXLOC
-    // ============================================================
-    struct
-    {
-        double val;
-        int rank;
-    } inJ, outJ, inB, outB, inE, outE, inP, outP;
-
-    inJ.val = maxJ.val;
-    inJ.rank = myid;
-    inB.val = maxB.val;
-    inB.rank = myid;
-    inE.val = maxEhall.val;
-    inE.rank = myid;
-    inP.val = maxpH.val;
-    inP.rank = myid;
-
-    MPI_Comm comm = MPI_COMM_WORLD; // 如果你有自己的 communicator，就改这里
-
-    MPI_Allreduce(&inJ, &outJ, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-    MPI_Allreduce(&inB, &outB, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-    MPI_Allreduce(&inE, &outE, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-    MPI_Allreduce(&inP, &outP, 1, MPI_DOUBLE_INT, MPI_MAXLOC, comm);
-
-    // ============================================================
-    // only owner rank prints
-    // ============================================================
-    if (myid == outJ.rank && maxJ.val == outJ.val)
-    {
-        double x, y, z;
-        xyz_of_cell(maxJ.ib, maxJ.i, maxJ.j, maxJ.k, x, y, z);
-
-        std::ostringstream oss;
-        oss << std::scientific << std::setprecision(6);
-        oss << "\n[MaxDiag] max|J| owner-rank=" << myid
-            << "  val=" << maxJ.val
-            << "  at (block=" << maxJ.ib
-            << ", i=" << maxJ.i << ", j=" << maxJ.j << ", k=" << maxJ.k << ")"
-            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
-        std::cout << oss.str() << std::flush;
-    }
-
-    if (myid == outB.rank && maxB.val == outB.val)
-    {
-        double x, y, z;
-        xyz_of_cell(maxB.ib, maxB.i, maxB.j, maxB.k, x, y, z);
-
-        std::ostringstream oss;
-        oss << std::scientific << std::setprecision(6);
-        oss << "\n[MaxDiag] max|B| owner-rank=" << myid
-            << "  val=" << maxB.val
-            << "  at (block=" << maxB.ib
-            << ", i=" << maxB.i << ", j=" << maxB.j << ", k=" << maxB.k << ")"
-            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
-        std::cout << oss.str() << std::flush;
-    }
-
-    if (myid == outP.rank && maxpH.val == outP.val)
-    {
-        double x, y, z;
-        xyz_of_cell(maxpH.ib, maxpH.i, maxpH.j, maxpH.k, x, y, z);
-
-        std::ostringstream oss;
-        oss << std::scientific << std::setprecision(6);
-        oss << "\n[MaxDiag] max pH owner-rank=" << myid
-            << "  val=" << maxpH.val
-            << "  at (block=" << maxpH.ib
-            << ", i=" << maxpH.i << ", j=" << maxpH.j << ", k=" << maxpH.k << ")"
-            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
-        std::cout << oss.str() << std::flush;
-    }
-
-    if (myid == outE.rank && maxEhall.val == outE.val)
-    {
-        double x, y, z;
-
-        if (maxEhall.dir == 1)
-            xyz_of_edge_xi(maxEhall.ib, maxEhall.i, maxEhall.j, maxEhall.k, x, y, z);
-        else if (maxEhall.dir == 2)
-            xyz_of_edge_eta(maxEhall.ib, maxEhall.i, maxEhall.j, maxEhall.k, x, y, z);
-        else
-            xyz_of_edge_zeta(maxEhall.ib, maxEhall.i, maxEhall.j, maxEhall.k, x, y, z);
-
-        const char *dname = (maxEhall.dir == 1 ? "xi" : (maxEhall.dir == 2 ? "eta" : "zeta"));
-
-        std::ostringstream oss;
-        oss << std::scientific << std::setprecision(6);
-        oss << "\n[MaxDiag] max|Ehall| owner-rank=" << myid
-            << "  val=" << maxEhall.val
-            << "  at (dir=" << dname
-            << ", block=" << maxEhall.ib
-            << ", i=" << maxEhall.i << ", j=" << maxEhall.j << ", k=" << maxEhall.k << ")"
-            << "  xyz=(" << x << ", " << y << ", " << z << ")\n";
-        std::cout << oss.str() << std::flush;
+        MPI_Barrier(MPI_COMM_WORLD);
     }
 }

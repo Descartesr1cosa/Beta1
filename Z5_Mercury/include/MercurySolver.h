@@ -248,14 +248,62 @@ private:
         return Eglob;
     }
 
-    void DebugPrintFieldByTopo_(int query_rank,
-                                int blk_num,
-                                int i, int j, int k,
-                                std::string &field_name);
+    struct DebugItem
+    {
+        double val = 0.0;
+        double xyz[3] = {0.0, 0.0, 0.0};
 
-    void DebugPrintEdgeEquivClass_(int query_rank,
-                                   int blk, int i, int j, int k, int dir) const;
+        int rank = -1;
+        int blk = -1;
+        int i = 0, j = 0, k = 0;
 
-    void Debug_global_max_JB_Ehall_pH();
+        int src_rank = -1;
+        int src_blk = -1;
+        int src_i = 0, src_j = 0, src_k = 0;
+
+        int fid = -1;
+        int comp = -1;
+
+        // relation:
+        //   0 = self
+        //   1 = topo-equivalent
+        //   2 = halo-peer
+        //   3 = physical-touch
+        int relation = 0;
+
+        // patch tag:
+        //   0 = self
+        //   1 = face-inner
+        //   2 = face-par
+        //   3 = edge-inner
+        //   4 = edge-par
+        //   5 = vertex-inner
+        //   6 = vertex-par
+        //   7 = physical
+        int patch_tag = 0;
+
+        // aux[0], aux[1], aux[2], aux[3] 预留:
+        //   aux[0] 可作 valid flag / physical dir / 其他整数信息
+        int aux[4] = {0, 0, 0, 0};
+    };
+
+    void DebugFindExtremaInner(const std::vector<int> &fids = {},
+                               const std::vector<std::string> &names = {},
+                               bool print_min = true,
+                               bool print_max = true);
+
+    void DebugDumpPointFields(int query_rank,
+                              int blk, int i, int j, int k,
+                              const std::vector<int> &fids = {},
+                              const std::vector<std::string> &names = {});
+
+    void DebugDumpPointPartners(int query_rank,
+                                int blk, int i, int j, int k,
+                                const std::vector<int> &fids = {},
+                                const std::vector<std::string> &names = {},
+                                int ngh = 0,
+                                bool include_topo = true,
+                                bool include_halo = true,
+                                bool include_physical = true);
     //=========================================================================
 };
