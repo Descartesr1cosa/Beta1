@@ -111,7 +111,7 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Ideal_()
 //=========================================================================
 void MercurySolver::AssembleOneDirectionEMF_(
     int iblk,
-    int dir,                // 0 xi, 1 eta, 2 zeta
+    int dir,                // 1 xi, 2 eta, 3 zeta
     FieldBlock &E_face,     // E_face_xi/eta/zeta   (ncomp=3)
     FieldBlock &B_face,     // B_xi/eta/zeta        (ncomp=1)
     FieldBlock &B_face_add, // B_xi/eta/zeta add    (ncomp=1)
@@ -262,26 +262,30 @@ void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
         B[3] = B_jac_total;
     };
 
-    if (direction == 0)
+    if (direction == 1)
     {
         int iL = index_i - 1;
         int iR = index_i;
         fill_state(iL, j, k, ppvvL, BL);
         fill_state(iR, j, k, ppvvR, BR);
     }
-    else if (direction == 1)
+    else if (direction == 2)
     {
         int jL = index_j - 1;
         int jR = index_j;
         fill_state(i, jL, k, ppvvL, BL);
         fill_state(i, jR, k, ppvvR, BR);
     }
-    else
-    { // direction == 2
+    else if (direction == 3)
+    { // direction == 3
         int kL = index_k - 1;
         int kR = index_k;
         fill_state(i, j, kL, ppvvL, BL);
         fill_state(i, j, kR, ppvvR, BR);
+    }
+    else
+    {
+        throw std::runtime_error("ReconstructionEMF_: invalid direction");
     }
 
     calc_Jac_radius_GCL(radius[0], ppvvL, BL, metric);
