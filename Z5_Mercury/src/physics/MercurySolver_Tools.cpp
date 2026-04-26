@@ -947,3 +947,217 @@ void MercurySolver::calc_Jcell()
     // }
     // mercury_bound_.Sync("J_cell");
 }
+
+void MercurySolver::calc_Jcell_from_Bcell_metric_()
+{
+    const int nb = fld_->num_blocks();
+
+    auto dd = [](double a, double b, double c,
+                 double fp_i, double fm_i,
+                 double fp_j, double fm_j,
+                 double fp_k, double fm_k) -> double
+    {
+        return 0.5 * (a * (fp_i - fm_i) +
+                      b * (fp_j - fm_j) +
+                      c * (fp_k - fm_k));
+    };
+
+    auto derv_at = [&](FieldBlock &Jac,
+                       FieldBlock &Axi,
+                       FieldBlock &Aet,
+                       FieldBlock &Aze,
+                       int i, int j, int k,
+                       double &ax, double &ay, double &az,
+                       double &bx, double &by, double &bz,
+                       double &cx, double &cy, double &cz)
+    {
+        const double V = std::abs(Jac(i, j, k, 0));
+
+        if (V <= 1.0e-300)
+        {
+            ax = ay = az = 0.0;
+            bx = by = bz = 0.0;
+            cx = cy = cz = 0.0;
+            return;
+        }
+
+        // These are the same metric derivative coefficients used in your source-term code.
+        ax = 0.5 * (Axi(i - 1, j, k, 0) + Axi(i, j, k, 0)) / V;
+        ay = 0.5 * (Axi(i - 1, j, k, 1) + Axi(i, j, k, 1)) / V;
+        az = 0.5 * (Axi(i - 1, j, k, 2) + Axi(i, j, k, 2)) / V;
+
+        bx = 0.5 * (Aet(i, j - 1, k, 0) + Aet(i, j, k, 0)) / V;
+        by = 0.5 * (Aet(i, j - 1, k, 1) + Aet(i, j, k, 1)) / V;
+        bz = 0.5 * (Aet(i, j - 1, k, 2) + Aet(i, j, k, 2)) / V;
+
+        cx = 0.5 * (Aze(i, j, k - 1, 0) + Aze(i, j, k, 0)) / V;
+        cy = 0.5 * (Aze(i, j, k - 1, 1) + Aze(i, j, k, 1)) / V;
+        cz = 0.5 * (Aze(i, j, k - 1, 2) + Aze(i, j, k, 2)) / V;
+    };
+
+    auto clear_Jcell = [&]()
+    {
+        for (int ib = 0; ib < nb; ++ib)
+        {
+            FieldBlock &Jc = fld_->field(fid_.fid_Jcell, ib);
+            if (!Jc.is_allocated())
+                continue;
+
+            Int3 lo = Jc.inner_lo();
+            Int3 hi = Jc.inner_hi();
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        Jc(i, j, k, 0) = 0.0;
+                        Jc(i, j, k, 1) = 0.0;
+                        Jc(i, j, k, 2) = 0.0;
+                    }
+        }
+    };
+
+    clear_Jcell();
+
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        FieldBlock &Bcell = fld_->field(fid_.fid_Bcell, ib);
+        FieldBlock &Jcell = fld_->field(fid_.fid_Jcell, ib);
+
+        FieldBlock &Jac = fld_->field(fid_.fid_Jac, ib);
+        FieldBlock &Axi = fld_->field(fid_.fid_metric.xi, ib);
+        FieldBlock &Aet = fld_->field(fid_.fid_metric.eta, ib);
+        FieldBlock &Aze = fld_->field(fid_.fid_metric.zeta, ib);
+
+        if (!Bcell.is_allocated() || !Jcell.is_allocated())
+            continue;
+        if (!Jac.is_allocated() || !Axi.is_allocated() || !Aet.is_allocated() || !Aze.is_allocated())
+            continue;
+
+        Int3 lo = Jcell.inner_lo();
+        Int3 hi = Jcell.inner_hi();
+
+        // 只在至少有一层内部邻居的位置做中心差分。
+        const int is = lo.i + 1;
+        const int ie = hi.i - 1;
+        const int js = lo.j + 1;
+        const int je = hi.j - 1;
+        const int ks = lo.k + 1;
+        const int ke = hi.k - 1;
+
+        if (is >= ie || js >= je || ks >= ke)
+            continue;
+
+        // ------------------------------------------------------------------
+        // 1. Safe interior: centered metric curl
+        // ------------------------------------------------------------------
+        for (int i = is; i < ie; ++i)
+            for (int j = js; j < je; ++j)
+                for (int k = ks; k < ke; ++k)
+                {
+                    double ax, ay, az;
+                    double bx, by, bz;
+                    double cx, cy, cz;
+
+                    derv_at(Jac, Axi, Aet, Aze,
+                            i, j, k,
+                            ax, ay, az,
+                            bx, by, bz,
+                            cx, cy, cz);
+
+                    // Bx derivatives
+                    const double dBx_dx = dd(ax, bx, cx,
+                                             Bcell(i + 1, j, k, 0), Bcell(i - 1, j, k, 0),
+                                             Bcell(i, j + 1, k, 0), Bcell(i, j - 1, k, 0),
+                                             Bcell(i, j, k + 1, 0), Bcell(i, j, k - 1, 0));
+
+                    const double dBx_dy = dd(ay, by, cy,
+                                             Bcell(i + 1, j, k, 0), Bcell(i - 1, j, k, 0),
+                                             Bcell(i, j + 1, k, 0), Bcell(i, j - 1, k, 0),
+                                             Bcell(i, j, k + 1, 0), Bcell(i, j, k - 1, 0));
+
+                    const double dBx_dz = dd(az, bz, cz,
+                                             Bcell(i + 1, j, k, 0), Bcell(i - 1, j, k, 0),
+                                             Bcell(i, j + 1, k, 0), Bcell(i, j - 1, k, 0),
+                                             Bcell(i, j, k + 1, 0), Bcell(i, j, k - 1, 0));
+
+                    // By derivatives
+                    const double dBy_dx = dd(ax, bx, cx,
+                                             Bcell(i + 1, j, k, 1), Bcell(i - 1, j, k, 1),
+                                             Bcell(i, j + 1, k, 1), Bcell(i, j - 1, k, 1),
+                                             Bcell(i, j, k + 1, 1), Bcell(i, j, k - 1, 1));
+
+                    const double dBy_dy = dd(ay, by, cy,
+                                             Bcell(i + 1, j, k, 1), Bcell(i - 1, j, k, 1),
+                                             Bcell(i, j + 1, k, 1), Bcell(i, j - 1, k, 1),
+                                             Bcell(i, j, k + 1, 1), Bcell(i, j, k - 1, 1));
+
+                    const double dBy_dz = dd(az, bz, cz,
+                                             Bcell(i + 1, j, k, 1), Bcell(i - 1, j, k, 1),
+                                             Bcell(i, j + 1, k, 1), Bcell(i, j - 1, k, 1),
+                                             Bcell(i, j, k + 1, 1), Bcell(i, j, k - 1, 1));
+
+                    // Bz derivatives
+                    const double dBz_dx = dd(ax, bx, cx,
+                                             Bcell(i + 1, j, k, 2), Bcell(i - 1, j, k, 2),
+                                             Bcell(i, j + 1, k, 2), Bcell(i, j - 1, k, 2),
+                                             Bcell(i, j, k + 1, 2), Bcell(i, j, k - 1, 2));
+
+                    const double dBz_dy = dd(ay, by, cy,
+                                             Bcell(i + 1, j, k, 2), Bcell(i - 1, j, k, 2),
+                                             Bcell(i, j + 1, k, 2), Bcell(i, j - 1, k, 2),
+                                             Bcell(i, j, k + 1, 2), Bcell(i, j, k - 1, 2));
+
+                    const double dBz_dz = dd(az, bz, cz,
+                                             Bcell(i + 1, j, k, 2), Bcell(i - 1, j, k, 2),
+                                             Bcell(i, j + 1, k, 2), Bcell(i, j - 1, k, 2),
+                                             Bcell(i, j, k + 1, 2), Bcell(i, j, k - 1, 2));
+
+                    // curl B
+                    const double Jx = dBz_dy - dBy_dz;
+                    const double Jy = dBx_dz - dBz_dx;
+                    const double Jz = dBy_dx - dBx_dy;
+
+                    Jcell(i, j, k, 0) = Jx;
+                    Jcell(i, j, k, 1) = Jy;
+                    Jcell(i, j, k, 2) = Jz;
+                }
+
+        // ------------------------------------------------------------------
+        // 2. Near-boundary engineering treatment:
+        //    copy from nearest safe interior cell.
+        //
+        //    这一步是为了避免壁面、pole、block 边界处的坏 ghost / 退化模板
+        //    直接进入源项。后续可以替换成 one-sided 或 axis-regularized stencil。
+        // ------------------------------------------------------------------
+        auto clamp_int = [](int x, int a, int b) -> int
+        {
+            return std::max(a, std::min(x, b));
+        };
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    const bool safe =
+                        (i >= is && i < ie &&
+                         j >= js && j < je &&
+                         k >= ks && k < ke);
+
+                    if (safe)
+                        continue;
+
+                    const int ii = clamp_int(i, is, ie - 1);
+                    const int jj = clamp_int(j, js, je - 1);
+                    const int kk = clamp_int(k, ks, ke - 1);
+
+                    Jcell(i, j, k, 0) = Jcell(ii, jj, kk, 0);
+                    Jcell(i, j, k, 1) = Jcell(ii, jj, kk, 1);
+                    Jcell(i, j, k, 2) = Jcell(ii, jj, kk, 2);
+                }
+    }
+
+    // Jcell 是 cell-centered Cartesian vector。
+    // 这里同步是合理的；它已经不再来自 edge 1-form。
+    mercury_bound_.Sync("J_cell");
+}

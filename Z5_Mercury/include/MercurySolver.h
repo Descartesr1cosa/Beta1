@@ -166,6 +166,8 @@ private:
     void calc_physical_constant(Param *par);
     void PrintMinMaxDiagnostics_();
     void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
+
+    void calc_Jcell_from_Bcell_metric_();
     //=========================================================================
 
     //=========================================================================

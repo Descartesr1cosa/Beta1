@@ -33,6 +33,36 @@ void MercurySolver::Time_Advance()
     //     // Calc_J_Edge();
     //     // calc_Jcell();
     // }
+
+    // {
+    //     mercury_bound_.Sync("Ucell");
+    //     mercury_bound_.Sync("Bface");
+    //     calc_PV();
+    //     calc_Uplus();
+    //     calc_Bcell();
+    //     Calc_J_Edge();
+    //     calc_Jcell();
+    //     DebugFindExtremaInner({}, {"J_cell", "B_cell"});
+    //     for (int i : {16})
+    //         for (int k : {10})
+    //             for (int j : {-1, 0, 1})
+    //             {
+    //                 DebugDumpPointFields(
+    //                     1, 0, i, j, k,
+    //                     {},
+    //                     {"J_zeta", "J_xi"});
+
+    //                 DebugDumpPointPartners(
+    //                     1, 0, i, j, k,
+    //                     {},
+    //                     {"J_zeta", "J_xi"},
+    //                     1,    // ngh
+    //                     true, // include_topo: 只看精确耦合/接口对应点
+    //                     true, // include_halo: 先不要混 halo
+    //                     false // include_physical
+    //                 );
+    //             }
+    // }
 #if HALL_IMPLICIT == 1
 
     hall_implicit_.SolveOneStep(dt, control_.if_outres);
