@@ -144,6 +144,7 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
 
                     // diode: block outflow from surface to fluid (vn>0)
                     std::array<double, 3> v_g = v;
+                    v_g = sub(v, scal(n_hat, vn));
                     // if (vn > 0.0)
                     // {
                     //     // remove only the outward-normal component; tangential unchanged
@@ -153,7 +154,7 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
                     //     // p_r   = p_floor;
                     // }
                     // v_g = sub(v, scal(n_hat, 2.0 * vn));
-                    v_g = {0.0, 0.0, 0.0};
+                    // v_g = {0.0, 0.0, 0.0};
 
                     int ig = ii + ng * cyc.i;
                     int jg = jj + ng * cyc.j;
@@ -369,6 +370,42 @@ void MercuryBoundary::BC_Pole_Eedge_Zero(FieldBlock &U, Field *fld, const BOUND:
             for (int k = inner.lo.k; k < inner.hi.k; ++k)
                 U(i, j, k, 0) = 0.0;
         }
+
+    bound_.DefaultPhysicalCopy(U, fld, r, ngh);
+}
+
+void MercuryBoundary::BC_Pole_Cell_(FieldBlock &U, Field *fld,
+                                    const BOUND::PhysicalRegion &r, int ngh)
+{
+    if (!U.is_allocated())
+        return;
+    const Box3 &inner = r.inner_slab;
+
+    // 这里把 ncomp() 换成你 FieldBlock 实际的分量数接口
+    const int ncomp = U.descriptor().ncomp;
+
+    for (int i = inner.lo.i; i < inner.hi.i; ++i)
+        for (int j = inner.lo.j; j < inner.hi.j; ++j)
+            for (int n = 0; n < ncomp; ++n)
+            {
+                double temp_U = 0.0;
+                double num_d = 0.0;
+
+                // 若 k=0 与 k=inner.hi.k-1 物理等价，则避免重复计数
+                for (int k = inner.lo.k; k < inner.hi.k - 1; ++k)
+                {
+                    temp_U += U(i, j, k, n);
+                    num_d += 1.0;
+                }
+
+                if (num_d > 0.0)
+                    temp_U /= num_d;
+                else
+                    temp_U = 0.0;
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    U(i, j, k, n) = temp_U;
+            }
 
     bound_.DefaultPhysicalCopy(U, fld, r, ngh);
 }

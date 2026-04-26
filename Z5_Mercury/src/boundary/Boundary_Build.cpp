@@ -128,7 +128,7 @@ void MercuryBoundary::InstallHandlers()
     auto Eedge_Pole_xi_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) == 2) // Pole rotational direction is zeta, so norm direction should be ETA
-            BC_Pole_Eedge_(U, fld, r, ngh);
+            BC_Pole_Eedge_Zero(U, fld, r, ngh);
         else
             BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     };
@@ -136,7 +136,7 @@ void MercuryBoundary::InstallHandlers()
     auto Eedge_Pole_eta_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) == 1) // Pole rotational direction is zeta, so norm direction should be XI
-            BC_Pole_Eedge_(U, fld, r, ngh);
+            BC_Pole_Eedge_Zero(U, fld, r, ngh);
         else
             BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     };
@@ -148,6 +148,23 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Ehall_eta", "Pole", Eedge_Pole_eta_zero);
     RegisterPhysical_("J_eta", "Pole", Eedge_Pole_eta_zero);
     // RegisterPhysical_("E_zeta", "Pole", Eedge_Pole_);
+    RegisterPhysical_("J_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Cell_(U, fld, r, ngh); });
+    RegisterPhysical_("B_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Cell_(U, fld, r, ngh); });
+    RegisterPhysical_("U_H", "Pole",
+                      [this](FieldBlock &U, Field *fld,
+                             const BOUND::PhysicalRegion &r, int ngh)
+                      {
+                          this->BC_Pole_Cell_(U, fld, r, ngh);
+                      });
+
+    RegisterPhysical_("U_Na", "Pole",
+                      [this](FieldBlock &U, Field *fld,
+                             const BOUND::PhysicalRegion &r, int ngh)
+                      {
+                          this->BC_Pole_Cell_(U, fld, r, ngh);
+                      });
 
     // 3) coupling：按你的耦合 channel 注册（先 DefaultCouplingCopy）
     auto ccopy = [](FieldBlock &Udst, Field *fld, CouplingBufferBlock &buf,
