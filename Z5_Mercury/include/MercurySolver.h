@@ -305,5 +305,7 @@ private:
                                 bool include_topo = true,
                                 bool include_halo = true,
                                 bool include_physical = true);
+
+    void Debug_TestJOperator_Manufactured(int test_id = -1);
     //=========================================================================
 };
