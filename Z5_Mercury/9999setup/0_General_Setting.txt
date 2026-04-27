@@ -3,6 +3,7 @@ double 	yee		0.125
 double 	max_Time		20.0
 int	output_step	2000
 int	output_residual	100
+double  Archive_Output_Time    0.5 //(hours), <=0 means closing the archive function
 int	dimension	3
 
 int	ngg		4

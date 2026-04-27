@@ -59,6 +59,12 @@ public:
     void WriteRunDataFile();
     //=========================================================================
 
+    //=========================================================================
+    // 4) Output Checkpoint protection and archive
+    void BackupDataDirectory(const std::string &backup_dir = "./DATA_backup");
+    void MaybeArchiveDataDirectory(int step, double time);
+    //=========================================================================
+
 private:
     //=========================================================================
     // ----- binary datas -----
@@ -121,6 +127,18 @@ private:
     RunData run_;
     RuntimeMonitor runtime_;
     int myid_;
+    //=========================================================================
+
+    //=========================================================================
+    // checkpoint backup / archive
+    double archive_output_interval_s_ = 0.0;
+    double last_archive_wall_s_ = 0.0;
+
+    std::string data_dir_ = "./DATA";
+    std::string archive_root_dir_ = "./DATA_archive";
+
+    void CopyCurrentCheckpointToDirectory_(const std::string &dst_dir) const;
+    std::string MakeArchiveDirectoryName_(int step, double time) const;
     //=========================================================================
 
     //=========================================================================

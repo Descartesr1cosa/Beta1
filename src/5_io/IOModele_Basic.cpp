@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <filesystem>
 
 void IOModule::Setup(Param *par, Grid *grd, Field *fld, int nvar)
 {
@@ -14,10 +15,31 @@ void IOModule::Setup(Param *par, Grid *grd, Field *fld, int nvar)
     if (!par_ || !fld_ || !grd_)
         Fail_("[IOModule] Setup: null par/fld/grd");
 
-    std::system("mkdir ./DATA");
+    if (par_->GetInt("myid") == 0)
+    {
+        std::filesystem::create_directories("./DATA");
+        // std::filesystem::create_directories("./DATA_backup");
+        std::filesystem::create_directories("./DATA_archive");
+    }
+    PARALLEL::mpi_barrier();
 
     // 获取bin文件的输出路径
     const int myid = par_->GetInt("myid");
+
+    const double archive_hours = par_->GetDou("Archive_Output_Time");
+    if (archive_hours > 0.0)
+        archive_output_interval_s_ = archive_hours * 3600.0;
+    else
+        archive_output_interval_s_ = 0.0;
+    last_archive_wall_s_ = MPI_Wtime();
+    if (myid == 0)
+    {
+        std::printf("[IOModule] Archive_Output_Time = %.6e hours, interval = %.6e seconds\n",
+                    archive_hours,
+                    archive_output_interval_s_);
+        std::fflush(stdout);
+    }
+
     auto rank4 = [](int id) -> std::string
     {
         char buf[8];

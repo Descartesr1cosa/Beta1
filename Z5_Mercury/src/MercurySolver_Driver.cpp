@@ -71,9 +71,16 @@ bool MercurySolver::UpdateControlAndOutput()
 
     if (control_.if_outfile)
     {
+        // 写新 DATA 前，先保护旧 DATA
+        io_.BackupDataDirectory("./DATA_backup");
+
+        // 写当前 checkpoint
         io_.WriteTecplotBinFile(run.step, run.time);
         io_.WriteRestartBinFile(run.step, run.time);
         io_.WriteRunDataFile();
+
+        // 当前 checkpoint 写完之后，再判断是否需要长期归档
+        io_.MaybeArchiveDataDirectory(run.step, run.time);
     }
 
     return control_.if_stop;
