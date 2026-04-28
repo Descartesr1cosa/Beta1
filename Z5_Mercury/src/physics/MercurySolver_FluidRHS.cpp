@@ -334,12 +334,17 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     const double sjby = Jz * Bx - Jx * Bz;
                     const double sjbz = Jx * By - Jy * Bx;
 
-                    double num[3];
-                    Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                    // double num[3];
+                    // Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                    // const double nH = num[0];
+                    // const double nNa = num[1];
+                    // const double ne = num[2];
 
-                    const double nH = num[0];
-                    const double nNa = num[1];
-                    const double ne = num[2];
+                    NumInfo num = Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0));
+                    const double nH = num.nH_true;
+                    const double nNa = num.nNa_true;
+                    const double chi_H = num.chiH;
+                    const double chi_Na = num.chiNa;
 
                     // // ---------- Hall coefficient (same convention as induction) ----------
                     // const double nH_hall = UH(i, j, k, 0) / M_H;
@@ -425,10 +430,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         //=============================================================================================
                         // Electromagnetic Source Terms
-                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH * subx + momentum_hall_coeff * nH / ne * sjbx;
-                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH * suby + momentum_hall_coeff * nH / ne * sjby;
-                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH * subz + momentum_hall_coeff * nH / ne * sjbz;
-                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH * subu + momentum_hall_coeff * nH / ne * sjbu;
+                        RHS_H(i, j, k, 1) += momentum_induce_coeff * nH * subx + momentum_hall_coeff * chi_H * sjbx;
+                        RHS_H(i, j, k, 2) += momentum_induce_coeff * nH * suby + momentum_hall_coeff * chi_H * sjby;
+                        RHS_H(i, j, k, 3) += momentum_induce_coeff * nH * subz + momentum_hall_coeff * chi_H * sjbz;
+                        RHS_H(i, j, k, 4) += momentum_induce_coeff * nH * subu + momentum_hall_coeff * chi_H * sjbu;
                         // RHS_H(i, j, k, 1) -= sns0 * (dpex / ne_cm);
                         // RHS_H(i, j, k, 2) -= sns0 * (dpey / ne_cm);
                         // RHS_H(i, j, k, 3) -= sns0 * (dpez / ne_cm);
@@ -438,7 +443,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         //=============================================================================================
                         // Photoionization Source Terms
                         // no source terms for H+
-                        RHS_H(i, j, k, 4) += a6 * sse * Tn0 * nH / ne;
+                        RHS_H(i, j, k, 4) += a6 * sse * Tn0 * chi_H;
                         // This is the electron energy that has been divided into corresponding species
                         // 光致电离产生电子的那一部分电子能量，按照组分数密度分配给对应组分
                         //=============================================================================================
@@ -484,10 +489,10 @@ void MercurySolver::AddSourceToRHS_Fluid()
 
                         //=============================================================================================
                         // Electromagnetic Source Terms
-                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa * subx + momentum_hall_coeff * nNa / ne * sjbx;
-                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * nNa / ne * sjby;
-                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * nNa / ne * sjbz;
-                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * nNa / ne * sjbu;
+                        RHS_Na(i, j, k, 1) += momentum_induce_coeff * nNa * subx + momentum_hall_coeff * chi_Na * sjbx;
+                        RHS_Na(i, j, k, 2) += momentum_induce_coeff * nNa * suby + momentum_hall_coeff * chi_Na * sjby;
+                        RHS_Na(i, j, k, 3) += momentum_induce_coeff * nNa * subz + momentum_hall_coeff * chi_Na * sjbz;
+                        RHS_Na(i, j, k, 4) += momentum_induce_coeff * nNa * subu + momentum_hall_coeff * chi_Na * sjbu;
                         // RHS_Na(i, j, k, 1) -= sns0 * (dpex / ne_cm);
                         // RHS_Na(i, j, k, 2) -= sns0 * (dpey / ne_cm);
                         // RHS_Na(i, j, k, 3) -= sns0 * (dpez / ne_cm);
@@ -499,7 +504,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         RHS_Na(i, j, k, 0) += a1_Na * sss;    // Na+ mass creation
                                                               // no Photoionization related source term for momentum eqs
                         RHS_Na(i, j, k, 4) += a6 * sss * Tn0; // Photoionization energy (internal) pump into this species
-                        RHS_Na(i, j, k, 4) += a6 * sse * Tn0 * nNa / ne;
+                        RHS_Na(i, j, k, 4) += a6 * sse * Tn0 * chi_Na;
                         // This is the electron energy that has been divided into corresponding species
                         // 光致电离产生电子的那一部分电子能量，按照组分数密度分配给对应组分
                         //=============================================================================================

@@ -133,9 +133,13 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                 for (int j = clo.j; j < chi.j; ++j)
                     for (int k = clo.k; k < chi.k; ++k)
                     {
-                        double num[3];
-                        Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
-                        const double ne = std::max(num[2], eps);
+                        // double num[3];
+                        // Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                        // const double ne = std::max(num[2], eps);
+
+                        NumInfo num = Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0));
+                        const double ne = num.ne_eff;
+
                         const double alpha = hall_coef / ne;
 
                         const double Jx = Jc(i, j, k, 0);
@@ -561,9 +565,13 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_()
             for (int j = clo.j; j < chi.j; ++j)
                 for (int k = clo.k; k < chi.k; ++k)
                 {
-                    double num[3];
-                    Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
-                    const double ne = num[2];
+                    // double num[3];
+                    // Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                    // const double ne = num[2];
+
+                    NumInfo num = Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0));
+                    const double ne = num.ne_eff;
+
                     const double alpha = hall_coef / ne;
 
                     const double Jx = Jc(i, j, k, 0);

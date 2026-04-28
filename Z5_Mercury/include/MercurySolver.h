@@ -11,6 +11,27 @@
 #include "4_Hall_Implicit.h"
 #endif
 
+struct NumInfo
+{
+    // true number densities, nondimensional
+    double nH_true{0.0};
+    double nNa_true{0.0};
+    double ne_true{0.0};
+
+    // Hall denominator regularization
+    double ne_eff{0.0};
+
+    // composition fractions: chiH + chiNa = 1 if ne_true > tiny
+    double chiH{1.0};
+    double chiNa{0.0};
+
+    // optional low-density MHD source weights:
+    // wH_mhd + wNa_mhd = ne_true / ne_eff <= 1
+    double wH_mhd{0.0};
+    double wNa_mhd{0.0};
+    double mhd_taper{0.0};
+};
+
 // ---- forward declarations (avoid heavy includes in header) ----
 class Grid;
 namespace TOPO
@@ -145,10 +166,13 @@ private:
                 for (int j = clo.j; j < chi.j; ++j)
                     for (int k = clo.k; k < chi.k; ++k)
                     {
-                        double num[3];
-                        Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                        // double num[3];
+                        // Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0), num);
+                        // const double ne = std::max(num[2], eps);
 
-                        const double ne = std::max(num[2], eps);
+                        NumInfo num = Hall_Num_Limiter(UH(i, j, k, 0), UNa(i, j, k, 0));
+                        const double ne = num.ne_eff;
+
                         buf.alpha_flat(i, j, k) = hall_coef / ne;
                     }
         }
@@ -165,7 +189,8 @@ private:
     void calc_Uplus();
     void calc_physical_constant(Param *par);
     void PrintMinMaxDiagnostics_();
-    void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
+    // void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
+    NumInfo Hall_Num_Limiter(double rhoH, double rhoNa);
 
     void calc_Jcell_from_Bcell_metric_();
     //=========================================================================
