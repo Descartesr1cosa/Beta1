@@ -152,6 +152,8 @@ void MercuryBoundary::InstallHandlers()
                       { this->BC_Pole_Cell_(U, fld, r, ngh); });
     RegisterPhysical_("B_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                       { this->BC_Pole_Cell_(U, fld, r, ngh); });
+    RegisterPhysical_("Bind_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Cell_(U, fld, r, ngh); });
     RegisterPhysical_("U_H", "Pole",
                       [this](FieldBlock &U, Field *fld,
                              const BOUND::PhysicalRegion &r, int ngh)

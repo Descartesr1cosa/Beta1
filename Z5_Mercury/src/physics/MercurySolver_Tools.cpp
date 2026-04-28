@@ -1074,7 +1074,7 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
 
     for (int ib = 0; ib < nb; ++ib)
     {
-        FieldBlock &Bcell = fld_->field(fid_.fid_Bcell, ib);
+        FieldBlock &Bcell = fld_->field(fid_.fid_Bindcell, ib);
         FieldBlock &Jcell = fld_->field(fid_.fid_Jcell, ib);
 
         FieldBlock &Jac = fld_->field(fid_.fid_Jac, ib);
