@@ -111,16 +111,24 @@ void MercuryBoundary::InstallHandlers()
 
     auto Eedge_Pole_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
-        if (abs(r.direction) == 2) // Pole rotational direction is zeta, so norm direction should be ETA
-            BC_Pole_Eedge_(U, fld, r, ngh);
+        const int dir = std::abs(r.direction);
+
+        if (dir == 1)
+            this->BC_Pole_Eedge_RegulateKAndCopyGhost_(U, fld, r, ngh);
+        else if (dir == 2)
+            this->BC_Pole_Eedge_(U, fld, r, ngh);
         else
             BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     };
 
     auto Eedge_Pole_eta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
-        if (abs(r.direction) == 1) // Pole rotational direction is zeta, so norm direction should be XI
-            BC_Pole_Eedge_(U, fld, r, ngh);
+        const int dir = std::abs(r.direction);
+
+        if (dir == 2)
+            this->BC_Pole_Eedge_RegulateKAndCopyGhost_(U, fld, r, ngh);
+        else if (dir == 1)
+            this->BC_Pole_Eedge_(U, fld, r, ngh);
         else
             BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     };
@@ -150,10 +158,10 @@ void MercuryBoundary::InstallHandlers()
     // RegisterPhysical_("E_zeta", "Pole", Eedge_Pole_);
     RegisterPhysical_("J_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                       { this->BC_Pole_Cell_(U, fld, r, ngh); });
-    RegisterPhysical_("B_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
-                      { this->BC_Pole_Cell_(U, fld, r, ngh); });
-    RegisterPhysical_("Bind_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
-                      { this->BC_Pole_Cell_(U, fld, r, ngh); });
+    // RegisterPhysical_("B_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    //                   { this->BC_Pole_Cell_(U, fld, r, ngh); });
+    // RegisterPhysical_("Bind_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    //                   { this->BC_Pole_Cell_(U, fld, r, ngh); });
     RegisterPhysical_("U_H", "Pole",
                       [this](FieldBlock &U, Field *fld,
                              const BOUND::PhysicalRegion &r, int ngh)

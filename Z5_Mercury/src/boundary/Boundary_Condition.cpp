@@ -409,3 +409,302 @@ void MercuryBoundary::BC_Pole_Cell_(FieldBlock &U, Field *fld,
 
     bound_.DefaultPhysicalCopy(U, fld, r, ngh);
 }
+
+void MercuryBoundary::BC_Pole_Eedge_RegulateKAndCopyGhost_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    const Box3 &inner = r.inner_slab;
+
+    const int ax = std::abs(r.direction);
+    const int sgn = (r.direction > 0) ? +1 : -1;
+
+    // 当前 handler 只应被用于：
+    //   E_xi  with ax == 1
+    //   E_eta with ax == 2
+    // 若以后扩展 E_zeta，也可 ax == 3。
+    Int3 nrm{0, 0, 0};
+    if (ax == 1)
+        nrm = Int3{sgn, 0, 0};
+    else if (ax == 2)
+        nrm = Int3{0, sgn, 0};
+    else
+        nrm = Int3{0, 0, sgn};
+
+    const Int3 ulo = U.get_lo();
+    const Int3 uhi = U.get_hi();
+
+    auto in_range = [&](int i, int j, int k) -> bool
+    {
+        return (i >= ulo.i && i < uhi.i &&
+                j >= ulo.j && j < uhi.j &&
+                k >= ulo.k && k < uhi.k);
+    };
+
+    // ------------------------------------------------------------
+    // 取当前 edge family 对应的物理边向量 dr。
+    //
+    // E_xi   -> dr_xi
+    // E_eta  -> dr_eta
+    // E_zeta -> dr_zeta
+    // ------------------------------------------------------------
+
+    const int ib = r.this_block;
+
+    FieldBlock *dr_ptr = nullptr;
+
+    if (ax == 1)
+        dr_ptr = &((*fld).field("dr_xi")[ib]);
+    else if (ax == 2)
+        dr_ptr = &((*fld).field("dr_eta")[ib]);
+    else
+        dr_ptr = &((*fld).field("dr_zeta")[ib]);
+
+    FieldBlock &dr = *dr_ptr;
+
+    auto get_dr = [&](int i, int j, int k) -> std::array<double, 3>
+    {
+        return {dr(i, j, k, 0), dr(i, j, k, 1), dr(i, j, k, 2)};
+    };
+
+    auto dot3 = [](const std::array<double, 3> &a,
+                   const std::array<double, 3> &b) -> double
+    {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    };
+
+    auto norm3 = [&](const std::array<double, 3> &a) -> double
+    {
+        return std::sqrt(dot3(a, a));
+    };
+
+    auto solve3x3 = [](double A[3][3], double b[3], double x[3]) -> bool
+    {
+        double M[3][4] = {
+            {A[0][0], A[0][1], A[0][2], b[0]},
+            {A[1][0], A[1][1], A[1][2], b[1]},
+            {A[2][0], A[2][1], A[2][2], b[2]}};
+
+        for (int c = 0; c < 3; ++c)
+        {
+            int piv = c;
+            double amax = std::abs(M[c][c]);
+
+            for (int r0 = c + 1; r0 < 3; ++r0)
+            {
+                const double av = std::abs(M[r0][c]);
+                if (av > amax)
+                {
+                    amax = av;
+                    piv = r0;
+                }
+            }
+
+            if (amax < 1.0e-300)
+                return false;
+
+            if (piv != c)
+            {
+                for (int q = c; q < 4; ++q)
+                    std::swap(M[c][q], M[piv][q]);
+            }
+
+            const double inv_piv = 1.0 / M[c][c];
+
+            for (int q = c; q < 4; ++q)
+                M[c][q] *= inv_piv;
+
+            for (int r0 = 0; r0 < 3; ++r0)
+            {
+                if (r0 == c)
+                    continue;
+
+                const double fac = M[r0][c];
+
+                for (int q = c; q < 4; ++q)
+                    M[r0][q] -= fac * M[c][q];
+            }
+        }
+
+        x[0] = M[0][3];
+        x[1] = M[1][3];
+        x[2] = M[2][3];
+
+        return true;
+    };
+
+    constexpr double eps_len = 1.0e-14;
+    constexpr double eps_reg = 1.0e-12;
+
+    // ============================================================
+    // 1. 对第一层物理边界做：
+    //
+    //      edge 1-form values -> unique Cartesian E vector -> edge 1-form values
+    //
+    // 对每个固定的 (i,j)，收集所有 k 上的当前 edge：
+    //
+    //      e_k = U(i,j,k,0)
+    //      dr_k = dr_axis(i,j,k,:)
+    //
+    // 解：
+    //
+    //      e_k / |dr_k| ≈ E · (dr_k / |dr_k|)
+    //
+    // 然后：
+    //
+    //      U(i,j,k,0) = E · dr_k
+    //
+    // 这样保证同一个 Pole 点的一圈 edge 由唯一 E_vec 生成。
+    // ============================================================
+
+    for (int i = inner.lo.i; i < inner.hi.i; ++i)
+    {
+        for (int j = inner.lo.j; j < inner.hi.j; ++j)
+        {
+            double A[3][3] = {
+                {0.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0}};
+
+            double b[3] = {0.0, 0.0, 0.0};
+
+            int cnt = 0;
+
+            for (int k = inner.lo.k; k < inner.hi.k - 1; ++k)
+            {
+                if (!in_range(i, j, k))
+                    continue;
+
+                const auto dl = get_dr(i, j, k);
+                const double L = norm3(dl);
+
+                // 对 collapsed edge，不参与矢量重构。
+                // 后面会投影成 0。
+                if (L < eps_len)
+                    continue;
+
+                const double invL = 1.0 / L;
+
+                const double tau[3] = {
+                    dl[0] * invL,
+                    dl[1] * invL,
+                    dl[2] * invL};
+
+                const double y = U(i, j, k, 0) * invL;
+
+                for (int a = 0; a < 3; ++a)
+                {
+                    b[a] += y * tau[a];
+
+                    for (int c = 0; c < 3; ++c)
+                        A[a][c] += tau[a] * tau[c];
+                }
+
+                ++cnt;
+            }
+
+            if (cnt <= 0)
+            {
+                // 所有 edge 都 collapsed，则直接置零这一圈。
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                {
+                    if (in_range(i, j, k))
+                        U(i, j, k, 0) = 0.0;
+                }
+                continue;
+            }
+
+            const double trA = A[0][0] + A[1][1] + A[2][2];
+            const double reg = eps_reg * std::max(1.0, trA);
+
+            A[0][0] += reg;
+            A[1][1] += reg;
+            A[2][2] += reg;
+
+            double Evec[3] = {0.0, 0.0, 0.0};
+
+            const bool ok = solve3x3(A, b, Evec);
+
+            if (!ok)
+            {
+                // 极端退化时，退回到代数平均，但仍然按 1-form 处理。
+                // 这里不建议直接保留原值，因为原值可能包含周向噪声。
+                double avg = 0.0;
+                int navg = 0;
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                {
+                    if (!in_range(i, j, k))
+                        continue;
+
+                    avg += U(i, j, k, 0);
+                    ++navg;
+                }
+
+                if (navg > 0)
+                    avg /= static_cast<double>(navg);
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                {
+                    if (in_range(i, j, k))
+                        U(i, j, k, 0) = avg;
+                }
+
+                continue;
+            }
+
+            // 用唯一 Evec 重新投影回每个 edge 的 1-form。
+            for (int k = inner.lo.k; k < inner.hi.k; ++k)
+            {
+                if (!in_range(i, j, k))
+                    continue;
+
+                const auto dl = get_dr(i, j, k);
+                const double L = norm3(dl);
+
+                if (L < eps_len)
+                {
+                    U(i, j, k, 0) = 0.0;
+                }
+                else
+                {
+                    U(i, j, k, 0) =
+                        Evec[0] * dl[0] +
+                        Evec[1] * dl[1] +
+                        Evec[2] * dl[2];
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // 2. ghost 从 regulation 后的第一层 copy。
+    //
+    // 注意：
+    // 这里 copy 的是已经由 Evec 投影回来的 1-form。
+    // ============================================================
+
+    for (int i = inner.lo.i; i < inner.hi.i; ++i)
+    {
+        for (int j = inner.lo.j; j < inner.hi.j; ++j)
+        {
+            for (int k = inner.lo.k; k < inner.hi.k; ++k)
+            {
+                if (!in_range(i, j, k))
+                    continue;
+
+                const double val = U(i, j, k, 0);
+
+                for (int g = 1; g <= ngh; ++g)
+                {
+                    const int ig = i + g * nrm.i;
+                    const int jg = j + g * nrm.j;
+                    const int kg = k + g * nrm.k;
+
+                    if (!in_range(ig, jg, kg))
+                        continue;
+
+                    U(ig, jg, kg, 0) = val;
+                }
+            }
+        }
+    }
+}
