@@ -391,8 +391,7 @@ void MercuryBoundary::BC_Pole_Cell_(FieldBlock &U, Field *fld,
                 double temp_U = 0.0;
                 double num_d = 0.0;
 
-                // 若 k=0 与 k=inner.hi.k-1 物理等价，则避免重复计数
-                for (int k = inner.lo.k; k < inner.hi.k - 1; ++k)
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
                 {
                     temp_U += U(i, j, k, n);
                     num_d += 1.0;
