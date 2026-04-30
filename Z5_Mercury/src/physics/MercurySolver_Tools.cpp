@@ -719,6 +719,25 @@ void MercurySolver::calc_divB()
 {
     const int nblock = fld_->num_blocks();
 
+    auto get_comp = [](const Int3 &a, int ax) -> int
+    {
+        if (ax == 0)
+            return a.i;
+        if (ax == 1)
+            return a.j;
+        return a.k;
+    };
+
+    auto set_comp = [](Int3 &a, int ax, int v)
+    {
+        if (ax == 0)
+            a.i = v;
+        else if (ax == 1)
+            a.j = v;
+        else
+            a.k = v;
+    };
+
     for (int ib = 0; ib < nblock; ++ib)
     {
         auto &divB = fld_->field(fid_.fid_divB, ib);
@@ -739,6 +758,52 @@ void MercurySolver::calc_divB()
                                         Bzeta(i, j, k + 1, 0) - Bzeta(i, j, k, 0)) /
                                        Jac(i, j, k, 0);
                 }
+
+        // Pole collapse intentionally identifies degenerate face fluxes, so the
+        // adjacent first off-axis shell is not a meaningful divB diagnostic.
+        for (const auto &p : topo_->physical_patches)
+        {
+            if (p.this_block != ib)
+                continue;
+            if (p.bc_name != "Pole")
+                continue;
+
+            const int ax = std::abs(p.direction) - 1;
+            const bool high_side = (p.direction > 0);
+
+            Int3 plo = lo;
+            Int3 phi = hi;
+
+            for (int d = 0; d < 3; ++d)
+            {
+                if (d == ax)
+                    continue;
+
+                const int tlo = std::max(get_comp(lo, d), get_comp(p.this_box_node.lo, d));
+                const int thi = std::min(get_comp(hi, d), get_comp(p.this_box_node.hi, d) - 1);
+                set_comp(plo, d, tlo);
+                set_comp(phi, d, thi);
+            }
+
+            if (high_side)
+            {
+                set_comp(plo, ax, get_comp(hi, ax) - 1);
+                set_comp(phi, ax, get_comp(hi, ax));
+            }
+            else
+            {
+                set_comp(plo, ax, get_comp(lo, ax));
+                set_comp(phi, ax, get_comp(lo, ax) + 1);
+            }
+
+            if (!(plo.i < phi.i && plo.j < phi.j && plo.k < phi.k))
+                continue;
+
+            for (int i = plo.i; i < phi.i; ++i)
+                for (int j = plo.j; j < phi.j; ++j)
+                    for (int k = plo.k; k < phi.k; ++k)
+                        divB(i, j, k, 0) = 0.0;
+        }
     }
 }
 
