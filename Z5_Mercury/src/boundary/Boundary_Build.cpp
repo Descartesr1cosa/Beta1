@@ -49,6 +49,12 @@ void MercuryBoundary::InstallHandlers()
                           this->BC_Solid_Surface_(U, fld, r, ngh);
                       });
 
+    RegisterPhysical_("J_cell", "Coupled-Solid",
+                      [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      {
+                          this->BC_Solid_Surface_Jcell(U, fld, r, ngh);
+                      });
+
     auto Eface_zero_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         if (abs(r.direction) == 1)
@@ -109,6 +115,11 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("J_zeta", "Coupled-Solid", Eedge_zero_zeta_);
     RegisterPhysical_("J_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
 
+    //=============================================================================================
+    // Pole Boundary
+    //-------------------------------------------------------------------------
+    // Edge
+    //-------------------------------------------------------------------------
     auto Eedge_Pole_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         const int dir = std::abs(r.direction);
@@ -156,26 +167,32 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Ehall_eta", "Pole", Eedge_Pole_eta_zero);
     RegisterPhysical_("J_eta", "Pole", Eedge_Pole_eta_zero);
     // RegisterPhysical_("E_zeta", "Pole", Eedge_Pole_);
+
+    //-------------------------------------------------------------------------
+    // Face
+    //-------------------------------------------------------------------------
+    RegisterPhysical_("B_xi", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Bface_Collapse_(U, fld, r, ngh); });
+    RegisterPhysical_("B_eta", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Bface_Collapse_(U, fld, r, ngh); });
+
+    //-------------------------------------------------------------------------
+    // Cell
+    //-------------------------------------------------------------------------
+    RegisterPhysical_("B_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Bcell_Collapse_(U, fld, r, ngh); });
+    RegisterPhysical_("Bind_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Bcell_Collapse_(U, fld, r, ngh); });
+
     RegisterPhysical_("J_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Jcell_Collapse_(U, fld, r, ngh); });
+
+    RegisterPhysical_("U_H", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                       { this->BC_Pole_Cell_(U, fld, r, ngh); });
-    // RegisterPhysical_("B_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
-    //                   { this->BC_Pole_Cell_(U, fld, r, ngh); });
-    // RegisterPhysical_("Bind_cell", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
-    //                   { this->BC_Pole_Cell_(U, fld, r, ngh); });
-    RegisterPhysical_("U_H", "Pole",
-                      [this](FieldBlock &U, Field *fld,
-                             const BOUND::PhysicalRegion &r, int ngh)
-                      {
-                          this->BC_Pole_Cell_(U, fld, r, ngh);
-                      });
+    RegisterPhysical_("U_Na", "Pole", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Pole_Cell_(U, fld, r, ngh); });
 
-    RegisterPhysical_("U_Na", "Pole",
-                      [this](FieldBlock &U, Field *fld,
-                             const BOUND::PhysicalRegion &r, int ngh)
-                      {
-                          this->BC_Pole_Cell_(U, fld, r, ngh);
-                      });
-
+    //=============================================================================================
     // 3) coupling：按你的耦合 channel 注册（先 DefaultCouplingCopy）
     auto ccopy = [](FieldBlock &Udst, Field *fld, CouplingBufferBlock &buf,
                     const std::string &src, const std::string &dst, const std::string &tag)

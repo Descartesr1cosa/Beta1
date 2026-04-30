@@ -124,4 +124,9 @@ private:
     void BC_Pole_Eedge_Zero(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Pole_Cell_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Pole_Eedge_RegulateKAndCopyGhost_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+
+    void BC_Pole_Bface_Collapse_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_Pole_Jcell_Collapse_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_Solid_Surface_Jcell(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
 };
