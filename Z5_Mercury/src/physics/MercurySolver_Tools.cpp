@@ -1082,6 +1082,38 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
                       c * (fp_k - fm_k));
     };
 
+    auto dd_axis = [](int axis,
+                      double a, double b, double c,
+                      double fp_i, double fm_i,
+                      double fp_j, double fm_j,
+                      double fp_k, double fm_k) -> double
+    {
+        if (axis == 0)
+            return 0.5 * a * (fp_i - fm_i);
+        if (axis == 1)
+            return 0.5 * b * (fp_j - fm_j);
+        return 0.5 * c * (fp_k - fm_k);
+    };
+
+    auto get_comp = [](const Int3 &a, int ax) -> int
+    {
+        if (ax == 0)
+            return a.i;
+        if (ax == 1)
+            return a.j;
+        return a.k;
+    };
+
+    auto set_comp = [](Int3 &a, int ax, int v)
+    {
+        if (ax == 0)
+            a.i = v;
+        else if (ax == 1)
+            a.j = v;
+        else
+            a.k = v;
+    };
+
     auto derv_at = [&](FieldBlock &Jac,
                        FieldBlock &Axi,
                        FieldBlock &Aet,
@@ -1200,6 +1232,121 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
                     Jcell(i, j, k, 0) = dBz_dy - dBy_dz;
                     Jcell(i, j, k, 1) = dBx_dz - dBz_dx;
                     Jcell(i, j, k, 2) = dBy_dx - dBx_dy;
+                }
+            }
+        }
+
+        // Pole cells are degenerate in the normal direction and collapsed
+        // around zeta/k. Recompute those cells with only the axial
+        // computational derivative: eta for xi-normal Poles, xi for eta-normal Poles.
+        for (const auto &p : topo_->physical_patches)
+        {
+            if (p.this_block != ib)
+                continue;
+            if (p.bc_name != "Pole")
+                continue;
+
+            const int dir = std::abs(p.direction);
+            if (dir != 1 && dir != 2)
+                continue;
+
+            const int norm_axis = dir - 1;
+            const int axial_axis = (dir == 1) ? 1 : 0;
+            const bool high_side = (p.direction > 0);
+
+            Int3 plo = lo;
+            Int3 phi = hi;
+
+            for (int d = 0; d < 3; ++d)
+            {
+                if (d == norm_axis)
+                    continue;
+
+                const int tlo = std::max(get_comp(lo, d), get_comp(p.this_box_node.lo, d));
+                const int thi = std::min(get_comp(hi, d), get_comp(p.this_box_node.hi, d) - 1);
+                set_comp(plo, d, tlo);
+                set_comp(phi, d, thi);
+            }
+
+            if (high_side)
+            {
+                set_comp(plo, norm_axis, get_comp(hi, norm_axis) - 1);
+                set_comp(phi, norm_axis, get_comp(hi, norm_axis));
+            }
+            else
+            {
+                set_comp(plo, norm_axis, get_comp(lo, norm_axis));
+                set_comp(phi, norm_axis, get_comp(lo, norm_axis) + 1);
+            }
+
+            if (!(plo.i < phi.i && plo.j < phi.j && plo.k < phi.k))
+                continue;
+
+            for (int i = plo.i; i < phi.i; ++i)
+            {
+                for (int j = plo.j; j < phi.j; ++j)
+                {
+                    for (int k = plo.k; k < phi.k; ++k)
+                    {
+                        double ax, ay, az;
+                        double bx, by, bz;
+                        double cx, cy, cz;
+
+                        derv_at(Jac, Axi, Aet, Aze,
+                                i, j, k,
+                                ax, ay, az,
+                                bx, by, bz,
+                                cx, cy, cz);
+
+                        const double dBx_dx = dd_axis(axial_axis, ax, bx, cx,
+                                                       Bcell(i + 1, j, k, 0), Bcell(i - 1, j, k, 0),
+                                                       Bcell(i, j + 1, k, 0), Bcell(i, j - 1, k, 0),
+                                                       Bcell(i, j, k + 1, 0), Bcell(i, j, k - 1, 0));
+
+                        const double dBx_dy = dd_axis(axial_axis, ay, by, cy,
+                                                       Bcell(i + 1, j, k, 0), Bcell(i - 1, j, k, 0),
+                                                       Bcell(i, j + 1, k, 0), Bcell(i, j - 1, k, 0),
+                                                       Bcell(i, j, k + 1, 0), Bcell(i, j, k - 1, 0));
+
+                        const double dBx_dz = dd_axis(axial_axis, az, bz, cz,
+                                                       Bcell(i + 1, j, k, 0), Bcell(i - 1, j, k, 0),
+                                                       Bcell(i, j + 1, k, 0), Bcell(i, j - 1, k, 0),
+                                                       Bcell(i, j, k + 1, 0), Bcell(i, j, k - 1, 0));
+
+                        const double dBy_dx = dd_axis(axial_axis, ax, bx, cx,
+                                                       Bcell(i + 1, j, k, 1), Bcell(i - 1, j, k, 1),
+                                                       Bcell(i, j + 1, k, 1), Bcell(i, j - 1, k, 1),
+                                                       Bcell(i, j, k + 1, 1), Bcell(i, j, k - 1, 1));
+
+                        const double dBy_dy = dd_axis(axial_axis, ay, by, cy,
+                                                       Bcell(i + 1, j, k, 1), Bcell(i - 1, j, k, 1),
+                                                       Bcell(i, j + 1, k, 1), Bcell(i, j - 1, k, 1),
+                                                       Bcell(i, j, k + 1, 1), Bcell(i, j, k - 1, 1));
+
+                        const double dBy_dz = dd_axis(axial_axis, az, bz, cz,
+                                                       Bcell(i + 1, j, k, 1), Bcell(i - 1, j, k, 1),
+                                                       Bcell(i, j + 1, k, 1), Bcell(i, j - 1, k, 1),
+                                                       Bcell(i, j, k + 1, 1), Bcell(i, j, k - 1, 1));
+
+                        const double dBz_dx = dd_axis(axial_axis, ax, bx, cx,
+                                                       Bcell(i + 1, j, k, 2), Bcell(i - 1, j, k, 2),
+                                                       Bcell(i, j + 1, k, 2), Bcell(i, j - 1, k, 2),
+                                                       Bcell(i, j, k + 1, 2), Bcell(i, j, k - 1, 2));
+
+                        const double dBz_dy = dd_axis(axial_axis, ay, by, cy,
+                                                       Bcell(i + 1, j, k, 2), Bcell(i - 1, j, k, 2),
+                                                       Bcell(i, j + 1, k, 2), Bcell(i, j - 1, k, 2),
+                                                       Bcell(i, j, k + 1, 2), Bcell(i, j, k - 1, 2));
+
+                        const double dBz_dz = dd_axis(axial_axis, az, bz, cz,
+                                                       Bcell(i + 1, j, k, 2), Bcell(i - 1, j, k, 2),
+                                                       Bcell(i, j + 1, k, 2), Bcell(i, j - 1, k, 2),
+                                                       Bcell(i, j, k + 1, 2), Bcell(i, j, k - 1, 2));
+
+                        Jcell(i, j, k, 0) = dBz_dy - dBy_dz;
+                        Jcell(i, j, k, 1) = dBx_dz - dBz_dx;
+                        Jcell(i, j, k, 2) = dBy_dx - dBx_dy;
+                    }
                 }
             }
         }

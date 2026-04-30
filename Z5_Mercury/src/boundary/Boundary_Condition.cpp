@@ -1222,22 +1222,8 @@ void MercuryBoundary::BC_Pole_Jcell_Collapse_(FieldBlock &U, Field *fld,
         return;
     }
 
-    const Box3 &inner = r.inner_slab;
-
-    for (int i = inner.lo.i; i < inner.hi.i; ++i)
-    {
-        for (int j = inner.lo.j; j < inner.hi.j; ++j)
-        {
-            for (int k = inner.lo.k; k < inner.hi.k; ++k)
-            {
-                U(i, j, k, 0) = 0.0;
-                U(i, j, k, 1) = 0.0;
-                U(i, j, k, 2) = 0.0;
-            }
-        }
-    }
-
-    // ghost 也从 zeroed inner_slab copy。
+    // J_cell on Pole inner cells is filtered in
+    // MercurySolver::calc_Jcell_from_Bcell_metric_().
     BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
 }
 
