@@ -1404,6 +1404,291 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
                 }
             }
         }
+
+        // Coupled-Solid wall cells are zeroed by the boundary handler below.
+        // For the first fluid layer next to that wall layer, avoid the wall
+        // Bcell in the normal derivative to suppress numerical wall-current
+        // contamination.
+        for (const auto &p : topo_->physical_patches)
+        {
+            if (p.this_block != ib)
+                continue;
+            if (p.bc_name != "Coupled-Solid")
+                continue;
+
+            const int dir = std::abs(p.direction);
+            if (dir < 1 || dir > 3)
+                continue;
+
+            const int norm_axis = dir - 1;
+            const bool high_side = (p.direction > 0);
+            const int inward = high_side ? -1 : +1;
+            const int nlo = get_comp(lo, norm_axis);
+            const int nhi = get_comp(hi, norm_axis);
+
+            if (nhi - nlo < 3)
+                continue;
+
+            Int3 plo = lo;
+            Int3 phi = hi;
+
+            for (int d = 0; d < 3; ++d)
+            {
+                if (d == norm_axis)
+                    continue;
+
+                const int tlo = std::max(get_comp(lo, d), get_comp(p.this_box_node.lo, d));
+                const int thi = std::min(get_comp(hi, d), get_comp(p.this_box_node.hi, d) - 1);
+                set_comp(plo, d, tlo);
+                set_comp(phi, d, thi);
+            }
+
+            if (high_side)
+            {
+                set_comp(plo, norm_axis, nhi - 2);
+                set_comp(phi, norm_axis, nhi - 1);
+            }
+            else
+            {
+                set_comp(plo, norm_axis, nlo + 1);
+                set_comp(phi, norm_axis, nlo + 2);
+            }
+
+            if (!(plo.i < phi.i && plo.j < phi.j && plo.k < phi.k))
+                continue;
+
+            auto B_at_axis_offset = [&](int i, int j, int k, int axis, int offset, int comp) -> double
+            {
+                if (axis == 0)
+                    return Bcell(i + offset, j, k, comp);
+                if (axis == 1)
+                    return Bcell(i, j + offset, k, comp);
+                return Bcell(i, j, k + offset, comp);
+            };
+
+            auto dcomp_axis = [&](int i, int j, int k, int axis, int comp) -> double
+            {
+                if (axis == norm_axis)
+                {
+                    if (inward > 0)
+                        return B_at_axis_offset(i, j, k, axis, +1, comp) -
+                               B_at_axis_offset(i, j, k, axis, 0, comp);
+
+                    return B_at_axis_offset(i, j, k, axis, 0, comp) -
+                           B_at_axis_offset(i, j, k, axis, -1, comp);
+                }
+
+                return 0.5 * (B_at_axis_offset(i, j, k, axis, +1, comp) -
+                              B_at_axis_offset(i, j, k, axis, -1, comp));
+            };
+
+            auto dphys = [&](int i, int j, int k, int comp,
+                             double qxi, double qet, double qze) -> double
+            {
+                return qxi * dcomp_axis(i, j, k, 0, comp) +
+                       qet * dcomp_axis(i, j, k, 1, comp) +
+                       qze * dcomp_axis(i, j, k, 2, comp);
+            };
+
+            for (int i = plo.i; i < phi.i; ++i)
+            {
+                for (int j = plo.j; j < phi.j; ++j)
+                {
+                    for (int k = plo.k; k < phi.k; ++k)
+                    {
+                        double ax, ay, az;
+                        double bx, by, bz;
+                        double cx, cy, cz;
+
+                        derv_at(Jac, Axi, Aet, Aze,
+                                i, j, k,
+                                ax, ay, az,
+                                bx, by, bz,
+                                cx, cy, cz);
+
+                        const double dBx_dx = dphys(i, j, k, 0, ax, bx, cx);
+                        const double dBx_dy = dphys(i, j, k, 0, ay, by, cy);
+                        const double dBx_dz = dphys(i, j, k, 0, az, bz, cz);
+
+                        const double dBy_dx = dphys(i, j, k, 1, ax, bx, cx);
+                        const double dBy_dy = dphys(i, j, k, 1, ay, by, cy);
+                        const double dBy_dz = dphys(i, j, k, 1, az, bz, cz);
+
+                        const double dBz_dx = dphys(i, j, k, 2, ax, bx, cx);
+                        const double dBz_dy = dphys(i, j, k, 2, ay, by, cy);
+                        const double dBz_dz = dphys(i, j, k, 2, az, bz, cz);
+
+                        Jcell(i, j, k, 0) = dBz_dy - dBy_dz;
+                        Jcell(i, j, k, 1) = dBx_dz - dBz_dx;
+                        Jcell(i, j, k, 2) = dBy_dx - dBx_dy;
+                    }
+                }
+            }
+        }
+
+        // Intersection of a Pole collapse and the first fluid layer next to a
+        // Coupled-Solid wall. This must run after both treatments above: keep
+        // the Pole k-collapse, but use a one-sided axial derivative away from
+        // the wall so the wall-layer Bcell is not sampled.
+        for (const auto &ppole : topo_->physical_patches)
+        {
+            if (ppole.this_block != ib)
+                continue;
+            if (ppole.bc_name != "Pole")
+                continue;
+
+            const int pole_dir = std::abs(ppole.direction);
+            if (pole_dir != 1 && pole_dir != 2)
+                continue;
+
+            const int pole_norm_axis = pole_dir - 1;
+            const int axial_axis = (pole_dir == 1) ? 1 : 0;
+            const bool pole_high_side = (ppole.direction > 0);
+
+            for (const auto &pwall : topo_->physical_patches)
+            {
+                if (pwall.this_block != ib)
+                    continue;
+                if (pwall.bc_name != "Coupled-Solid")
+                    continue;
+
+                const int wall_dir = std::abs(pwall.direction);
+                if (wall_dir - 1 != axial_axis)
+                    continue;
+
+                const bool wall_high_side = (pwall.direction > 0);
+                const int wall_inward = wall_high_side ? -1 : +1;
+                const int axial_lo = get_comp(lo, axial_axis);
+                const int axial_hi = get_comp(hi, axial_axis);
+
+                if (axial_hi - axial_lo < 3)
+                    continue;
+
+                Int3 plo = lo;
+                Int3 phi = hi;
+
+                if (pole_high_side)
+                {
+                    set_comp(plo, pole_norm_axis, get_comp(hi, pole_norm_axis) - 1);
+                    set_comp(phi, pole_norm_axis, get_comp(hi, pole_norm_axis));
+                }
+                else
+                {
+                    set_comp(plo, pole_norm_axis, get_comp(lo, pole_norm_axis));
+                    set_comp(phi, pole_norm_axis, get_comp(lo, pole_norm_axis) + 1);
+                }
+
+                if (wall_high_side)
+                {
+                    set_comp(plo, axial_axis, axial_hi - 2);
+                    set_comp(phi, axial_axis, axial_hi - 1);
+                }
+                else
+                {
+                    set_comp(plo, axial_axis, axial_lo + 1);
+                    set_comp(phi, axial_axis, axial_lo + 2);
+                }
+
+                const int klo = std::max({lo.k, ppole.this_box_node.lo.k, pwall.this_box_node.lo.k});
+                const int khi = std::min({hi.k, ppole.this_box_node.hi.k - 1, pwall.this_box_node.hi.k - 1});
+                plo.k = klo;
+                phi.k = khi;
+
+                if (!(plo.i < phi.i && plo.j < phi.j && plo.k < phi.k))
+                    continue;
+
+                auto B_axis = [&](int i, int j, int k, int offset, int comp) -> double
+                {
+                    if (axial_axis == 0)
+                        return Bcell(i + offset, j, k, comp);
+                    return Bcell(i, j + offset, k, comp);
+                };
+
+                const int k_count = phi.k - plo.k;
+                const double inv_k_count = 1.0 / static_cast<double>(k_count);
+
+                for (int i = plo.i; i < phi.i; ++i)
+                {
+                    for (int j = plo.j; j < phi.j; ++j)
+                    {
+                        double ax_avg = 0.0, ay_avg = 0.0, az_avg = 0.0;
+                        double bx_avg = 0.0, by_avg = 0.0, bz_avg = 0.0;
+
+                        for (int k = plo.k; k < phi.k; ++k)
+                        {
+                            double ax, ay, az;
+                            double bx, by, bz;
+                            double cx, cy, cz;
+
+                            derv_at(Jac, Axi, Aet, Aze,
+                                    i, j, k,
+                                    ax, ay, az,
+                                    bx, by, bz,
+                                    cx, cy, cz);
+
+                            if (axial_axis == 0)
+                            {
+                                ax_avg += ax;
+                                ay_avg += ay;
+                                az_avg += az;
+                            }
+                            else
+                            {
+                                bx_avg += bx;
+                                by_avg += by;
+                                bz_avg += bz;
+                            }
+                        }
+
+                        ax_avg *= inv_k_count;
+                        ay_avg *= inv_k_count;
+                        az_avg *= inv_k_count;
+                        bx_avg *= inv_k_count;
+                        by_avg *= inv_k_count;
+                        bz_avg *= inv_k_count;
+
+                        const int k0 = plo.k;
+                        double dB_daxis[3] = {0.0, 0.0, 0.0};
+                        for (int comp = 0; comp < 3; ++comp)
+                        {
+                            if (wall_inward > 0)
+                                dB_daxis[comp] = B_axis(i, j, k0, +1, comp) -
+                                                 B_axis(i, j, k0, 0, comp);
+                            else
+                                dB_daxis[comp] = B_axis(i, j, k0, 0, comp) -
+                                                 B_axis(i, j, k0, -1, comp);
+                        }
+
+                        const double qx = (axial_axis == 0) ? ax_avg : bx_avg;
+                        const double qy = (axial_axis == 0) ? ay_avg : by_avg;
+                        const double qz = (axial_axis == 0) ? az_avg : bz_avg;
+
+                        const double dBx_dx = qx * dB_daxis[0];
+                        const double dBx_dy = qy * dB_daxis[0];
+                        const double dBx_dz = qz * dB_daxis[0];
+
+                        const double dBy_dx = qx * dB_daxis[1];
+                        const double dBy_dy = qy * dB_daxis[1];
+                        const double dBy_dz = qz * dB_daxis[1];
+
+                        const double dBz_dx = qx * dB_daxis[2];
+                        const double dBz_dy = qy * dB_daxis[2];
+                        const double dBz_dz = qz * dB_daxis[2];
+
+                        const double Jx = dBz_dy - dBy_dz;
+                        const double Jy = dBx_dz - dBz_dx;
+                        const double Jz = dBy_dx - dBx_dy;
+
+                        for (int k = plo.k; k < phi.k; ++k)
+                        {
+                            Jcell(i, j, k, 0) = Jx;
+                            Jcell(i, j, k, 1) = Jy;
+                            Jcell(i, j, k, 2) = Jz;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // 后续所有 Pole / wall / coupling / halo 处理都交给边界系统。
