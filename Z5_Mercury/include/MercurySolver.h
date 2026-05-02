@@ -221,6 +221,7 @@ private:
     void AddHallEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
     void Calc_J_Edge();
+    void FilterPoleNearAxisEedge_();
 
     void AddHyperResistiveEdgeEMF_();
     void AddSecondResistiveEdgeEMF_();
