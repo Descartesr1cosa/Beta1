@@ -107,6 +107,199 @@ void MercurySolver::AddResistiveEdgeEMF_()
     }
 }
 
+void MercurySolver::AddPoleResistiveEdgeEMF_FromJcell_()
+{
+    constexpr int shift_layers = 4;
+    constexpr double radius_limit = 1.2;
+    constexpr double filter_floor = 0.0;
+
+    auto loc_delta = [](int edge_axis) -> Int3
+    {
+        if (edge_axis == 0)
+            return {1, 0, 0};
+        if (edge_axis == 1)
+            return {0, 1, 0};
+        return {0, 0, 1};
+    };
+
+    auto get_comp = [](const Int3 &a, int ax) -> int
+    {
+        if (ax == 0)
+            return a.i;
+        if (ax == 1)
+            return a.j;
+        return a.k;
+    };
+
+    auto set_comp = [](Int3 &a, int ax, int v)
+    {
+        if (ax == 0)
+            a.i = v;
+        else if (ax == 1)
+            a.j = v;
+        else
+            a.k = v;
+    };
+
+    auto add_one_edge = [&](FieldBlock &E,
+                            FieldBlock &dr,
+                            int edge_axis,
+                            const TOPO::PhysicalPatch &p,
+                            double3D &x,
+                            double3D &y,
+                            double3D &z,
+                            FieldBlock &Jcell)
+    {
+        if (!E.is_allocated() || !dr.is_allocated() || !Jcell.is_allocated())
+            return;
+
+        const int pole_dir = std::abs(p.direction);
+        if (pole_dir != 1 && pole_dir != 2)
+            return;
+
+        const int norm_axis = pole_dir - 1;
+        const bool high_side = (p.direction > 0);
+        const Int3 delta = loc_delta(edge_axis);
+
+        const Int3 elo = E.inner_lo();
+        const Int3 ehi = E.inner_hi();
+
+        Int3 base_lo = elo;
+        Int3 base_hi = ehi;
+
+        for (int ax = 0; ax < 3; ++ax)
+        {
+            if (ax == norm_axis)
+                continue;
+
+            const int d = get_comp(delta, ax);
+            const int patch_lo = get_comp(p.this_box_node.lo, ax);
+            const int patch_hi = get_comp(p.this_box_node.hi, ax) - d;
+
+            set_comp(base_lo, ax, std::max(get_comp(elo, ax), patch_lo));
+            set_comp(base_hi, ax, std::min(get_comp(ehi, ax), patch_hi));
+        }
+
+        const int nlo = get_comp(elo, norm_axis);
+        const int nhi = get_comp(ehi, norm_axis);
+        const int max_layers = std::min(shift_layers, nhi - nlo);
+
+        if (max_layers <= 0)
+            return;
+
+        auto edge_mid_radius = [&](int i, int j, int k) -> double
+        {
+            const int ip = i + (edge_axis == 0 ? 1 : 0);
+            const int jp = j + (edge_axis == 1 ? 1 : 0);
+            const int kp = k + (edge_axis == 2 ? 1 : 0);
+
+            const double xm = 0.5 * (x(i, j, k) + x(ip, jp, kp));
+            const double ym = 0.5 * (y(i, j, k) + y(ip, jp, kp));
+            const double zm = 0.5 * (z(i, j, k) + z(ip, jp, kp));
+
+            return std::sqrt(xm * xm + ym * ym + zm * zm);
+        };
+
+        auto jcell_to_edge = [&](int i, int j, int k) -> double
+        {
+            double Jx = 0.0;
+            double Jy = 0.0;
+            double Jz = 0.0;
+
+            if (edge_axis == 0)
+            {
+                Jx = 0.25 * (Jcell(i, j - 1, k - 1, 0) + Jcell(i, j - 1, k, 0) +
+                             Jcell(i, j, k - 1, 0) + Jcell(i, j, k, 0));
+                Jy = 0.25 * (Jcell(i, j - 1, k - 1, 1) + Jcell(i, j - 1, k, 1) +
+                             Jcell(i, j, k - 1, 1) + Jcell(i, j, k, 1));
+                Jz = 0.25 * (Jcell(i, j - 1, k - 1, 2) + Jcell(i, j - 1, k, 2) +
+                             Jcell(i, j, k - 1, 2) + Jcell(i, j, k, 2));
+            }
+            else if (edge_axis == 1)
+            {
+                Jx = 0.25 * (Jcell(i - 1, j, k - 1, 0) + Jcell(i - 1, j, k, 0) +
+                             Jcell(i, j, k - 1, 0) + Jcell(i, j, k, 0));
+                Jy = 0.25 * (Jcell(i - 1, j, k - 1, 1) + Jcell(i - 1, j, k, 1) +
+                             Jcell(i, j, k - 1, 1) + Jcell(i, j, k, 1));
+                Jz = 0.25 * (Jcell(i - 1, j, k - 1, 2) + Jcell(i - 1, j, k, 2) +
+                             Jcell(i, j, k - 1, 2) + Jcell(i, j, k, 2));
+            }
+            else
+            {
+                Jx = 0.25 * (Jcell(i - 1, j - 1, k, 0) + Jcell(i - 1, j, k, 0) +
+                             Jcell(i, j - 1, k, 0) + Jcell(i, j, k, 0));
+                Jy = 0.25 * (Jcell(i - 1, j - 1, k, 1) + Jcell(i - 1, j, k, 1) +
+                             Jcell(i, j - 1, k, 1) + Jcell(i, j, k, 1));
+                Jz = 0.25 * (Jcell(i - 1, j - 1, k, 2) + Jcell(i - 1, j, k, 2) +
+                             Jcell(i, j - 1, k, 2) + Jcell(i, j, k, 2));
+            }
+
+            return Jx * dr(i, j, k, 0) + Jy * dr(i, j, k, 1) + Jz * dr(i, j, k, 2);
+        };
+
+        for (int layer = 0; layer < max_layers; ++layer)
+        {
+            Int3 lo = base_lo;
+            Int3 hi = base_hi;
+
+            const int n = high_side ? (nhi - 1 - layer) : (nlo + layer);
+            set_comp(lo, norm_axis, n);
+            set_comp(hi, norm_axis, n + 1);
+
+            if (!(lo.i < hi.i && lo.j < hi.j && lo.k < hi.k))
+                continue;
+
+            double weight = 1.0 - static_cast<double>(layer) / static_cast<double>(max_layers);
+            weight = std::max(filter_floor, std::min(1.0, weight));
+
+            if (weight <= 0.0)
+                continue;
+
+            const double eta = 0.05 * weight;
+
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                    {
+                        if (edge_mid_radius(i, j, k) > radius_limit)
+                            continue;
+
+                        E(i, j, k, 0) += eta * jcell_to_edge(i, j, k);
+                    }
+        }
+    };
+
+    const int nb = fld_->num_blocks();
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        FieldBlock &Exi = fld_->field(fid_.fid_E.xi, ib);
+        FieldBlock &Eeta = fld_->field(fid_.fid_E.eta, ib);
+        FieldBlock &Eze = fld_->field(fid_.fid_E.zeta, ib);
+
+        FieldBlock &dr_xi = fld_->field(fid_.Edge_dr.xi, ib);
+        FieldBlock &dr_eta = fld_->field(fid_.Edge_dr.eta, ib);
+        FieldBlock &dr_zeta = fld_->field(fid_.Edge_dr.zeta, ib);
+
+        FieldBlock &Jcell = fld_->field(fid_.fid_Jcell, ib);
+
+        auto &x = grd_->grids(ib).x;
+        auto &y = grd_->grids(ib).y;
+        auto &z = grd_->grids(ib).z;
+
+        for (const auto &p : topo_->physical_patches)
+        {
+            if (p.this_block != ib)
+                continue;
+            if (p.bc_name != "Pole")
+                continue;
+
+            add_one_edge(Exi, dr_xi, 0, p, x, y, z, Jcell);
+            add_one_edge(Eeta, dr_eta, 1, p, x, y, z, Jcell);
+            add_one_edge(Eze, dr_zeta, 2, p, x, y, z, Jcell);
+        }
+    }
+}
+
 void MercurySolver::AddSecondResistiveEdgeEMF_()
 {
     constexpr double eps = 1e-14;

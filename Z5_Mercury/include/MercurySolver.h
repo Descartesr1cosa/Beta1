@@ -217,6 +217,7 @@ private:
     // For Magnetic
     void Build_E_explicit_edge_();
     void AddResistiveEdgeEMF_();
+    void AddPoleResistiveEdgeEMF_FromJcell_();
     void AddIdealEdgeEMF_();
     void AddHallEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
