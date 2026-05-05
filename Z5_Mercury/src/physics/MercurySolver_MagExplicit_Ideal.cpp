@@ -1,5 +1,8 @@
-
 #include "MercurySolver.h"
+
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
 
 void MercurySolver::AddIdealEdgeEMF_()
 {
@@ -10,17 +13,31 @@ void MercurySolver::AddIdealEdgeEMF_()
         auto &UN = fld_->field(fid_.fid_U_Na, iblk);
         if (!Uplus.is_allocated() || !UH.is_allocated() || !UN.is_allocated())
             continue;
-        auto &Bcell = fld_->field(fid_.fid_Bcell, iblk);
-        //  三方向：通量 + ideal face EMF
-        for (int dir = 1; dir <= 3; ++dir)
-        {
-            auto &E_face = fld_->field(fid_.fid_Eface.at(dir), iblk);
-            auto &B_face = fld_->field(fid_.fid_B.at(dir), iblk);
-            auto &B_face_add = fld_->field(fid_.fid_Badd.at(dir), iblk);
-            auto &metric = fld_->field(fid_.fid_metric.at(dir), iblk); // Xi_[iblk]/Eta_[iblk]/Zeta_[iblk]
 
-            AssembleOneDirectionEMF_(iblk, dir, E_face, B_face, B_face_add, Bcell, metric, Uplus, UH, UN);
-        }
+        auto &Bxi = fld_->field(fid_.fid_B.xi, iblk);
+        auto &Beta = fld_->field(fid_.fid_B.eta, iblk);
+        auto &Bzeta = fld_->field(fid_.fid_B.zeta, iblk);
+        auto &Badd_xi = fld_->field(fid_.fid_Badd.xi, iblk);
+        auto &Badd_eta = fld_->field(fid_.fid_Badd.eta, iblk);
+        auto &Badd_zeta = fld_->field(fid_.fid_Badd.zeta, iblk);
+
+        auto &Jac = fld_->field(fid_.fid_Jac, iblk);
+        auto &JDxi = fld_->field(fid_.fid_metric.xi, iblk);
+        auto &JDet = fld_->field(fid_.fid_metric.eta, iblk);
+        auto &JDze = fld_->field(fid_.fid_metric.zeta, iblk);
+
+        AssembleOneDirectionEMF_(1, fld_->field(fid_.fid_Eface.xi, iblk),
+                                 Bxi, Beta, Bzeta,
+                                 Badd_xi, Badd_eta, Badd_zeta,
+                                 Jac, JDxi, JDet, JDze, Uplus);
+        AssembleOneDirectionEMF_(2, fld_->field(fid_.fid_Eface.eta, iblk),
+                                 Bxi, Beta, Bzeta,
+                                 Badd_xi, Badd_eta, Badd_zeta,
+                                 Jac, JDxi, JDet, JDze, Uplus);
+        AssembleOneDirectionEMF_(3, fld_->field(fid_.fid_Eface.zeta, iblk),
+                                 Bxi, Beta, Bzeta,
+                                 Badd_xi, Badd_eta, Badd_zeta,
+                                 Jac, JDxi, JDet, JDze, Uplus);
     }
 
     mercury_bound_.Sync("Eface");
@@ -29,19 +46,13 @@ void MercurySolver::AddIdealEdgeEMF_()
 }
 
 //=========================================================================
-// Eelectric face  to  edge
+// Face candidates to the unique shared edge EMF.
+// Eface_* stores candidate components (e_xi,e_eta,e_zeta), not Cartesian E.
 void MercurySolver::AssembleEdgeEMF_FromFaceE_Ideal_()
 {
     Int3 sub, sup;
-    // 插值计算电场E=-u\times B, 存储的E_xi eta zeta均为E\cdot dr的线积分量
     for (int iblk = 0; iblk < fld_->num_blocks(); iblk++)
     {
-        auto &Bcell = fld_->field(fid_.fid_Bcell, iblk);
-        Vec3 E, dr;
-        double3D &x = fld_->grd->grids(iblk).x;
-        double3D &y = fld_->grd->grids(iblk).y;
-        double3D &z = fld_->grd->grids(iblk).z;
-
         {
             auto &Exi = fld_->field(fid_.fid_E.xi, iblk);
             auto &E_face_eta = fld_->field(fid_.fid_Eface.eta, iblk);
@@ -52,15 +63,9 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Ideal_()
                 for (int j = sub.j; j < sup.j; j++)
                     for (int k = sub.k; k < sup.k; k++)
                     {
-
-                        E.vec[0] = 0.25 * (E_face_eta(i, j, k, 0) + E_face_eta(i, j, k - 1, 0) + E_face_zeta(i, j, k, 0) + E_face_zeta(i, j - 1, k, 0));
-                        E.vec[1] = 0.25 * (E_face_eta(i, j, k, 1) + E_face_eta(i, j, k - 1, 1) + E_face_zeta(i, j, k, 1) + E_face_zeta(i, j - 1, k, 1));
-                        E.vec[2] = 0.25 * (E_face_eta(i, j, k, 2) + E_face_eta(i, j, k - 1, 2) + E_face_zeta(i, j, k, 2) + E_face_zeta(i, j - 1, k, 2));
-
-                        dr = {x(i + 1, j, k) - x(i, j, k),
-                              y(i + 1, j, k) - y(i, j, k),
-                              z(i + 1, j, k) - z(i, j, k)};
-                        Exi(i, j, k, 0) = E * dr;
+                        Exi(i, j, k, 0) = 0.25 * (
+                            E_face_eta(i, j, k, 0) + E_face_eta(i, j, k - 1, 0) +
+                            E_face_zeta(i, j, k, 0) + E_face_zeta(i, j - 1, k, 0));
                     }
         }
 
@@ -74,14 +79,9 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Ideal_()
                 for (int j = sub.j; j < sup.j; j++)
                     for (int k = sub.k; k < sup.k; k++)
                     {
-                        E.vec[0] = 0.25 * (E_face_xi(i, j, k, 0) + E_face_xi(i, j, k - 1, 0) + E_face_zeta(i, j, k, 0) + E_face_zeta(i - 1, j, k, 0));
-                        E.vec[1] = 0.25 * (E_face_xi(i, j, k, 1) + E_face_xi(i, j, k - 1, 1) + E_face_zeta(i, j, k, 1) + E_face_zeta(i - 1, j, k, 1));
-                        E.vec[2] = 0.25 * (E_face_xi(i, j, k, 2) + E_face_xi(i, j, k - 1, 2) + E_face_zeta(i, j, k, 2) + E_face_zeta(i - 1, j, k, 2));
-
-                        dr = {x(i, j + 1, k) - x(i, j, k),
-                              y(i, j + 1, k) - y(i, j, k),
-                              z(i, j + 1, k) - z(i, j, k)};
-                        Eeta(i, j, k, 0) = E * dr;
+                        Eeta(i, j, k, 0) = 0.25 * (
+                            E_face_xi(i, j, k, 1) + E_face_xi(i, j, k - 1, 1) +
+                            E_face_zeta(i, j, k, 1) + E_face_zeta(i - 1, j, k, 1));
                     }
         }
 
@@ -95,14 +95,9 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Ideal_()
                 for (int j = sub.j; j < sup.j; j++)
                     for (int k = sub.k; k < sup.k; k++)
                     {
-                        E.vec[0] = 0.25 * (E_face_xi(i, j, k, 0) + E_face_xi(i, j - 1, k, 0) + E_face_eta(i, j, k, 0) + E_face_eta(i - 1, j, k, 0));
-                        E.vec[1] = 0.25 * (E_face_xi(i, j, k, 1) + E_face_xi(i, j - 1, k, 1) + E_face_eta(i, j, k, 1) + E_face_eta(i - 1, j, k, 1));
-                        E.vec[2] = 0.25 * (E_face_xi(i, j, k, 2) + E_face_xi(i, j - 1, k, 2) + E_face_eta(i, j, k, 2) + E_face_eta(i - 1, j, k, 2));
-
-                        dr = {x(i, j, k + 1) - x(i, j, k),
-                              y(i, j, k + 1) - y(i, j, k),
-                              z(i, j, k + 1) - z(i, j, k)};
-                        Ezeta(i, j, k, 0) = E * dr;
+                        Ezeta(i, j, k, 0) = 0.25 * (
+                            E_face_xi(i, j, k, 2) + E_face_xi(i, j - 1, k, 2) +
+                            E_face_eta(i, j, k, 2) + E_face_eta(i - 1, j, k, 2));
                     }
         }
     }
@@ -110,199 +105,128 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Ideal_()
 
 //=========================================================================
 void MercurySolver::AssembleOneDirectionEMF_(
-    int iblk,
-    int dir,                // 1 xi, 2 eta, 3 zeta
-    FieldBlock &E_face,     // E_face_xi/eta/zeta   (ncomp=3)
-    FieldBlock &B_face,     // B_xi/eta/zeta        (ncomp=1)
-    FieldBlock &B_face_add, // B_xi/eta/zeta add    (ncomp=1)
-    FieldBlock &Bcell,
-    FieldBlock &metricField, // Xi_/Eta_/Zeta_      (ncomp=3)
-    FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN)
+    int dir, FieldBlock &E_face,
+    FieldBlock &Bxi, FieldBlock &Beta, FieldBlock &Bzeta,
+    FieldBlock &Badd_xi, FieldBlock &Badd_eta, FieldBlock &Badd_zeta,
+    FieldBlock &Jac,
+    FieldBlock &JDxi, FieldBlock &JDet, FieldBlock &JDze,
+    FieldBlock &Uplus)
 {
+    constexpr double jac_floor = 1.0e-30;
+
+    auto shift_cell = [](int axis, int side, int &i, int &j, int &k)
+    {
+        if (axis == 0)
+            i += side;
+        else if (axis == 1)
+            j += side;
+        else
+            k += side;
+    };
+
+    auto face_beta = [&](int axis, int i, int j, int k) -> double
+    {
+        if (axis == 0)
+            return Bxi(i, j, k, 0) + Badd_xi(i, j, k, 0);
+        if (axis == 1)
+            return Beta(i, j, k, 0) + Badd_eta(i, j, k, 0);
+        return Bzeta(i, j, k, 0) + Badd_zeta(i, j, k, 0);
+    };
+
+    auto cell_beta = [&](int axis, int i, int j, int k) -> double
+    {
+        int ip = i, jp = j, kp = k;
+        shift_cell(axis, 1, ip, jp, kp);
+        return 0.5 * (face_beta(axis, i, j, k) + face_beta(axis, ip, jp, kp));
+    };
+
+    auto metric_component = [&](int axis, int i, int j, int k, int comp) -> double
+    {
+        if (axis == 0)
+            return JDxi(i, j, k, comp);
+        if (axis == 1)
+            return JDet(i, j, k, comp);
+        return JDze(i, j, k, comp);
+    };
+
+    auto cell_u_contra = [&](int axis, int i, int j, int k) -> double
+    {
+        int ip = i, jp = j, kp = k;
+        shift_cell(axis, 1, ip, jp, kp);
+
+        const double kx = 0.5 * (metric_component(axis, i, j, k, 0) + metric_component(axis, ip, jp, kp, 0));
+        const double ky = 0.5 * (metric_component(axis, i, j, k, 1) + metric_component(axis, ip, jp, kp, 1));
+        const double kz = 0.5 * (metric_component(axis, i, j, k, 2) + metric_component(axis, ip, jp, kp, 2));
+        const double inv_jac = 1.0 / (std::abs(Jac(i, j, k, 0)) + jac_floor);
+
+        return (kx * Uplus(i, j, k, 0) +
+                ky * Uplus(i, j, k, 1) +
+                kz * Uplus(i, j, k, 2)) *
+               inv_jac;
+    };
+
+    auto flux = [&](int beta_axis, int flux_axis,
+                    int iL, int jL, int kL,
+                    int iR, int jR, int kR,
+                    double beta_flux_face) -> double
+    {
+        const double betaL = cell_beta(beta_axis, iL, jL, kL);
+        const double betaR = cell_beta(beta_axis, iR, jR, kR);
+
+        const double uFluxL = cell_u_contra(flux_axis, iL, jL, kL);
+        const double uFluxR = cell_u_contra(flux_axis, iR, jR, kR);
+        const double uBetaL = cell_u_contra(beta_axis, iL, jL, kL);
+        const double uBetaR = cell_u_contra(beta_axis, iR, jR, kR);
+
+        const double GL = uFluxL * betaL - uBetaL * beta_flux_face;
+        const double GR = uFluxR * betaR - uBetaR * beta_flux_face;
+        const double radius = std::max(std::abs(uFluxL), std::abs(uFluxR));
+
+        return 0.5 * (GL + GR) - 0.5 * radius * (betaR - betaL);
+    };
+
+    const int flux_axis = dir - 1;
+    if (flux_axis < 0 || flux_axis > 2)
+        throw std::runtime_error("AssembleOneDirectionEMF_: invalid direction");
+
     Int3 sub = E_face.inner_lo();
     Int3 sup = E_face.inner_hi();
-
-    double metric[3];
-    double flux3[3]; // 注意：Reconstruction 输出 8 个，其中[5..7] 已被旋转成 E_face
 
     for (int i = sub.i; i < sup.i; ++i)
         for (int j = sub.j; j < sup.j; ++j)
             for (int k = sub.k; k < sup.k; ++k)
             {
-                metric[0] = metricField(i, j, k, 0);
-                metric[1] = metricField(i, j, k, 1);
-                metric[2] = metricField(i, j, k, 2);
+                int iL = i, jL = j, kL = k;
+                int iR = i, jR = j, kR = k;
+                shift_cell(flux_axis, -1, iL, jL, kL);
 
-                ReconstructionEMF_(metric, dir, Uplus, UH, UN, Bcell,
-                                   B_face(i, j, k, 0) + B_face_add(i, j, k, 0), iblk, i, j, k, flux3);
+                const double beta_flux_face = face_beta(flux_axis, i, j, k);
+                double e[3] = {0.0, 0.0, 0.0};
 
-                // 2) Ideal MHD electric field on face
-                E_face(i, j, k, 0) = flux3[0];
-                E_face(i, j, k, 1) = flux3[1];
-                E_face(i, j, k, 2) = flux3[2];
+                if (flux_axis == 0)
+                {
+                    const double G_eta_xi = flux(1, 0, iL, jL, kL, iR, jR, kR, beta_flux_face);
+                    const double G_zeta_xi = flux(2, 0, iL, jL, kL, iR, jR, kR, beta_flux_face);
+                    e[1] = G_zeta_xi;
+                    e[2] = -G_eta_xi;
+                }
+                else if (flux_axis == 1)
+                {
+                    const double G_xi_eta = flux(0, 1, iL, jL, kL, iR, jR, kR, beta_flux_face);
+                    const double G_zeta_eta = flux(2, 1, iL, jL, kL, iR, jR, kR, beta_flux_face);
+                    e[0] = -G_zeta_eta;
+                    e[2] = G_xi_eta;
+                }
+                else
+                {
+                    const double G_xi_zeta = flux(0, 2, iL, jL, kL, iR, jR, kR, beta_flux_face);
+                    const double G_eta_zeta = flux(1, 2, iL, jL, kL, iR, jR, kR, beta_flux_face);
+                    e[0] = G_eta_zeta;
+                    e[1] = -G_xi_zeta;
+                }
+
+                E_face(i, j, k, 0) = e[0];
+                E_face(i, j, k, 1) = e[1];
+                E_face(i, j, k, 2) = e[2];
             }
-}
-
-void MercurySolver::ReconstructionEMF_(double *metric, int32_t direction,
-                                       FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
-                                       double *out_flux)
-{
-    auto calc_Jac_radius_GCL = [&](double &out, double *pv, double *B, double *metric)
-    {
-        double u, v, w;
-        double BB2, Bx, By, Bz;
-        double K1, K2, K3;
-        double rho = pv[3];
-        double p = pv[4];
-        u = pv[0];
-        v = pv[1];
-        w = pv[2];
-
-        Bx = B[0];
-        By = B[1];
-        Bz = B[2];
-
-        BB2 = Bx * Bx + By * By + Bz * Bz;
-
-        K1 = metric[0];
-        K2 = metric[1];
-        K3 = metric[2];
-
-        double kk = K1 * K1 + K2 * K2 + K3 * K3;
-        double kn = std::sqrt(kk);
-
-        double uvw = K1 * u + K2 * v + K3 * w;
-
-        // sound speed square
-        double cs2 = gamma_ * p / rho;
-        // Alfvén speed square
-        double vA2 = inver_MA2 * BB2 / rho;
-        // vAn^2:  (B·n)^2，where n = k/|k|，so (B·n)^2 = (B·k)^2/|k|^2
-        double Bdotk = B[3]; // consistent with calc_Jac_Flux_GCL：face  B·k
-        double vAn2 = (kk > 0.0) ? (inver_MA2 * (Bdotk * Bdotk) / (rho * kk)) : 0.0;
-        // fast magnetosonic
-        double term = cs2 + vA2;
-        double disc = term * term - 4.0 * cs2 * vAn2;
-        if (disc < 0.0)
-            disc = 0.0;
-        double cf = std::sqrt(0.5 * (term + std::sqrt(disc)));
-
-        // double cc1 = sqrt((gamma_ * p / rho) * (K1 * K1 + K2 * K2 + K3 * K3));
-        // double cc = sqrt((gamma_ * p / rho + BB2 / rho * inver_MA2) * (K1 * K1 + K2 * K2 + K3 * K3));
-        // constexpr double C_hall_safe = 1.5;
-        // double c_hall = C_hall_safe * ion_inertial_len * sqrt(BB2 / rho * inver_MA2 * (K1 * K1 + K2 * K2 + K3 * K3)); // ≈ Jac * v_A * d_i * |k|
-        // out = fabs(uvw) + cc + c_hall;
-        out = 1.1 * (fabs(uvw) + cf * kn);
-        return;
-    };
-
-    // 注意这里的B长度为4，最后一个为B_Jac_nabla\xi eta zeta
-    auto calc_Jac_Flux_GCL = [&](double *flux, double *pv, double *B, double *metric)
-    {
-        double k1, k2, k3; // GCL 这里为Jac *k1, Jac *k2, Jac *k3
-        k1 = metric[0];
-        k2 = metric[1];
-        k3 = metric[2];
-
-        double u, v, w, uvw;
-        double Bx, By, Bz, B_Jac_nabla;
-
-        u = pv[0];
-        v = pv[1];
-        w = pv[2];
-
-        Bx = B[0];
-        By = B[1];
-        Bz = B[2];
-        B_Jac_nabla = B[3]; // Bx * k1 + By * k2 + Bz * k3;
-        uvw = k1 * u + k2 * v + k3 * w;
-
-        flux[0] = uvw * Bx - B_Jac_nabla * u;
-        flux[1] = uvw * By - B_Jac_nabla * v;
-        flux[2] = uvw * Bz - B_Jac_nabla * w;
-    };
-
-    int i = index_i;
-    int j = index_j;
-    int k = index_k;
-
-    double ppvvL[5], ppvvR[5], BL[4], BR[4];
-    // ppvv u v w rho p;
-    double radius[2];
-
-    auto fill_state = [&](int ic, int jc, int kc, double *pv, double *B)
-    {
-        double u = Uplus(ic, jc, kc, 0);
-        double v = Uplus(ic, jc, kc, 1);
-        double w = Uplus(ic, jc, kc, 2);
-
-        double rho = UH(ic, jc, kc, 0) + UN(ic, jc, kc, 0);
-        double p = (UH(ic, jc, kc, 4) - 0.5 / UH(ic, jc, kc, 0) * (UH(ic, jc, kc, 1) * UH(ic, jc, kc, 1) + UH(ic, jc, kc, 2) * UH(ic, jc, kc, 2) + UH(ic, jc, kc, 3) * UH(ic, jc, kc, 3))) * (gamma_ - 1.0);
-        p += (UN(ic, jc, kc, 4) - 0.5 / UN(ic, jc, kc, 0) * (UN(ic, jc, kc, 1) * UN(ic, jc, kc, 1) + UN(ic, jc, kc, 2) * UN(ic, jc, kc, 2) + UN(ic, jc, kc, 3) * UN(ic, jc, kc, 3))) * (gamma_ - 1.0);
-
-        double Bx = B_cell(ic, jc, kc, 0); // including B_add
-        double By = B_cell(ic, jc, kc, 1); // including B_add
-        double Bz = B_cell(ic, jc, kc, 2); // including B_add
-
-        double inner_product = Bx * metric[0] + By * metric[1] + Bz * metric[2];
-        // double inner_product_add = B_add_x * metric[0] + B_add_y * metric[1] + B_add_z * metric[2];
-        double inver_norm2 = 1.0 / (metric[0] * metric[0] + metric[1] * metric[1] + metric[2] * metric[2] + 1E-20);
-
-        double B_jac_total = B_jac_nabla; // 法向通量仅仅为induced部分
-
-        pv[0] = u;
-        pv[1] = v;
-        pv[2] = w;
-        pv[3] = rho;
-        pv[4] = p;
-
-        B[0] = Bx;
-        B[1] = By;
-        B[2] = Bz;
-        B[3] = B_jac_total;
-    };
-
-    if (direction == 1)
-    {
-        int iL = index_i - 1;
-        int iR = index_i;
-        fill_state(iL, j, k, ppvvL, BL);
-        fill_state(iR, j, k, ppvvR, BR);
-    }
-    else if (direction == 2)
-    {
-        int jL = index_j - 1;
-        int jR = index_j;
-        fill_state(i, jL, k, ppvvL, BL);
-        fill_state(i, jR, k, ppvvR, BR);
-    }
-    else if (direction == 3)
-    { // direction == 3
-        int kL = index_k - 1;
-        int kR = index_k;
-        fill_state(i, j, kL, ppvvL, BL);
-        fill_state(i, j, kR, ppvvR, BR);
-    }
-    else
-    {
-        throw std::runtime_error("ReconstructionEMF_: invalid direction");
-    }
-
-    calc_Jac_radius_GCL(radius[0], ppvvL, BL, metric);
-    calc_Jac_radius_GCL(radius[1], ppvvR, BR, metric);
-
-    double radius_max = std::max(radius[0], radius[1]);
-
-    double FL[8], FR[8];
-    calc_Jac_Flux_GCL(FL, ppvvL, BL, metric);
-    calc_Jac_Flux_GCL(FR, ppvvR, BR, metric);
-
-    for (int m = 0; m < 3; ++m)
-        out_flux[m] = 0.5 * (FL[m] + FR[m]) - 0.5 * radius_max * (BR[m] - BL[m]);
-
-    double Elec_flux[3] = {out_flux[0], out_flux[1], out_flux[2]};
-    double norm2 = -1.0 / (metric[0] * metric[0] + metric[1] * metric[1] + metric[2] * metric[2] + 1E-20);
-    out_flux[0] = norm2 * (metric[1] * Elec_flux[2] - metric[2] * Elec_flux[1]); // Averaged Electric in Face xi eta zeta
-    out_flux[1] = norm2 * (metric[2] * Elec_flux[0] - metric[0] * Elec_flux[2]); // Averaged Electric in Face xi eta zeta
-    out_flux[2] = norm2 * (metric[0] * Elec_flux[1] - metric[1] * Elec_flux[0]); // Averaged Electric in Face xi eta zeta
 }

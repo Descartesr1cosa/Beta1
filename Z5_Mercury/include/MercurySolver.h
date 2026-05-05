@@ -237,11 +237,13 @@ private:
     void AssembleEdgeEMF_FromFaceE_Hall_();
     //--------------------------------
     //  For Ideal
-    void AssembleOneDirectionEMF_(int iblk, int dir, FieldBlock &E_face, FieldBlock &B_face, FieldBlock &B_face_add, FieldBlock &Bcell, FieldBlock &metricField, FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN);
+    void AssembleOneDirectionEMF_(int dir, FieldBlock &E_face,
+                                  FieldBlock &Bxi, FieldBlock &Beta, FieldBlock &Bzeta,
+                                  FieldBlock &Badd_xi, FieldBlock &Badd_eta, FieldBlock &Badd_zeta,
+                                  FieldBlock &Jac,
+                                  FieldBlock &JDxi, FieldBlock &JDet, FieldBlock &JDze,
+                                  FieldBlock &Uplus);
     void AssembleEdgeEMF_FromFaceE_Ideal_();
-    void ReconstructionEMF_(double *metric, int32_t direction,
-                            FieldBlock &Uplus, FieldBlock &UH, FieldBlock &UN, FieldBlock &B_cell, double B_jac_nabla, int iblock, int index_i, int index_j, int index_k,
-                            double *out_flux);
     //---------------------------------------------------------------
     double ComputeMagEnergy_Cell_()
     {
