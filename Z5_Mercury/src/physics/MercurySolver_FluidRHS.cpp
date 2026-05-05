@@ -443,7 +443,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         //=============================================================================================
                         // Photoionization Source Terms
                         // no source terms for H+
-                        RHS_H(i, j, k, 4) += a6 * sse * Tn0 * chi_H;
+                        // RHS_H(i, j, k, 4) += a6 * sse * Tn0 * chi_H;
                         // This is the electron energy that has been divided into corresponding species
                         // 光致电离产生电子的那一部分电子能量，按照组分数密度分配给对应组分
                         //=============================================================================================
@@ -504,7 +504,7 @@ void MercurySolver::AddSourceToRHS_Fluid()
                         RHS_Na(i, j, k, 0) += a1_Na * sss;    // Na+ mass creation
                                                               // no Photoionization related source term for momentum eqs
                         RHS_Na(i, j, k, 4) += a6 * sss * Tn0; // Photoionization energy (internal) pump into this species
-                        RHS_Na(i, j, k, 4) += a6 * sse * Tn0 * chi_Na;
+                        // RHS_Na(i, j, k, 4) += a6 * sse * Tn0 * chi_Na;
                         // This is the electron energy that has been divided into corresponding species
                         // 光致电离产生电子的那一部分电子能量，按照组分数密度分配给对应组分
                         //=============================================================================================
