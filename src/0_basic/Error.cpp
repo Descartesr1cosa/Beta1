@@ -1,8 +1,9 @@
 #include "0_basic/Error.h"
+#include <cstdlib>
 
-void ERROR::Abort(std::string Message)
+[[noreturn]] void ERROR::Abort(std::string Message)
 {
     std::cout << "Error ! !\t" << Message << "\n"
               << std::flush;
-    exit(-1);
+    std::exit(-1);
 }

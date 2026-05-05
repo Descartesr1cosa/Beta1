@@ -4,5 +4,5 @@
 
 namespace ERROR
 {
-    void Abort(std::string Message);
+    [[noreturn]] void Abort(std::string Message);
 } // namespace ERROR
