@@ -1142,7 +1142,7 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
                     U(i0, j, k, 2) = Bp[2];
                 }
 
-                reset_zeta_flux_range(i0, j, Bp);
+                // reset_zeta_flux_range(i0, j, Bp);
             }
         }
     }
@@ -1247,7 +1247,7 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
                     U(i, j0, k, 2) = Bp[2];
                 }
 
-                reset_zeta_flux_range(i, j0, Bp);
+                // reset_zeta_flux_range(i, j0, Bp);
             }
         }
     }
