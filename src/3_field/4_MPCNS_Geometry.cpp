@@ -212,8 +212,10 @@ void Field::build_geometry(int geomtry_ghost_)
             auto &cy = grd->grids(ib).dual_y;
             auto &cz = grd->grids(ib).dual_z;
 
-            Int3 lo = Jac.inner_lo();
-            Int3 hi = Jac.inner_hi();
+            // Int3 lo = Jac.inner_lo();
+            // Int3 hi = Jac.inner_hi();
+            Int3 lo = Jac.get_lo();
+            Int3 hi = Jac.get_hi();
 
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)

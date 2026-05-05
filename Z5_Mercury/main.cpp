@@ -124,9 +124,13 @@ int main(int arg, char **argv)
         // Register Coupling Pair Description（CouplingPairDesc）
         //   register_coupling_channel("A", "B", "A_field",**):
         //   Let A_field in Block A transfer to coresponding coupling buffer area of Block B
-        fld->register_coupling_channel("Solid", "Fluid", "B_xi", StaggerLocation::FaceXi, 1, ngg);       // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "B_eta", StaggerLocation::FaceEt, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "B_zeta", StaggerLocation::FaceZe, 1, ngg);     // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "B_xi", StaggerLocation::FaceXi, 1, ngg);      // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "B_eta", StaggerLocation::FaceEt, 1, ngg);     // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "B_zeta", StaggerLocation::FaceZe, 1, ngg);    // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "Badd_xi", StaggerLocation::FaceXi, 1, ngg);   // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "Badd_eta", StaggerLocation::FaceEt, 1, ngg);  // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "Badd_zeta", StaggerLocation::FaceZe, 1, ngg); // Solid -> Fluid
+
         fld->register_coupling_channel("Solid", "Fluid", "Eface_xi", StaggerLocation::FaceXi, 3, ngg);   // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "Eface_eta", StaggerLocation::FaceEt, 3, ngg);  // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "Eface_zeta", StaggerLocation::FaceZe, 3, ngg); // Solid -> Fluid
@@ -160,6 +164,9 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Fluid", "Solid", "B_xi", StaggerLocation::FaceXi, 1, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "B_eta", StaggerLocation::FaceEt, 1, ngg);      // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "B_zeta", StaggerLocation::FaceZe, 1, ngg);     // Fluid -> Solid
+        fld->register_coupling_channel("Fluid", "Solid", "Badd_xi", StaggerLocation::FaceXi, 1, ngg);    // Fluid -> Solid
+        fld->register_coupling_channel("Fluid", "Solid", "Badd_eta", StaggerLocation::FaceEt, 1, ngg);   // Fluid -> Solid
+        fld->register_coupling_channel("Fluid", "Solid", "Badd_zeta", StaggerLocation::FaceZe, 1, ngg);  // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "Eface_xi", StaggerLocation::FaceXi, 3, ngg);   // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "Eface_eta", StaggerLocation::FaceEt, 3, ngg);  // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "Eface_zeta", StaggerLocation::FaceZe, 3, ngg); // Fluid -> Solid
@@ -207,6 +214,13 @@ int main(int arg, char **argv)
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "B_zeta";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
+        fieldname = "Badd_xi";
+        hal->register_halo_field(fieldname, HaloLevel::Vertex);
+        fieldname = "Badd_eta";
+        hal->register_halo_field(fieldname, HaloLevel::Vertex);
+        fieldname = "Badd_zeta";
+        hal->register_halo_field(fieldname, HaloLevel::Vertex);
+
         fieldname = "E_xi";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "E_eta";

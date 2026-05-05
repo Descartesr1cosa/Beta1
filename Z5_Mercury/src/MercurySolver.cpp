@@ -130,6 +130,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     }
     initial_.Initialization(fld_, fid_);
 
+    mercury_bound_.Sync("Badd");
+
     // ---- components ----
     control_.Setup(par_);
 

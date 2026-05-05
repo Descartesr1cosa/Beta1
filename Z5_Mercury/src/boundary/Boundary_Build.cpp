@@ -210,6 +210,13 @@ void MercuryBoundary::InstallHandlers()
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "B_eta", "B_eta", ccopy);
     RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "B_zeta", "B_zeta", ccopy);
 
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceXi, "Badd_xi", "Badd_xi", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceEt, "Badd_eta", "Badd_eta", ccopy);
+    RegisterCoupling_("Solid", "Fluid", StaggerLocation::FaceZe, "Badd_zeta", "Badd_zeta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceXi, "Badd_xi", "Badd_xi", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceEt, "Badd_eta", "Badd_eta", ccopy);
+    RegisterCoupling_("Fluid", "Solid", StaggerLocation::FaceZe, "Badd_zeta", "Badd_zeta", ccopy);
+
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeXi, "J_xi", "J_xi", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeEt, "J_eta", "J_eta", ccopy);
     RegisterCoupling_("Solid", "Fluid", StaggerLocation::EdgeZe, "J_zeta", "J_zeta", ccopy);
@@ -378,6 +385,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gdEpre.halo_level = HaloLevel::Vertex;
     gdEpre.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gdEpre);
+
+    BoundGroup gBadd;
+    gBadd.name = "Badd";
+    gBadd.fields = {"Badd_xi", "Badd_eta", "Badd_zeta"};
+    gBadd.do_coupling = true;
+    gBadd.do_physical = true;
+    gBadd.do_halo = true;
+    gBadd.halo_level = HaloLevel::Vertex;
+    gBadd.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gBadd);
 }
 
 void MercuryBoundary::Build(bool strict_check)
