@@ -124,20 +124,41 @@ void MercurySolver::AssembleOneDirectionEMF_(
             k += side;
     };
 
-    auto face_beta = [&](int axis, int i, int j, int k) -> double
+    auto face_beta_ind = [&](int axis, int i, int j, int k) -> double
     {
         if (axis == 0)
-            return Bxi(i, j, k, 0) + Badd_xi(i, j, k, 0);
+            return Bxi(i, j, k, 0);
         if (axis == 1)
-            return Beta(i, j, k, 0) + Badd_eta(i, j, k, 0);
-        return Bzeta(i, j, k, 0) + Badd_zeta(i, j, k, 0);
+            return Beta(i, j, k, 0);
+        return Bzeta(i, j, k, 0);
     };
 
-    auto cell_beta = [&](int axis, int i, int j, int k) -> double
+    auto face_beta_add = [&](int axis, int i, int j, int k) -> double
+    {
+        if (axis == 0)
+            return Badd_xi(i, j, k, 0);
+        if (axis == 1)
+            return Badd_eta(i, j, k, 0);
+        return Badd_zeta(i, j, k, 0);
+    };
+
+    auto face_beta_total = [&](int axis, int i, int j, int k) -> double
+    {
+        return face_beta_ind(axis, i, j, k) + face_beta_add(axis, i, j, k);
+    };
+
+    auto cell_beta_ind = [&](int axis, int i, int j, int k) -> double
     {
         int ip = i, jp = j, kp = k;
         shift_cell(axis, 1, ip, jp, kp);
-        return 0.5 * (face_beta(axis, i, j, k) + face_beta(axis, ip, jp, kp));
+        return 0.5 * (face_beta_ind(axis, i, j, k) + face_beta_ind(axis, ip, jp, kp));
+    };
+
+    auto cell_beta_total = [&](int axis, int i, int j, int k) -> double
+    {
+        int ip = i, jp = j, kp = k;
+        shift_cell(axis, 1, ip, jp, kp);
+        return 0.5 * (face_beta_total(axis, i, j, k) + face_beta_total(axis, ip, jp, kp));
     };
 
     auto metric_component = [&](int axis, int i, int j, int k, int comp) -> double
@@ -170,19 +191,21 @@ void MercurySolver::AssembleOneDirectionEMF_(
                     int iR, int jR, int kR,
                     double beta_flux_face) -> double
     {
-        const double betaL = cell_beta(beta_axis, iL, jL, kL);
-        const double betaR = cell_beta(beta_axis, iR, jR, kR);
+        const double betaTotalL = cell_beta_total(beta_axis, iL, jL, kL);
+        const double betaTotalR = cell_beta_total(beta_axis, iR, jR, kR);
+        const double betaIndL = cell_beta_ind(beta_axis, iL, jL, kL);
+        const double betaIndR = cell_beta_ind(beta_axis, iR, jR, kR);
 
         const double uFluxL = cell_u_contra(flux_axis, iL, jL, kL);
         const double uFluxR = cell_u_contra(flux_axis, iR, jR, kR);
         const double uBetaL = cell_u_contra(beta_axis, iL, jL, kL);
         const double uBetaR = cell_u_contra(beta_axis, iR, jR, kR);
 
-        const double GL = uFluxL * betaL - uBetaL * beta_flux_face;
-        const double GR = uFluxR * betaR - uBetaR * beta_flux_face;
+        const double GL = uFluxL * betaTotalL - uBetaL * beta_flux_face;
+        const double GR = uFluxR * betaTotalR - uBetaR * beta_flux_face;
         const double radius = std::max(std::abs(uFluxL), std::abs(uFluxR));
 
-        return 0.5 * (GL + GR) - 0.5 * radius * (betaR - betaL);
+        return 0.5 * (GL + GR) - 0.5 * radius * (betaIndR - betaIndL);
     };
 
     const int flux_axis = dir - 1;
@@ -200,7 +223,7 @@ void MercurySolver::AssembleOneDirectionEMF_(
                 int iR = i, jR = j, kR = k;
                 shift_cell(flux_axis, -1, iL, jL, kL);
 
-                const double beta_flux_face = face_beta(flux_axis, i, j, k);
+                const double beta_flux_face = face_beta_total(flux_axis, i, j, k);
                 double e[3] = {0.0, 0.0, 0.0};
 
                 if (flux_axis == 0)
