@@ -324,16 +324,41 @@ void MercuryBoundary::BC_Solid_Surface_Eface_(FieldBlock &U, Field *fld, const B
 
 void MercuryBoundary::BC_Solid_Surface_Eedge_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
 {
+    const Box3 &wall = r.inner_slab;
+    const int ax = std::abs(r.direction);
+    const int sgn = (r.direction > 0) ? +1 : -1;
 
-    // const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
-    const Box3 &g = r.inner_slab;
+    const Int3 outward_step = (ax == 1)   ? Int3{sgn, 0, 0}
+                              : (ax == 2) ? Int3{0, sgn, 0}
+                                          : Int3{0, 0, sgn};
 
-    for (int i = g.lo.i; i < g.hi.i; ++i)
-        for (int j = g.lo.j; j < g.hi.j; ++j)
-            for (int k = g.lo.k; k < g.hi.k; ++k)
-            {
-                U(i, j, k, 0) = 0.0;
-            }
+    const Int3 ulo = U.get_lo();
+    const Int3 uhi = U.get_hi();
+    const int buffer_width = 4; // std::max(1, 4 * ngh);
+
+    auto in_range = [&](int i, int j, int k)
+    {
+        return (i >= ulo.i && i < uhi.i &&
+                j >= ulo.j && j < uhi.j &&
+                k >= ulo.k && k < uhi.k);
+    };
+
+    for (int i = wall.lo.i; i < wall.hi.i; ++i)
+        for (int j = wall.lo.j; j < wall.hi.j; ++j)
+            for (int k = wall.lo.k; k < wall.hi.k; ++k)
+                for (int d = 0; d <= buffer_width; ++d)
+                {
+                    const int ii = i - d * outward_step.i;
+                    const int jj = j - d * outward_step.j;
+                    const int kk = k - d * outward_step.k;
+
+                    if (!in_range(ii, jj, kk))
+                        continue;
+
+                    const double t = static_cast<double>(d) / static_cast<double>(buffer_width);
+                    const double damping = t * t * (3.0 - 2.0 * t);
+                    U(ii, jj, kk, 0) *= damping;
+                }
 }
 
 void MercuryBoundary::BC_Pole_Eedge_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)

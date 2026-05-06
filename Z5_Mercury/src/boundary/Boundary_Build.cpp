@@ -71,20 +71,20 @@ void MercuryBoundary::InstallHandlers()
             BC_Solid_Surface_Eface_(U, fld, r, ngh);
     };
 
-    auto Eedge_zero_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    auto Eedge_buffer_xi_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
-        if (abs(r.direction) != 1)
-            BC_Solid_Surface_Eedge_(U, fld, r, ngh);
+        // if (abs(r.direction) != 1)
+        BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
-    auto Eedge_zero_eta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    auto Eedge_buffer_eta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
-        if (abs(r.direction) != 2)
-            BC_Solid_Surface_Eedge_(U, fld, r, ngh);
+        // if (abs(r.direction) != 2)
+        BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
-    auto Eedge_zero_zeta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    auto Eedge_buffer_zeta_ = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
-        if (abs(r.direction) != 3)
-            BC_Solid_Surface_Eedge_(U, fld, r, ngh);
+        // if (abs(r.direction) != 3)
+        BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
 
     RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_zero_xi_);
@@ -94,26 +94,26 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_zero_zeta_);
     RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_zero_zeta_);
 
-    RegisterPhysical_("Ehall_xi", "Coupled-Solid", Eedge_zero_xi_);
-    RegisterPhysical_("Ehall_xi", "Coupled-Fluid", Eedge_zero_xi_);
-    RegisterPhysical_("Ehall_eta", "Coupled-Solid", Eedge_zero_eta_);
-    RegisterPhysical_("Ehall_eta", "Coupled-Fluid", Eedge_zero_eta_);
-    RegisterPhysical_("Ehall_zeta", "Coupled-Solid", Eedge_zero_zeta_);
-    RegisterPhysical_("Ehall_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
+    RegisterPhysical_("Ehall_xi", "Coupled-Solid", Eedge_buffer_xi_);
+    RegisterPhysical_("Ehall_xi", "Coupled-Fluid", Eedge_buffer_xi_);
+    RegisterPhysical_("Ehall_eta", "Coupled-Solid", Eedge_buffer_eta_);
+    RegisterPhysical_("Ehall_eta", "Coupled-Fluid", Eedge_buffer_eta_);
+    RegisterPhysical_("Ehall_zeta", "Coupled-Solid", Eedge_buffer_zeta_);
+    RegisterPhysical_("Ehall_zeta", "Coupled-Fluid", Eedge_buffer_zeta_);
 
-    RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_zero_xi_);
-    RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_zero_xi_);
-    RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_zero_eta_);
-    RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_zero_eta_);
-    RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_zero_zeta_);
-    RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
+    RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_buffer_xi_);
+    RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_buffer_xi_);
+    RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_buffer_eta_);
+    RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_buffer_eta_);
+    RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_buffer_zeta_);
+    RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_buffer_zeta_);
 
-    RegisterPhysical_("J_xi", "Coupled-Solid", Eedge_zero_xi_);
-    RegisterPhysical_("J_xi", "Coupled-Fluid", Eedge_zero_xi_);
-    RegisterPhysical_("J_eta", "Coupled-Solid", Eedge_zero_eta_);
-    RegisterPhysical_("J_eta", "Coupled-Fluid", Eedge_zero_eta_);
-    RegisterPhysical_("J_zeta", "Coupled-Solid", Eedge_zero_zeta_);
-    RegisterPhysical_("J_zeta", "Coupled-Fluid", Eedge_zero_zeta_);
+    RegisterPhysical_("J_xi", "Coupled-Solid", Eedge_buffer_xi_);
+    RegisterPhysical_("J_xi", "Coupled-Fluid", Eedge_buffer_xi_);
+    RegisterPhysical_("J_eta", "Coupled-Solid", Eedge_buffer_eta_);
+    RegisterPhysical_("J_eta", "Coupled-Fluid", Eedge_buffer_eta_);
+    RegisterPhysical_("J_zeta", "Coupled-Solid", Eedge_buffer_zeta_);
+    RegisterPhysical_("J_zeta", "Coupled-Fluid", Eedge_buffer_zeta_);
 
     //=============================================================================================
     // Pole Boundary
