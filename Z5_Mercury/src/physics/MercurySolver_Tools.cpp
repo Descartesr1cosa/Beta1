@@ -1239,6 +1239,7 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
         // Pole cells are degenerate in the normal direction and collapsed
         // around zeta/k. Recompute those cells with only the axial
         // computational derivative: eta for xi-normal Poles, xi for eta-normal Poles.
+        // Pole电流的正则化
         for (const auto &p : topo_->physical_patches)
         {
             if (p.this_block != ib)
@@ -1409,6 +1410,7 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
         // For the first fluid layer next to that wall layer, avoid the wall
         // Bcell in the normal derivative to suppress numerical wall-current
         // contamination.
+        // 壁面电流的正则化，避免使用异常的壁面Bcell
         for (const auto &p : topo_->physical_patches)
         {
             if (p.this_block != ib)
@@ -1530,6 +1532,7 @@ void MercurySolver::calc_Jcell_from_Bcell_metric_()
         // Coupled-Solid wall. This must run after both treatments above: keep
         // the Pole k-collapse, but use a one-sided axial derivative away from
         // the wall so the wall-layer Bcell is not sampled.
+        // 近轴 + 壁面/障碍体交界额外处理的正则化
         for (const auto &ppole : topo_->physical_patches)
         {
             if (ppole.this_block != ib)
