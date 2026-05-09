@@ -583,6 +583,35 @@ void MercuryBoundary::BC_Solid_Surface_Eface_(FieldBlock &U, Field *fld, const B
 
 void MercuryBoundary::BC_Solid_Surface_Eedge_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
 {
+    const Box3 &wall = r.inner_slab;
+    const int ax = std::abs(r.direction);
+    const int sgn = (r.direction > 0) ? +1 : -1;
+
+    const Int3 outward_step = (ax == 1)   ? Int3{sgn, 0, 0}
+                              : (ax == 2) ? Int3{0, sgn, 0}
+                                          : Int3{0, 0, sgn};
+    // Only tangential E_edge at 1st layer off the wall will be modified
+    if (U.descriptor().name == "E_xi" && ax == 1)
+        return;
+    if (U.descriptor().name == "E_eta" && ax == 2)
+        return;
+    if (U.descriptor().name == "E_zeta" && ax == 3)
+        return;
+
+    const Int3 ulo = U.get_lo();
+    const Int3 uhi = U.get_hi();
+
+    for (int i = wall.lo.i; i < wall.hi.i; ++i)
+        for (int j = wall.lo.j; j < wall.hi.j; ++j)
+            for (int k = wall.lo.k; k < wall.hi.k; ++k)
+            {
+                const int ii = i - outward_step.i;
+                const int jj = j - outward_step.j;
+                const int kk = k - outward_step.k;
+
+                U(ii, jj, kk, 0) = 0.0;
+            }
+
     // const Box3 &wall = r.inner_slab;
     // const int ax = std::abs(r.direction);
     // const int sgn = (r.direction > 0) ? +1 : -1;

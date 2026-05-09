@@ -137,17 +137,17 @@ void MercuryBoundary::InstallHandlers()
     // -------------------------------------------------------------------------
     // Edge: E_xi/eta/zeta
     // -------------------------------------------------------------------------
-    // auto Eedge_to_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
-    // {
-    //     // no operators
-    //     // this->BC_Solid_Surface_Eedge_(U, fld, r, ngh);
-    // };
-    // RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_to_zero);
-    // RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_to_zero);
-    // RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_to_zero);
-    // RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_to_zero);
-    // RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_to_zero);
-    // RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_to_zero);
+    auto Eedge_1stlayer_to_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        // no operators
+        this->BC_Solid_Surface_Eedge_(U, fld, r, ngh);
+    };
+    RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_1stlayer_to_zero);
+    RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+    RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_1stlayer_to_zero);
+    RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+    RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_1stlayer_to_zero);
+    RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
     // ------------------------------------------
     // Pole
     //   E_xi / E_eta 保留你原来的 Pole 处理；
