@@ -53,7 +53,7 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
     const bool is_Na = (name.find("U_Na") != std::string::npos) || (name.find("Na") != std::string::npos);
 
     // ---- floors: keep consistent with your calc_PV floors to avoid U/PV mismatch ----
-    const double rho_floor = 1e-12; // same order as calc_PV
+    const double rho_floor = (is_Na) ? 1e-12 : 2.5e-3; // same order as calc_PV
     const double p_floor = 1e-12;
 
     auto dot = [&](const std::array<double, 3> &a, const std::array<double, 3> &b)
@@ -123,9 +123,9 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
                 std::array<double, 3> n_hat = scal(A, sign_to_fluid / An); // points into FLUID
 
                 {
-                    int ir = ii; // - cyc.i;
-                    int jr = jj; // - cyc.j;
-                    int kr = kk; // - cyc.k;
+                    int ir = ii - cyc.i;
+                    int jr = jj - cyc.j;
+                    int kr = kk - cyc.k;
                     double rho_r = std::max(U(ir, jr, kr, 0), rho_floor);
                     double mx_r = U(ir, jr, kr, 1);
                     double my_r = U(ir, jr, kr, 2);
@@ -137,7 +137,8 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
 
                     // diode: block outflow from surface to fluid (vn>0)
                     std::array<double, 3> v_g = v;
-                    v_g = sub(v, scal(n_hat, vn));
+                    // v_g = sub(v, scal(n_hat, vn));
+                    v_g = {0.0, 0.0, 0.0};
 
                     // write to first layer
                     U(ii, jj, kk, 0) = rho_r;
@@ -151,9 +152,13 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
                 // reference index = inner - (ng-1)*cyc (keeps extension smooth for multi-ghost)
                 for (int ng = 1; ng <= ngh; ++ng)
                 {
-                    int ir = ii - (ng - 1) * cyc.i;
-                    int jr = jj - (ng - 1) * cyc.j;
-                    int kr = kk - (ng - 1) * cyc.k;
+                    // int ir = ii - (ng - 1) * cyc.i;
+                    // int jr = jj - (ng - 1) * cyc.j;
+                    // int kr = kk - (ng - 1) * cyc.k;
+                    int ir = ii;
+                    int jr = jj;
+                    int kr = kk;
+
                     clamp_idx(ir, jr, kr);
 
                     double rho_r = std::max(U(ir, jr, kr, 0), rho_floor);
@@ -169,7 +174,7 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
 
                     // diode: block outflow from surface to fluid (vn>0)
                     std::array<double, 3> v_g = v;
-                    v_g = sub(v, scal(n_hat, vn));
+                    // v_g = sub(v, scal(n_hat, vn));
                     // if (vn > 0.0)
                     // {
                     //     // remove only the outward-normal component; tangential unchanged
@@ -179,7 +184,7 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
                     //     // p_r   = p_floor;
                     // }
                     // v_g = sub(v, scal(n_hat, 2.0 * vn));
-                    // v_g = {0.0, 0.0, 0.0};
+                    v_g = {0.0, 0.0, 0.0};
 
                     int ig = ii + ng * cyc.i;
                     int jg = jj + ng * cyc.j;
