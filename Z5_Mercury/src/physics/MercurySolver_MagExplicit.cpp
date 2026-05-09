@@ -6,7 +6,7 @@ void MercurySolver::Build_E_explicit_edge_()
     AddIdealEdgeEMF_();
 
     // AddResistiveEdgeEMF_(); // Add magnetic diffusion in solid (and optionally fluid)
-    // AddPoleResistiveEdgeEMF_FromJcell_();
+    AddPoleResistiveEdgeEMF_FromJcell_();
 
     // AddAmbipolarEdgeEMF_();
 }

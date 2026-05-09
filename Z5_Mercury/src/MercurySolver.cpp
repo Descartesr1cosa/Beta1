@@ -158,6 +158,14 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
 
     runtime_data_->Begin(*run_data_, par_, count_global_cells());
 
+    resist_control.enabled = par_->GetBoo("enable_arti_resistance");
+    resist_control.eta_max = par_->GetDou("arti_resistance_max");
+    resist_control.J_on = par_->GetDou("arti_resistance_J_on");
+    resist_control.J_full = par_->GetDou("arti_resistance_J_full");
+    resist_control.J_max_force = par_->GetDou("arti_resistance_J_max_force");
+    resist_control.osc_on = par_->GetDou("arti_resistance_osc_on");
+    resist_control.osc_full = par_->GetDou("arti_resistance_osc_full");
+
 #ifdef HALL_IMPLICIT
     if (!topo_equiv_ || !edge_owner_pat_)
         throw std::runtime_error("MercurySolver: hall implicit topology/pattern is null.");

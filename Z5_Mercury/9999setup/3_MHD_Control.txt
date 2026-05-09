@@ -14,3 +14,11 @@ Dipole2		7
 x0			y0			z0		mx		my		mz		a
 0.0			0.0			1720e3	0.0		0.0		1.0e12	5.0e3
 LIST==================================================================
+
+bool    enable_arti_resistance      1
+double  arti_resistance_max         0.5
+double  arti_resistance_J_on        3000
+double  arti_resistance_J_full      10000
+double  arti_resistance_J_max_force 12000
+double  arti_resistance_osc_on      0.5
+double  arti_resistance_osc_full    1.0

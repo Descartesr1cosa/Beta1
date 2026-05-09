@@ -32,6 +32,23 @@ struct NumInfo
     double mhd_taper{0.0};
 };
 
+struct ResistiveEdgeEMFControl
+{
+    bool enabled = false;
+
+    double eta_max = 0.0;
+
+    double J_on = 0.0;
+    double J_full = 0.0;
+
+    double osc_on = 0.5;
+    double osc_full = 1.0;
+
+    double J_max_force = 1.0e100;
+
+    double eps = 1.0e-30;
+};
+
 // ---- forward declarations (avoid heavy includes in header) ----
 class Grid;
 namespace TOPO
@@ -115,6 +132,8 @@ private:
 
     double inver_MA2{0.0};
     double inver_Rem{0.0};
+
+    ResistiveEdgeEMFControl resist_control;
 
 #ifdef HALL_IMPLICIT
 
