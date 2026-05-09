@@ -122,6 +122,31 @@ void MercuryBoundary::BC_Solid_Surface_(FieldBlock &U, Field *fld,
                 const double An = std::sqrt(An2);
                 std::array<double, 3> n_hat = scal(A, sign_to_fluid / An); // points into FLUID
 
+                {
+                    int ir = ii; // - cyc.i;
+                    int jr = jj; // - cyc.j;
+                    int kr = kk; // - cyc.k;
+                    double rho_r = std::max(U(ir, jr, kr, 0), rho_floor);
+                    double mx_r = U(ir, jr, kr, 1);
+                    double my_r = U(ir, jr, kr, 2);
+                    double mz_r = U(ir, jr, kr, 3);
+                    double E_r = U(ir, jr, kr, 4);
+                    double p_r = pressure_from_cons(rho_r, mx_r, my_r, mz_r, E_r);
+                    std::array<double, 3> v = {mx_r / rho_r, my_r / rho_r, mz_r / rho_r};
+                    const double vn = dot(v, n_hat);
+
+                    // diode: block outflow from surface to fluid (vn>0)
+                    std::array<double, 3> v_g = v;
+                    v_g = sub(v, scal(n_hat, vn));
+
+                    // write to first layer
+                    U(ii, jj, kk, 0) = rho_r;
+                    U(ii, jj, kk, 1) = rho_r * v_g[0];
+                    U(ii, jj, kk, 2) = rho_r * v_g[1];
+                    U(ii, jj, kk, 3) = rho_r * v_g[2];
+                    const double ke_g = 0.5 * rho_r * dot(v_g, v_g);
+                    U(ii, jj, kk, 4) = p_r / (bc_state_.gamma - 1.0) + ke_g;
+                }
                 // fill each ghost layer: ghost index = inner + ng*cyc
                 // reference index = inner - (ng-1)*cyc (keeps extension smooth for multi-ghost)
                 for (int ng = 1; ng <= ngh; ++ng)
