@@ -61,9 +61,6 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
 
     FieldBlock *Baddxi = get_optional("Badd_xi");
     FieldBlock *Baddet = get_optional("Badd_eta");
-    FieldBlock *Bze = get_optional("B_zeta");
-    FieldBlock *Aze = get_optional("JDze");
-    FieldBlock *Baddze = get_optional("Badd_zeta");
 
     if (!Bxi || !Bet || !Axi || !Aet)
     {
@@ -82,45 +79,6 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
             v += (*Fadd)(i, j, k, 0);
 
         return v;
-    };
-
-    auto reset_zeta_flux_from_Bcell = [&](int i, int j, int k, const double Bp[3])
-    {
-        if (!is_total_Bcell)
-            return;
-
-        if (!Bze || !Aze)
-            return;
-
-        double phi = Bp[0] * (*Aze)(i, j, k, 0) +
-                     Bp[1] * (*Aze)(i, j, k, 1) +
-                     Bp[2] * (*Aze)(i, j, k, 2);
-
-        if (Baddze)
-            phi -= (*Baddze)(i, j, k, 0);
-
-        (*Bze)(i, j, k, 0) = phi;
-    };
-
-    auto reset_zeta_flux_range = [&](int i, int j, const double Bp[3])
-    {
-        if (!is_total_Bcell)
-            return;
-
-        if (!Bze || !Aze)
-            return;
-
-        const Int3 blo = Bze->get_lo();
-        const Int3 bhi = Bze->get_hi();
-
-        if (i < blo.i || i >= bhi.i || j < blo.j || j >= bhi.j)
-            return;
-
-        const int klo = std::max(inner.lo.k, blo.k);
-        const int khi = std::min(inner.hi.k + 1, bhi.k);
-
-        for (int k = klo; k < khi; ++k)
-            reset_zeta_flux_from_Bcell(i, j, k, Bp);
     };
 
     auto push_eq = [](double Sx, double Sy, double Sz, double phi,
@@ -311,7 +269,6 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
                     U(i0, j, k, 2) = Bp[2];
                 }
 
-                // reset_zeta_flux_range(i0, j, Bp);
             }
         }
     }
@@ -416,7 +373,6 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
                     U(i, j0, k, 2) = Bp[2];
                 }
 
-                // reset_zeta_flux_range(i, j0, Bp);
             }
         }
     }

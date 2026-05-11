@@ -339,6 +339,73 @@ void MercurySolver::calc_Bcell()
 
     mercury_bound_.Sync("B_cell");
 
+    if (topo_)
+    {
+        for (const auto &p : topo_->physical_patches)
+        {
+            if (p.bc_name != "Pole")
+                continue;
+
+            const int dir = std::abs(p.direction);
+            if (dir != 1 && dir != 2)
+                continue;
+
+            const int ib = p.this_block;
+            if (ib < 0 || ib >= nblock)
+                continue;
+
+            auto &Bindcell = fld_->field(fid_.fid_Bindcell, ib);
+            auto &Bzeta = fld_->field(fid_.fid_B.zeta, ib);
+            // auto &Baddzeta = fld_->field(fid_.fid_Badd.zeta, ib);
+            auto &Aze = fld_->field(fid_.fid_metric.zeta, ib);
+
+            if (!Bzeta.is_allocated() || !Aze.is_allocated())
+                continue;
+
+            const int sgn = (p.direction > 0) ? +1 : -1;
+
+            auto write_zeta_flux = [&](int i, int j, int k)
+            {
+                const int kc = k;
+                const double phi =
+                    Bindcell(i, j, kc, 0) * Aze(i, j, k, 0) +
+                    Bindcell(i, j, kc, 1) * Aze(i, j, k, 1) +
+                    Bindcell(i, j, kc, 2) * Aze(i, j, k, 2);
+
+                Bzeta(i, j, k, 0) = phi; //- Baddzeta(i, j, k, 0);
+            };
+
+            const Box3 &node = p.this_box_node;
+
+            if (dir == 1)
+            {
+                const int icell = (sgn < 0) ? node.lo.i : (node.lo.i - 1);
+
+                const int jface_lo = node.lo.j;
+                const int jface_hi = node.hi.j - 1;
+                const int kface_lo = node.lo.k;
+                const int kface_hi = node.hi.k;
+
+                for (int j = jface_lo; j < jface_hi; ++j)
+                    for (int k = kface_lo; k < kface_hi; ++k)
+                        write_zeta_flux(icell, j, k);
+            }
+            else
+            {
+                const int jcell = (sgn < 0) ? node.lo.j : (node.lo.j - 1);
+
+                const int iface_lo = node.lo.i;
+                const int iface_hi = node.hi.i - 1;
+                const int kface_lo = node.lo.k;
+                const int kface_hi = node.hi.k;
+
+                for (int i = iface_lo; i < iface_hi; ++i)
+                    for (int k = kface_lo; k < kface_hi; ++k)
+                        write_zeta_flux(i, jcell, k);
+            }
+        }
+    }
+
     // const int nblock = fld_->num_blocks();
 
     // const double eps = 1e-300;
