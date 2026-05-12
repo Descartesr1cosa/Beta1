@@ -474,3 +474,89 @@ void MercuryBoundary::BC_Pole_Eedge_RegulateK_Norm(FieldBlock &U, Field *fld, co
         }
     }
 }
+
+void MercuryBoundary::BC_Farfield_Eedge_set_zerocurl(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    double u_inf[3] = {bc_state_.q_pv_inf[0], bc_state_.q_pv_inf[1], bc_state_.q_pv_inf[2]};
+    double B_inf[3] = {bc_state_.B_imf[0], bc_state_.B_imf[1], bc_state_.B_imf[2]};
+
+    double E_inf[3]; // = - u_inf \times B_inf
+    E_inf[0] = B_inf[1] * u_inf[2] - B_inf[2] * u_inf[1];
+    E_inf[1] = B_inf[2] * u_inf[0] - B_inf[0] * u_inf[2];
+    E_inf[2] = B_inf[0] * u_inf[1] - B_inf[1] * u_inf[0];
+
+    int dijk[3] = {0, 0, 0};
+
+    if (U.descriptor().name == "E_xi")
+    {
+        dijk[0] = 1;
+    }
+    else if (U.descriptor().name == "E_eta")
+    {
+        dijk[1] = 1;
+    }
+    else if (U.descriptor().name == "E_zeta")
+    {
+        dijk[2] = 1;
+    }
+    else
+    {
+        bound_.DefaultPhysicalCopy(U, fld, r, ngh);
+        return;
+    }
+
+    int iblock = r.this_block;
+    double3D &x = fld->grd->grids(iblock).x;
+    double3D &y = fld->grd->grids(iblock).y;
+    double3D &z = fld->grd->grids(iblock).z;
+
+    const Box3 &inner = r.inner_slab;
+
+    for (int i = inner.lo.i; i < inner.hi.i; ++i)
+        for (int j = inner.lo.j; j < inner.hi.j; ++j)
+            for (int k = inner.lo.k; k < inner.hi.k; ++k)
+            {
+                const int ir = i + dijk[0];
+                const int jr = j + dijk[1];
+                const int kr = k + dijk[2];
+                U(i, j, k, 0) = E_inf[0] * (x(ir, jr, kr) - x(i, j, k)) +
+                                E_inf[1] * (y(ir, jr, kr) - y(i, j, k)) +
+                                E_inf[2] * (z(ir, jr, kr) - z(i, j, k));
+            }
+    bound_.DefaultPhysicalCopy(U, fld, r, ngh);
+    return;
+}
+
+void MercuryBoundary::BC_Farfield_Bface(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
+
+    if (U.descriptor().name == "B_cell")
+    {
+        for (int i = g.lo.i; i < g.hi.i; ++i)
+            for (int j = g.lo.j; j < g.hi.j; ++j)
+                for (int k = g.lo.k; k < g.hi.k; ++k)
+                {
+                    U(i, j, k, 0) = bc_state_.B_imf[0];
+                    U(i, j, k, 1) = bc_state_.B_imf[1];
+                    U(i, j, k, 2) = bc_state_.B_imf[2];
+                }
+    }
+    else if (U.descriptor().name == "Bind_cell")
+    {
+        for (int i = g.lo.i; i < g.hi.i; ++i)
+            for (int j = g.lo.j; j < g.hi.j; ++j)
+                for (int k = g.lo.k; k < g.hi.k; ++k)
+                {
+                    U(i, j, k, 0) = 0.0;
+                    U(i, j, k, 1) = 0.0;
+                    U(i, j, k, 2) = 0.0;
+                }
+    }
+    else
+    {
+        std::cerr << "BC_Farfield_Bface called for unexpected field: "
+                  << U.descriptor().name << std::endl;
+        return;
+    }
+}

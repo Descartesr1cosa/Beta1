@@ -96,6 +96,10 @@ void MercuryBoundary::InstallHandlers()
                       {
                           this->BC_Pole_Bcell_Collapse_(U, fld, r, ngh);
                       });
+    RegisterPhysical_("B_cell", "Farfield", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Farfield_Bface(U, fld, r, ngh); });
+    RegisterPhysical_("Bind_cell", "Farfield", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      { this->BC_Farfield_Bface(U, fld, r, ngh); });
     // J_cell Pole无需特别处理，在计算的时候就已经处理过了
     // J_cell 壁面层cell置零，虚网格会有耦合场拷贝
     RegisterPhysical_("J_cell", "Coupled-Solid",
@@ -121,6 +125,10 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("B_eta", "Pole", Bface_pole);
     // 当前策略：B_zeta copy。
     RegisterPhysical_("B_zeta", "Pole", copy);
+
+    RegisterPhysical_("B_xi", "Farfield", nop);
+    RegisterPhysical_("B_eta", "Farfield", nop);
+    RegisterPhysical_("B_zeta", "Farfield", nop);
     // ------------------------------------------
     // E_face
     // ------------------------------------------
@@ -134,6 +142,10 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_Wall);
     RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_Wall);
     RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_Wall);
+
+    RegisterPhysical_("Eface_xi", "Farfield", nop);
+    RegisterPhysical_("Eface_eta", "Farfield", nop);
+    RegisterPhysical_("Eface_zeta", "Farfield", nop);
     // -------------------------------------------------------------------------
     // Edge: E_xi/eta/zeta
     // -------------------------------------------------------------------------
@@ -148,6 +160,14 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
     RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_1stlayer_to_zero);
     RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+
+    auto Eedge_boundandghost_to_constant = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        this->BC_Farfield_Eedge_set_zerocurl(U, fld, r, ngh);
+    };
+    RegisterPhysical_("E_xi", "Farfield", Eedge_boundandghost_to_constant);
+    RegisterPhysical_("E_eta", "Farfield", Eedge_boundandghost_to_constant);
+    RegisterPhysical_("E_zeta", "Farfield", Eedge_boundandghost_to_constant);
     // ------------------------------------------
     // Pole
     //   E_xi / E_eta 保留你原来的 Pole 处理；
