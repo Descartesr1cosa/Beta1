@@ -194,16 +194,17 @@ void MercurySolver::calc_PV()
 void MercurySolver::calc_Uplus()
 {
     const double rho_eps = 1e-20;
-    const double inv23 = M_H / M_Na; // 与 Fortran sm2≈23*sm1 对齐
 
     const int nb = fld_->num_blocks();
     for (int ib = 0; ib < nb; ++ib)
     {
         FieldBlock &UH = fld_->field(fid_.fid_U_H, ib);
         FieldBlock &UN = fld_->field(fid_.fid_U_Na, ib);
-        FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib); // 新增
+        FieldBlock &PVH = fld_->field(fid_.fid_PV_H, ib);
+        FieldBlock &PVN = fld_->field(fid_.fid_PV_Na, ib);
+        FieldBlock &Up = fld_->field(fid_.fid_U_plus, ib);
 
-        if (!UH.is_allocated() || !UN.is_allocated() || !Up.is_allocated())
+        if (!Up.is_allocated())
             continue;
 
         const Int3 lo = Up.get_lo();
@@ -213,16 +214,29 @@ void MercurySolver::calc_Uplus()
             for (int j = lo.j; j < hi.j; ++j)
                 for (int k = lo.k; k < hi.k; ++k)
                 {
+                    Up(i, j, k, 0) = 0.0;
+                    Up(i, j, k, 1) = 0.0;
+                    Up(i, j, k, 2) = 0.0;
+                }
+
+        if (!UH.is_allocated() || !UN.is_allocated() ||
+            !PVH.is_allocated() || !PVN.is_allocated())
+            continue;
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
                     const double rhoH0 = std::max(UH(i, j, k, 0), 0.0);
                     const double rhoNa0 = std::max(UN(i, j, k, 0), 0.0);
 
-                    const double uH = (rhoH0 > rho_eps) ? UH(i, j, k, 1) / rhoH0 : 0.0;
-                    const double vH = (rhoH0 > rho_eps) ? UH(i, j, k, 2) / rhoH0 : 0.0;
-                    const double wH = (rhoH0 > rho_eps) ? UH(i, j, k, 3) / rhoH0 : 0.0;
+                    const double uH = (rhoH0 > rho_eps) ? PVH(i, j, k, 0) : 0.0;
+                    const double vH = (rhoH0 > rho_eps) ? PVH(i, j, k, 1) : 0.0;
+                    const double wH = (rhoH0 > rho_eps) ? PVH(i, j, k, 2) : 0.0;
 
-                    const double uNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 1) / rhoNa0 : 0.0;
-                    const double vNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 2) / rhoNa0 : 0.0;
-                    const double wNa = (rhoNa0 > rho_eps) ? UN(i, j, k, 3) / rhoNa0 : 0.0;
+                    const double uNa = (rhoNa0 > rho_eps) ? PVN(i, j, k, 0) : 0.0;
+                    const double vNa = (rhoNa0 > rho_eps) ? PVN(i, j, k, 1) : 0.0;
+                    const double wNa = (rhoNa0 > rho_eps) ? PVN(i, j, k, 2) : 0.0;
 
                     // double num[3];
                     // Hall_Num_Limiter(rhoH0, rhoNa0, num)
@@ -258,6 +272,8 @@ void MercurySolver::calc_Uplus()
                     // }
                 }
     }
+
+    mercury_bound_.Sync("Uplus");
 }
 
 void MercurySolver::calc_Bcell()

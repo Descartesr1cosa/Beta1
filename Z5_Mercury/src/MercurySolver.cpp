@@ -102,6 +102,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
             "Ehall_xi",
             "Ehall_eta",
             "Ehall_zeta",
+            "U_plus",
             "Bind_cell",
             "J_cell",
             "dJ_xi",

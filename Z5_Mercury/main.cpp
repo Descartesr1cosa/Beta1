@@ -103,7 +103,7 @@ int main(int arg, char **argv)
 
         fld->register_field({"Na", StaggerLocation::Cell, 1, ngg, "Fluid"});         // Na neutral atom
         fld->register_field({"Photo_rate", StaggerLocation::Cell, 1, ngg, "Fluid"}); // Photoionization rate
-        fld->register_field({"U_plus", StaggerLocation::Cell, 3, ngg, "Fluid"});     // Averaged Velocity (electric density weighted), used in induction Eqs
+        fld->register_field({"U_plus", StaggerLocation::Cell, 3, ngg});              // Averaged Velocity (electric density weighted), used in induction Eqs
 
         fld->register_field(FieldDescriptor{"PV_H", StaggerLocation::Cell, 5, ngg, "Fluid"});  // H+  primitive variables: u v w p T
         fld->register_field(FieldDescriptor{"PV_Na", StaggerLocation::Cell, 5, ngg, "Fluid"}); // Na+ primitive variables: u v w p T
@@ -146,6 +146,7 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Solid", "Fluid", "J_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Solid -> Fluid
+        fld->register_coupling_channel("Solid", "Fluid", "U_plus", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
 
         fld->register_coupling_channel("Solid", "Fluid", "dE_xi", StaggerLocation::EdgeXi, 1, ngg);      // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "dE_eta", StaggerLocation::EdgeEt, 1, ngg);     // Solid -> Fluid
@@ -182,6 +183,7 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Fluid", "Solid", "J_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Fluid -> Solid
+        fld->register_coupling_channel("Fluid", "Solid", "U_plus", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
 
         fld->register_coupling_channel("Fluid", "Solid", "dE_xi", StaggerLocation::EdgeXi, 1, ngg);      // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "dE_eta", StaggerLocation::EdgeEt, 1, ngg);     // Fluid -> Solid
@@ -207,6 +209,8 @@ int main(int arg, char **argv)
         fieldname = "U_H";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "U_Na";
+        hal->register_halo_field(fieldname, HaloLevel::Vertex);
+        fieldname = "U_plus";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "B_xi";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);

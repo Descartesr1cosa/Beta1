@@ -35,6 +35,12 @@ void MercuryBoundary::InstallHandlers()
         RegisterPhysical_(fn, "Coupled-Fluid", nop);
     }
 
+    RegisterPhysical_("U_plus", "Outflow", nop);
+    RegisterPhysical_("U_plus", "Farfield", nop);
+    RegisterPhysical_("U_plus", "Pole", nop);
+    RegisterPhysical_("U_plus", "Coupled-Solid", nop);
+    RegisterPhysical_("U_plus", "Coupled-Fluid", nop);
+
     // ============================================================================================
     // Fluid BCs
     // -------------------------------------------------------------------------
@@ -571,6 +577,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gJc.halo_level = HaloLevel::Vertex;
     gJc.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gJc);
+
+    BoundGroup gUplus;
+    gUplus.name = "Uplus";
+    gUplus.fields = {"U_plus"};
+    gUplus.do_coupling = true;
+    gUplus.do_physical = false;
+    gUplus.do_halo = true;
+    gUplus.halo_level = HaloLevel::Vertex;
+    gUplus.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gUplus);
 
     BoundGroup gdE;
     gdE.name = "dE";
