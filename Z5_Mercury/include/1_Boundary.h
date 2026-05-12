@@ -119,6 +119,7 @@ private:
     void BC_UH_Farfield_Na_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Solid_Surface_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Solid_Surface_Eface_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_Solid_Surface_Eface_ghots_zero(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Solid_Surface_Eedge_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
 
     void BC_Pole_Cell_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);

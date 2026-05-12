@@ -7,6 +7,8 @@ void MercuryBoundary::InstallHandlers()
     if (!par_)
         ERROR::Abort("InstallHandlers: call Setup first");
 
+    bool is_Mercury_interior_resis = par_->GetBoo("is_Mercury_resistance");
+
     auto copy = [](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
@@ -132,16 +134,29 @@ void MercuryBoundary::InstallHandlers()
     // ------------------------------------------
     // E_face
     // ------------------------------------------
-    auto Eface_Wall = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    if (!is_Mercury_interior_resis)
     {
-        this->BC_Solid_Surface_Eface_(U, fld, r, ngh);
-    };
-    RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_Wall);
-    RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_Wall);
-    RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_Wall);
-    RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_Wall);
-    RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_Wall);
-    RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_Wall);
+        auto Eface_Wall = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+        {
+            this->BC_Solid_Surface_Eface_(U, fld, r, ngh);
+        };
+        RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_Wall);
+        RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_Wall);
+        RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_Wall);
+        RegisterPhysical_("Eface_xi", "Coupled-Fluid", Eface_Wall);
+        RegisterPhysical_("Eface_eta", "Coupled-Fluid", Eface_Wall);
+        RegisterPhysical_("Eface_zeta", "Coupled-Fluid", Eface_Wall);
+    }
+    else
+    {
+        auto Eface_Wall = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+        {
+            this->BC_Solid_Surface_Eface_ghots_zero(U, fld, r, ngh);
+        };
+        RegisterPhysical_("Eface_xi", "Coupled-Solid", Eface_Wall);
+        RegisterPhysical_("Eface_eta", "Coupled-Solid", Eface_Wall);
+        RegisterPhysical_("Eface_zeta", "Coupled-Solid", Eface_Wall);
+    }
 
     RegisterPhysical_("Eface_xi", "Farfield", nop);
     RegisterPhysical_("Eface_eta", "Farfield", nop);
@@ -154,12 +169,15 @@ void MercuryBoundary::InstallHandlers()
         // no operators
         this->BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
-    RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_1stlayer_to_zero);
-    RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_1stlayer_to_zero);
-    RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_1stlayer_to_zero);
-    RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
-    RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_1stlayer_to_zero);
-    RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+    if (!is_Mercury_interior_resis)
+    {
+        RegisterPhysical_("E_xi", "Coupled-Solid", Eedge_1stlayer_to_zero);
+        RegisterPhysical_("E_xi", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+        RegisterPhysical_("E_eta", "Coupled-Solid", Eedge_1stlayer_to_zero);
+        RegisterPhysical_("E_eta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+        RegisterPhysical_("E_zeta", "Coupled-Solid", Eedge_1stlayer_to_zero);
+        RegisterPhysical_("E_zeta", "Coupled-Fluid", Eedge_1stlayer_to_zero);
+    }
 
     auto Eedge_boundandghost_to_constant = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
