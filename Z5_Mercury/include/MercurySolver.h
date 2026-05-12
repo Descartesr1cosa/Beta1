@@ -35,6 +35,7 @@ struct NumInfo
 struct ResistiveEdgeEMFControl
 {
     bool enabled = false;
+    bool is_Mercury_resistance = false;
 
     double eta_max = 0.0;
 

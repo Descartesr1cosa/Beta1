@@ -2,6 +2,9 @@
 
 void MercurySolver::AddResistiveEdgeEMF_()
 {
+    if (!resist_control.is_Mercury_resistance)
+        return;
+
     const int nb = fld_->num_blocks();
 
     const double r_cut_in = 0.8;
@@ -28,81 +31,115 @@ void MercurySolver::AddResistiveEdgeEMF_()
         auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
         auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
 
-        auto &Jxi = fld_->field(fid_.fid_J.xi, ib);
-        auto &Jeta = fld_->field(fid_.fid_J.eta, ib);
-        auto &Jzeta = fld_->field(fid_.fid_J.zeta, ib);
+        auto &dr_xi = fld_->field(fid_.Edge_dr.xi, ib);
+        auto &dr_eta = fld_->field(fid_.Edge_dr.eta, ib);
+        auto &dr_zeta = fld_->field(fid_.Edge_dr.zeta, ib);
 
-        if (!Exi.is_allocated())
+        auto &Jcell = fld_->field(fid_.fid_Jcell, ib);
+
+        if (!Jcell.is_allocated())
             continue;
 
         auto &x = grd_->grids(ib).x;
         auto &y = grd_->grids(ib).y;
         auto &z = grd_->grids(ib).z;
 
-        // --- EdgeXi: use the edge midpoint of node (i,j,k) -> (i+1,j,k) ---
+        auto get_edge_cells = [](int edge_axis, int i, int j, int k)
         {
-            Int3 lo = Exi.inner_lo();
-            Int3 hi = Exi.inner_hi();
+            std::array<Int3, 4> c;
 
-            // 如果你后续在扩散项里不需要 i±1/j±1/k±1，就不必“严格 inner 收缩”；
-            // 这里我们只用本点的 Jxi 和本边的坐标，所以不用收缩。
+            if (edge_axis == 0)
+            {
+                c[0] = {i, j, k};
+                c[1] = {i, j - 1, k};
+                c[2] = {i, j, k - 1};
+                c[3] = {i, j - 1, k - 1};
+            }
+            else if (edge_axis == 1)
+            {
+                c[0] = {i, j, k};
+                c[1] = {i - 1, j, k};
+                c[2] = {i, j, k - 1};
+                c[3] = {i - 1, j, k - 1};
+            }
+            else
+            {
+                c[0] = {i, j, k};
+                c[1] = {i - 1, j, k};
+                c[2] = {i, j - 1, k};
+                c[3] = {i - 1, j - 1, k};
+            }
+
+            return c;
+        };
+
+        auto add_one_edge = [&](FieldBlock &E,
+                                FieldBlock &dr,
+                                int edge_axis,
+                                int di,
+                                int dj,
+                                int dk)
+        {
+            if (!E.is_allocated() || !dr.is_allocated())
+                return;
+
+            Int3 lo = E.inner_lo();
+            Int3 hi = E.inner_hi();
+
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
                     for (int k = lo.k; k < hi.k; ++k)
                     {
-                        const double xm = 0.5 * (x(i, j, k) + x(i + 1, j, k));
-                        const double ym = 0.5 * (y(i, j, k) + y(i + 1, j, k));
-                        const double zm = 0.5 * (z(i, j, k) + z(i + 1, j, k));
+                        const double xm = 0.5 * (x(i, j, k) + x(i + di, j + dj, k + dk));
+                        const double ym = 0.5 * (y(i, j, k) + y(i + di, j + dj, k + dk));
+                        const double zm = 0.5 * (z(i, j, k) + z(i + di, j + dj, k + dk));
                         const double r = std::sqrt(xm * xm + ym * ym + zm * zm);
 
                         const double yita0 = yita0_of_r(r);
                         if (yita0 == 0.0)
                             continue;
 
-                        Exi(i, j, k, 0) += (inver_Rem * yita0) * Jxi(i, j, k, 0);
+                        const auto cells = get_edge_cells(edge_axis, i, j, k);
+                        double Jx = 0.0;
+                        double Jy = 0.0;
+                        double Jz = 0.0;
+
+                        for (int q = 0; q < 4; ++q)
+                        {
+                            const int ic = cells[q].i;
+                            const int jc = cells[q].j;
+                            const int kc = cells[q].k;
+                            Jx += Jcell(ic, jc, kc, 0);
+                            Jy += Jcell(ic, jc, kc, 1);
+                            Jz += Jcell(ic, jc, kc, 2);
+                        }
+
+                        Jx *= 0.25;
+                        Jy *= 0.25;
+                        Jz *= 0.25;
+
+                        const double Jedge =
+                            Jx * dr(i, j, k, 0) +
+                            Jy * dr(i, j, k, 1) +
+                            Jz * dr(i, j, k, 2);
+
+                        E(i, j, k, 0) += (inver_Rem * yita0) * Jedge;
                     }
+        };
+
+        // --- EdgeXi: use the edge midpoint of node (i,j,k) -> (i+1,j,k) ---
+        {
+            add_one_edge(Exi, dr_xi, 0, 1, 0, 0);
         }
 
         // --- EdgeEt: node (i,j,k) -> (i,j+1,k) ---
         {
-            Int3 lo = Eeta.inner_lo();
-            Int3 hi = Eeta.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        const double xm = 0.5 * (x(i, j, k) + x(i, j + 1, k));
-                        const double ym = 0.5 * (y(i, j, k) + y(i, j + 1, k));
-                        const double zm = 0.5 * (z(i, j, k) + z(i, j + 1, k));
-                        const double r = std::sqrt(xm * xm + ym * ym + zm * zm);
-
-                        const double yita0 = yita0_of_r(r);
-                        if (yita0 == 0.0)
-                            continue;
-
-                        Eeta(i, j, k, 0) += (inver_Rem * yita0) * Jeta(i, j, k, 0);
-                    }
+            add_one_edge(Eeta, dr_eta, 1, 0, 1, 0);
         }
 
         // --- EdgeZe: node (i,j,k) -> (i,j,k+1) ---
         {
-            Int3 lo = Eze.inner_lo();
-            Int3 hi = Eze.inner_hi();
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                    {
-                        const double xm = 0.5 * (x(i, j, k) + x(i, j, k + 1));
-                        const double ym = 0.5 * (y(i, j, k) + y(i, j, k + 1));
-                        const double zm = 0.5 * (z(i, j, k) + z(i, j, k + 1));
-                        const double r = std::sqrt(xm * xm + ym * ym + zm * zm);
-
-                        const double yita0 = yita0_of_r(r);
-                        if (yita0 == 0.0)
-                            continue;
-
-                        Eze(i, j, k, 0) += (inver_Rem * yita0) * Jzeta(i, j, k, 0);
-                    }
+            add_one_edge(Eze, dr_zeta, 2, 0, 0, 1);
         }
     }
 }
