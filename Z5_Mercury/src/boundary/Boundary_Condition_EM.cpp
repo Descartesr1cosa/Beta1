@@ -446,299 +446,299 @@ void MercuryBoundary::BC_Pole_Bface_Collapse_(FieldBlock &U, Field *fld,
         (dir == 1 && is_Beta) ||
         (dir == 2 && is_Bxi);
 
-    if (is_axis_face)
-    {
-        const int ib = r.this_block;
-
-        FieldBlock *Aaxis = nullptr;
-
-        if (fld)
-        {
-            if (dir == 1 && is_Beta)
-            {
-                // xi-Pole: axis face = B_eta, area vector = JDet
-                if (fld->has_field("JDet"))
-                    Aaxis = &fld->field("JDet", ib);
-            }
-            else if (dir == 2 && is_Bxi)
-            {
-                // eta-Pole: axis face = B_xi, area vector = JDxi
-                if (fld->has_field("JDxi"))
-                    Aaxis = &fld->field("JDxi", ib);
-            }
-        }
-
-        auto fallback_average_ring = [&](int i, int j)
-        {
-            double sum = 0.0;
-            int cnt = 0;
-
-            for (int k = inner.lo.k; k < inner.hi.k; ++k)
-            {
-                sum += U(i, j, k, 0);
-                ++cnt;
-            }
-
-            if (cnt <= 0)
-                return;
-
-            const double avg = sum / static_cast<double>(cnt);
-
-            for (int k = inner.lo.k; k < inner.hi.k; ++k)
-                U(i, j, k, 0) = avg;
-        };
-
-        auto solve3x3 = [](double A[3][3], double b[3], double x[3]) -> bool
-        {
-            double M[3][4] = {
-                {A[0][0], A[0][1], A[0][2], b[0]},
-                {A[1][0], A[1][1], A[1][2], b[1]},
-                {A[2][0], A[2][1], A[2][2], b[2]}};
-
-            for (int col = 0; col < 3; ++col)
-            {
-                int piv = col;
-                double maxv = std::abs(M[col][col]);
-
-                for (int r = col + 1; r < 3; ++r)
-                {
-                    const double v = std::abs(M[r][col]);
-                    if (v > maxv)
-                    {
-                        maxv = v;
-                        piv = r;
-                    }
-                }
-
-                if (maxv < 1.0e-300)
-                    return false;
-
-                if (piv != col)
-                {
-                    for (int c = col; c < 4; ++c)
-                        std::swap(M[col][c], M[piv][c]);
-                }
-
-                const double inv = 1.0 / M[col][col];
-
-                for (int c = col; c < 4; ++c)
-                    M[col][c] *= inv;
-
-                for (int r = 0; r < 3; ++r)
-                {
-                    if (r == col)
-                        continue;
-
-                    const double fac = M[r][col];
-
-                    for (int c = col; c < 4; ++c)
-                        M[r][c] -= fac * M[col][c];
-                }
-            }
-
-            x[0] = M[0][3];
-            x[1] = M[1][3];
-            x[2] = M[2][3];
-
-            return true;
-        };
-
-        auto project_induced_axis_ring = [&](int i, int j)
-        {
-            if (!Aaxis)
-            {
-                fallback_average_ring(i, j);
-                return;
-            }
-
-            const int klo = inner.lo.k;
-            const int khi = inner.hi.k;
-            const int nk = khi - klo;
-
-            if (nk <= 0)
-                return;
-
-            double mean_phi = 0.0;
-            double mean_A[3] = {0.0, 0.0, 0.0};
-
-            for (int k = klo; k < khi; ++k)
-            {
-                mean_phi += U(i, j, k, 0);
-
-                mean_A[0] += (*Aaxis)(i, j, k, 0);
-                mean_A[1] += (*Aaxis)(i, j, k, 1);
-                mean_A[2] += (*Aaxis)(i, j, k, 2);
-            }
-
-            const double inv_nk = 1.0 / static_cast<double>(nk);
-
-            mean_phi *= inv_nk;
-            mean_A[0] *= inv_nk;
-            mean_A[1] *= inv_nk;
-            mean_A[2] *= inv_nk;
-
-            // 求 b:
-            // min_b sum_k | (phi_k - mean_phi)
-            //              - (A_k - mean_A) · b |^2
-            double M[3][3] = {
-                {0.0, 0.0, 0.0},
-                {0.0, 0.0, 0.0},
-                {0.0, 0.0, 0.0}};
-
-            double rhs[3] = {0.0, 0.0, 0.0};
-
-            for (int k = klo; k < khi; ++k)
-            {
-                const double h[3] = {
-                    (*Aaxis)(i, j, k, 0) - mean_A[0],
-                    (*Aaxis)(i, j, k, 1) - mean_A[1],
-                    (*Aaxis)(i, j, k, 2) - mean_A[2]};
-
-                const double rphi = U(i, j, k, 0) - mean_phi;
-
-                // flux-norm LS. 如果以后想最小化 Bn 误差，
-                // 可改成 w = 1.0 / (|A|^2 + eps)。
-                const double w = 1.0;
-
-                for (int a = 0; a < 3; ++a)
-                {
-                    rhs[a] += w * h[a] * rphi;
-
-                    for (int b = 0; b < 3; ++b)
-                        M[a][b] += w * h[a] * h[b];
-                }
-            }
-
-            const double tr = M[0][0] + M[1][1] + M[2][2];
-
-            double beta[3] = {0.0, 0.0, 0.0};
-
-            if (tr > 1.0e-300)
-            {
-                // Tikhonov regularization，避免 A_k 近似平行时奇异。
-                const double reg = 1.0e-10 * tr;
-
-                M[0][0] += reg;
-                M[1][1] += reg;
-                M[2][2] += reg;
-
-                const bool ok = solve3x3(M, rhs, beta);
-
-                if (!ok)
-                {
-                    beta[0] = 0.0;
-                    beta[1] = 0.0;
-                    beta[2] = 0.0;
-                }
-            }
-
-            // 生成 target induced flux。
-            // theta=1: 完全使用几何投影；
-            // theta=0: 退回原始平均。
-            const double theta = 1.0;
-
-            double sum_target = 0.0;
-            double sum_old = 0.0;
-
-            for (int k = klo; k < khi; ++k)
-            {
-                const double h[3] = {
-                    (*Aaxis)(i, j, k, 0) - mean_A[0],
-                    (*Aaxis)(i, j, k, 1) - mean_A[1],
-                    (*Aaxis)(i, j, k, 2) - mean_A[2]};
-
-                const double geom =
-                    h[0] * beta[0] +
-                    h[1] * beta[1] +
-                    h[2] * beta[2];
-
-                const double phi_target =
-                    mean_phi + theta * geom;
-
-                sum_target += phi_target;
-                sum_old += U(i, j, k, 0);
-
-                U(i, j, k, 0) = phi_target;
-            }
-
-            // roundoff correction：严格保持 sum_k U 不变。
-            const double corr =
-                (sum_old - sum_target) / static_cast<double>(nk);
-
-            for (int k = klo; k < khi; ++k)
-                U(i, j, k, 0) += corr;
-        };
-
-        for (int i = inner.lo.i; i < inner.hi.i; ++i)
-        {
-            for (int j = inner.lo.j; j < inner.hi.j; ++j)
-            {
-                project_induced_axis_ring(i, j);
-            }
-        }
-
-        BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
-        return;
-    }
-
     // if (is_axis_face)
     // {
-    //     if (dir == 1)
+    //     const int ib = r.this_block;
+
+    //     FieldBlock *Aaxis = nullptr;
+
+    //     if (fld)
     //     {
-    //         // norm=xi, axis=eta:
-    //         // fixed i,j; average over k
-    //         for (int i = inner.lo.i; i < inner.hi.i; ++i)
+    //         if (dir == 1 && is_Beta)
     //         {
-    //             for (int j = inner.lo.j; j < inner.hi.j; ++j)
-    //             {
-    //                 double sum = 0.0;
-    //                 int cnt = 0;
-
-    //                 for (int k = inner.lo.k; k < inner.hi.k; ++k)
-    //                 {
-    //                     sum += U(i, j, k, 0);
-    //                     ++cnt;
-    //                 }
-
-    //                 if (cnt > 0)
-    //                 {
-    //                     const double avg = sum / static_cast<double>(cnt);
-    //                     for (int k = inner.lo.k; k < inner.hi.k; ++k)
-    //                         U(i, j, k, 0) = avg;
-    //                 }
-    //             }
+    //             // xi-Pole: axis face = B_eta, area vector = JDet
+    //             if (fld->has_field("JDet"))
+    //                 Aaxis = &fld->field("JDet", ib);
+    //         }
+    //         else if (dir == 2 && is_Bxi)
+    //         {
+    //             // eta-Pole: axis face = B_xi, area vector = JDxi
+    //             if (fld->has_field("JDxi"))
+    //                 Aaxis = &fld->field("JDxi", ib);
     //         }
     //     }
-    //     else // dir == 2
+
+    //     auto fallback_average_ring = [&](int i, int j)
     //     {
-    //         // norm=eta, axis=xi:
-    //         // fixed i,j; average over k
-    //         for (int i = inner.lo.i; i < inner.hi.i; ++i)
+    //         double sum = 0.0;
+    //         int cnt = 0;
+
+    //         for (int k = inner.lo.k; k < inner.hi.k; ++k)
     //         {
-    //             for (int j = inner.lo.j; j < inner.hi.j; ++j)
+    //             sum += U(i, j, k, 0);
+    //             ++cnt;
+    //         }
+
+    //         if (cnt <= 0)
+    //             return;
+
+    //         const double avg = sum / static_cast<double>(cnt);
+
+    //         for (int k = inner.lo.k; k < inner.hi.k; ++k)
+    //             U(i, j, k, 0) = avg;
+    //     };
+
+    //     auto solve3x3 = [](double A[3][3], double b[3], double x[3]) -> bool
+    //     {
+    //         double M[3][4] = {
+    //             {A[0][0], A[0][1], A[0][2], b[0]},
+    //             {A[1][0], A[1][1], A[1][2], b[1]},
+    //             {A[2][0], A[2][1], A[2][2], b[2]}};
+
+    //         for (int col = 0; col < 3; ++col)
+    //         {
+    //             int piv = col;
+    //             double maxv = std::abs(M[col][col]);
+
+    //             for (int r = col + 1; r < 3; ++r)
     //             {
-    //                 double sum = 0.0;
-    //                 int cnt = 0;
-
-    //                 for (int k = inner.lo.k; k < inner.hi.k; ++k)
+    //                 const double v = std::abs(M[r][col]);
+    //                 if (v > maxv)
     //                 {
-    //                     sum += U(i, j, k, 0);
-    //                     ++cnt;
-    //                 }
-
-    //                 if (cnt > 0)
-    //                 {
-    //                     const double avg = sum / static_cast<double>(cnt);
-    //                     for (int k = inner.lo.k; k < inner.hi.k; ++k)
-    //                         U(i, j, k, 0) = avg;
+    //                     maxv = v;
+    //                     piv = r;
     //                 }
     //             }
+
+    //             if (maxv < 1.0e-300)
+    //                 return false;
+
+    //             if (piv != col)
+    //             {
+    //                 for (int c = col; c < 4; ++c)
+    //                     std::swap(M[col][c], M[piv][c]);
+    //             }
+
+    //             const double inv = 1.0 / M[col][col];
+
+    //             for (int c = col; c < 4; ++c)
+    //                 M[col][c] *= inv;
+
+    //             for (int r = 0; r < 3; ++r)
+    //             {
+    //                 if (r == col)
+    //                     continue;
+
+    //                 const double fac = M[r][col];
+
+    //                 for (int c = col; c < 4; ++c)
+    //                     M[r][c] -= fac * M[col][c];
+    //             }
+    //         }
+
+    //         x[0] = M[0][3];
+    //         x[1] = M[1][3];
+    //         x[2] = M[2][3];
+
+    //         return true;
+    //     };
+
+    //     auto project_induced_axis_ring = [&](int i, int j)
+    //     {
+    //         if (!Aaxis)
+    //         {
+    //             fallback_average_ring(i, j);
+    //             return;
+    //         }
+
+    //         const int klo = inner.lo.k;
+    //         const int khi = inner.hi.k;
+    //         const int nk = khi - klo;
+
+    //         if (nk <= 0)
+    //             return;
+
+    //         double mean_phi = 0.0;
+    //         double mean_A[3] = {0.0, 0.0, 0.0};
+
+    //         for (int k = klo; k < khi; ++k)
+    //         {
+    //             mean_phi += U(i, j, k, 0);
+
+    //             mean_A[0] += (*Aaxis)(i, j, k, 0);
+    //             mean_A[1] += (*Aaxis)(i, j, k, 1);
+    //             mean_A[2] += (*Aaxis)(i, j, k, 2);
+    //         }
+
+    //         const double inv_nk = 1.0 / static_cast<double>(nk);
+
+    //         mean_phi *= inv_nk;
+    //         mean_A[0] *= inv_nk;
+    //         mean_A[1] *= inv_nk;
+    //         mean_A[2] *= inv_nk;
+
+    //         // 求 b:
+    //         // min_b sum_k | (phi_k - mean_phi)
+    //         //              - (A_k - mean_A) · b |^2
+    //         double M[3][3] = {
+    //             {0.0, 0.0, 0.0},
+    //             {0.0, 0.0, 0.0},
+    //             {0.0, 0.0, 0.0}};
+
+    //         double rhs[3] = {0.0, 0.0, 0.0};
+
+    //         for (int k = klo; k < khi; ++k)
+    //         {
+    //             const double h[3] = {
+    //                 (*Aaxis)(i, j, k, 0) - mean_A[0],
+    //                 (*Aaxis)(i, j, k, 1) - mean_A[1],
+    //                 (*Aaxis)(i, j, k, 2) - mean_A[2]};
+
+    //             const double rphi = U(i, j, k, 0) - mean_phi;
+
+    //             // flux-norm LS. 如果以后想最小化 Bn 误差，
+    //             // 可改成 w = 1.0 / (|A|^2 + eps)。
+    //             const double w = 1.0;
+
+    //             for (int a = 0; a < 3; ++a)
+    //             {
+    //                 rhs[a] += w * h[a] * rphi;
+
+    //                 for (int b = 0; b < 3; ++b)
+    //                     M[a][b] += w * h[a] * h[b];
+    //             }
+    //         }
+
+    //         const double tr = M[0][0] + M[1][1] + M[2][2];
+
+    //         double beta[3] = {0.0, 0.0, 0.0};
+
+    //         if (tr > 1.0e-300)
+    //         {
+    //             // Tikhonov regularization，避免 A_k 近似平行时奇异。
+    //             const double reg = 1.0e-10 * tr;
+
+    //             M[0][0] += reg;
+    //             M[1][1] += reg;
+    //             M[2][2] += reg;
+
+    //             const bool ok = solve3x3(M, rhs, beta);
+
+    //             if (!ok)
+    //             {
+    //                 beta[0] = 0.0;
+    //                 beta[1] = 0.0;
+    //                 beta[2] = 0.0;
+    //             }
+    //         }
+
+    //         // 生成 target induced flux。
+    //         // theta=1: 完全使用几何投影；
+    //         // theta=0: 退回原始平均。
+    //         const double theta = 1.0;
+
+    //         double sum_target = 0.0;
+    //         double sum_old = 0.0;
+
+    //         for (int k = klo; k < khi; ++k)
+    //         {
+    //             const double h[3] = {
+    //                 (*Aaxis)(i, j, k, 0) - mean_A[0],
+    //                 (*Aaxis)(i, j, k, 1) - mean_A[1],
+    //                 (*Aaxis)(i, j, k, 2) - mean_A[2]};
+
+    //             const double geom =
+    //                 h[0] * beta[0] +
+    //                 h[1] * beta[1] +
+    //                 h[2] * beta[2];
+
+    //             const double phi_target =
+    //                 mean_phi + theta * geom;
+
+    //             sum_target += phi_target;
+    //             sum_old += U(i, j, k, 0);
+
+    //             U(i, j, k, 0) = phi_target;
+    //         }
+
+    //         // roundoff correction：严格保持 sum_k U 不变。
+    //         const double corr =
+    //             (sum_old - sum_target) / static_cast<double>(nk);
+
+    //         for (int k = klo; k < khi; ++k)
+    //             U(i, j, k, 0) += corr;
+    //     };
+
+    //     for (int i = inner.lo.i; i < inner.hi.i; ++i)
+    //     {
+    //         for (int j = inner.lo.j; j < inner.hi.j; ++j)
+    //         {
+    //             project_induced_axis_ring(i, j);
     //         }
     //     }
 
     //     BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
     //     return;
     // }
+
+    if (is_axis_face)
+    {
+        if (dir == 1)
+        {
+            // norm=xi, axis=eta:
+            // fixed i,j; average over k
+            for (int i = inner.lo.i; i < inner.hi.i; ++i)
+            {
+                for (int j = inner.lo.j; j < inner.hi.j; ++j)
+                {
+                    double sum = 0.0;
+                    int cnt = 0;
+
+                    for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    {
+                        sum += U(i, j, k, 0);
+                        ++cnt;
+                    }
+
+                    if (cnt > 0)
+                    {
+                        const double avg = sum / static_cast<double>(cnt);
+                        for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                            U(i, j, k, 0) = avg;
+                    }
+                }
+            }
+        }
+        else // dir == 2
+        {
+            // norm=eta, axis=xi:
+            // fixed i,j; average over k
+            for (int i = inner.lo.i; i < inner.hi.i; ++i)
+            {
+                for (int j = inner.lo.j; j < inner.hi.j; ++j)
+                {
+                    double sum = 0.0;
+                    int cnt = 0;
+
+                    for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    {
+                        sum += U(i, j, k, 0);
+                        ++cnt;
+                    }
+
+                    if (cnt > 0)
+                    {
+                        const double avg = sum / static_cast<double>(cnt);
+                        for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                            U(i, j, k, 0) = avg;
+                    }
+                }
+            }
+        }
+
+        BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
+        return;
+    }
 
     // ------------------------------------------------------------
     // 3. B_zeta | norm=0 无效：不做 collapse，保持默认 copy。
