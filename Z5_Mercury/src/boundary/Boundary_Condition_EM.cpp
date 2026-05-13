@@ -772,6 +772,43 @@ void MercuryBoundary::BC_Solid_Surface_Eface_(FieldBlock &U, Field *fld, const B
 
 void MercuryBoundary::BC_Solid_Surface_Eface_ghots_zero(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
 {
+    bool is_norm = false;
+    if (U.descriptor().name == "Eface_xi")
+    {
+        if (abs(r.direction) == 1)
+            is_norm = true;
+    }
+    else if (U.descriptor().name == "Eface_eta")
+    {
+        if (abs(r.direction) == 2)
+            is_norm = true;
+    }
+    else if (U.descriptor().name == "Eface_zeta")
+    {
+        if (abs(r.direction) == 3)
+            is_norm = true;
+    }
+    else
+    {
+        std::cerr << "BC_Solid_Surface_Eface_ghots_zero called for unexpected field: "
+                  << U.descriptor().name << std::endl;
+        return;
+    }
+
+    if (is_norm)
+    {
+        const Box3 &g = r.inner_slab;
+
+        for (int i = g.lo.i; i < g.hi.i; ++i)
+            for (int j = g.lo.j; j < g.hi.j; ++j)
+                for (int k = g.lo.k; k < g.hi.k; ++k)
+                {
+                    U(i, j, k, 0) = 0.0;
+                    U(i, j, k, 1) = 0.0;
+                    U(i, j, k, 2) = 0.0;
+                }
+    }
+
     const Box3 &g = BoundaryCore::MakeGhostSlabFromInner(r.inner_slab, r.direction, ngh); // ghost slab to write
 
     for (int i = g.lo.i; i < g.hi.i; ++i)
@@ -782,8 +819,6 @@ void MercuryBoundary::BC_Solid_Surface_Eface_ghots_zero(FieldBlock &U, Field *fl
                 U(i, j, k, 1) = 0.0;
                 U(i, j, k, 2) = 0.0;
             }
-
-    BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
 }
 
 void MercuryBoundary::BC_Solid_Surface_Eedge_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
