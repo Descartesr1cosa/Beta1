@@ -36,6 +36,7 @@ struct SolverFields
     IdTriplet fid_E;     // (xi,eta,zeta) <- (E_xi,E_eta,E_zeta)
     IdTriplet fid_Eface; // (xi,eta,zeta) <- (E_xi,E_eta,E_zeta)
     IdTriplet fid_Ehall; // (xi,eta,zeta) <- (E_xi,E_eta,E_zeta)
+    IdTriplet fid_Eres;  // (xi,eta,zeta) <- (Eres_xi,Eres_eta,Eres_zeta)
     IdTriplet fid_J;     // (xi,eta,zeta) <- (J_xi,J_eta,J_zeta)
 
     // ---- auxiliary ----
@@ -55,6 +56,7 @@ struct SolverFields
     int fid_RHS_H = -1;
     int fid_RHS_Na = -1;
     IdTriplet fid_RHS_b;
+    IdTriplet fid_RHS_b_res;
     int fid_U_plus = -1;
     // int fid_old_U = -1;
     int fid_divB = -1;
@@ -135,6 +137,10 @@ struct SolverFields
         fid_Ehall.eta = fld->field_id("Ehall_eta");
         fid_Ehall.zeta = fld->field_id("Ehall_zeta");
 
+        fid_Eres.xi = fld->field_id("Eres_xi");
+        fid_Eres.eta = fld->field_id("Eres_eta");
+        fid_Eres.zeta = fld->field_id("Eres_zeta");
+
         fid_Eface.xi = fld->field_id("Eface_xi");
         fid_Eface.eta = fld->field_id("Eface_eta");
         fid_Eface.zeta = fld->field_id("Eface_zeta");
@@ -165,6 +171,9 @@ struct SolverFields
         fid_RHS_b.xi = fld->field_id("RHS_B_xi");
         fid_RHS_b.eta = fld->field_id("RHS_B_eta");
         fid_RHS_b.zeta = fld->field_id("RHS_B_zeta");
+        fid_RHS_b_res.xi = fld->field_id("RHS_Bres_xi");
+        fid_RHS_b_res.eta = fld->field_id("RHS_Bres_eta");
+        fid_RHS_b_res.zeta = fld->field_id("RHS_Bres_zeta");
         fid_U_plus = fld->field_id("U_plus");
         // fid_old_U = fld->field_id("old_U_");
         fid_divB = fld->field_id("divB");
@@ -236,6 +245,7 @@ struct SolverFields
         fid_B.require_all("B_xi/B_eta/B_zeta");
         fid_E.require_all("E_xi/E_eta/E_zeta");
         fid_Ehall.require_all("Ehall_xi/Ehall_eta/Ehall_zeta");
+        fid_Eres.require_all("Eres_xi/Eres_eta/Eres_zeta");
         fid_Eface.require_all("Eface_xi/Eface_eta/Eface_zeta");
         fid_J.require_all("J_xi/J_eta/J_zeta");
 
@@ -254,6 +264,7 @@ struct SolverFields
         require_id(fid_RHS_H, "RHS_H");
         require_id(fid_RHS_Na, "RHS_Na");
         fid_RHS_b.require_all("Flux(RHS_B_xi/RHS_B_eta/RHS_B_zeta)");
+        fid_RHS_b_res.require_all("Flux(RHS_Bres_xi/RHS_Bres_eta/RHS_Bres_zeta)");
         require_id(fid_U_plus, "U_plus");
         // require_id(fid_old_U, "old_U_");
         require_id(fid_divB, "divB");

@@ -898,6 +898,11 @@ void MercurySolver::AssembleEdgeEMF_FromFaceE_Hall_()
 
 void MercurySolver::ApplyUpdate_Euler_BfaceOnly_(double dt_sub)
 {
+    ApplyUpdate_Euler_BfaceOnly_(dt_sub, fid_.fid_RHS_b);
+}
+
+void MercurySolver::ApplyUpdate_Euler_BfaceOnly_(double dt_sub, const IdTriplet &fid_RHSB)
+{
     const int nb = fld_->num_blocks();
     for (int ib = 0; ib < nb; ++ib)
     {
@@ -905,9 +910,9 @@ void MercurySolver::ApplyUpdate_Euler_BfaceOnly_(double dt_sub)
         auto &Ub_eta = fld_->field(fid_.fid_B.eta, ib);
         auto &Ub_zeta = fld_->field(fid_.fid_B.zeta, ib);
 
-        auto &RHSB_xi = fld_->field(fid_.fid_RHS_b.xi, ib);
-        auto &RHSB_eta = fld_->field(fid_.fid_RHS_b.eta, ib);
-        auto &RHSB_zeta = fld_->field(fid_.fid_RHS_b.zeta, ib);
+        auto &RHSB_xi = fld_->field(fid_RHSB.xi, ib);
+        auto &RHSB_eta = fld_->field(fid_RHSB.eta, ib);
+        auto &RHSB_zeta = fld_->field(fid_RHSB.zeta, ib);
 
         if (!Ub_xi.is_allocated())
             continue;

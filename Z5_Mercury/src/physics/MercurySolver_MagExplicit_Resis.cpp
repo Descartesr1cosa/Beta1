@@ -2,6 +2,11 @@
 
 void MercurySolver::AddResistiveEdgeEMF_()
 {
+    AddResistiveEdgeEMF_To_(fid_.fid_E);
+}
+
+void MercurySolver::AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget)
+{
     if (!resist_control.is_Mercury_resistance)
         return;
 
@@ -27,9 +32,9 @@ void MercurySolver::AddResistiveEdgeEMF_()
         // if (blk.block_name != "Solid")
         //     continue;
 
-        auto &Exi = fld_->field(fid_.fid_E.xi, ib);
-        auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
-        auto &Eze = fld_->field(fid_.fid_E.zeta, ib);
+        auto &Exi = fld_->field(fid_Etarget.xi, ib);
+        auto &Eeta = fld_->field(fid_Etarget.eta, ib);
+        auto &Eze = fld_->field(fid_Etarget.zeta, ib);
 
         auto &dr_xi = fld_->field(fid_.Edge_dr.xi, ib);
         auto &dr_eta = fld_->field(fid_.Edge_dr.eta, ib);

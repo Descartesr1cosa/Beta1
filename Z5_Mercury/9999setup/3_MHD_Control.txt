@@ -16,6 +16,7 @@ x0			y0			z0		mx		my		mz		a
 LIST==================================================================
 
 bool    is_Mercury_resistance       0
+int     n_resistive_subcycles       1
 
 bool    enable_arti_resistance      1
 double  arti_resistance_max         0.5

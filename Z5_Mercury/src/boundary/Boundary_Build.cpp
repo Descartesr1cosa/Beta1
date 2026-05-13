@@ -192,6 +192,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("E_xi", "Farfield", Eedge_boundandghost_to_constant);
     RegisterPhysical_("E_eta", "Farfield", Eedge_boundandghost_to_constant);
     RegisterPhysical_("E_zeta", "Farfield", Eedge_boundandghost_to_constant);
+    RegisterPhysical_("Eres_xi", "Farfield", Eedge_boundandghost_to_constant);
+    RegisterPhysical_("Eres_eta", "Farfield", Eedge_boundandghost_to_constant);
+    RegisterPhysical_("Eres_zeta", "Farfield", Eedge_boundandghost_to_constant);
     // ------------------------------------------
     // Pole
     //   E_xi / E_eta 保留你原来的 Pole 处理；
@@ -229,6 +232,9 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("E_xi", "Pole", E_xi_pole);
     RegisterPhysical_("E_eta", "Pole", E_eta_pole);
     RegisterPhysical_("E_zeta", "Pole", E_zeta_pole);
+    RegisterPhysical_("Eres_xi", "Pole", E_xi_pole);
+    RegisterPhysical_("Eres_eta", "Pole", E_eta_pole);
+    RegisterPhysical_("Eres_zeta", "Pole", E_zeta_pole);
 
     // -------------------------------------------------------------------------
     // Coupling handlers
@@ -537,6 +543,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gEhall.halo_level = HaloLevel::Vertex;
     gEhall.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gEhall);
+
+    BoundGroup gEres;
+    gEres.name = "Eres";
+    gEres.fields = {"Eres_xi", "Eres_eta", "Eres_zeta"};
+    gEres.do_coupling = true;
+    gEres.do_physical = true;
+    gEres.do_halo = true;
+    gEres.halo_level = HaloLevel::Vertex;
+    gEres.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gEres);
 
     BoundGroup gB;
     gB.name = "Bface";

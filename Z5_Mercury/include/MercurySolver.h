@@ -36,6 +36,7 @@ struct ResistiveEdgeEMFControl
 {
     bool enabled = false;
     bool is_Mercury_resistance = false;
+    int n_subcycles = 1;
 
     double eta_max = 0.0;
 
@@ -237,6 +238,7 @@ private:
     // For Magnetic
     void Build_E_explicit_edge_();
     void AddResistiveEdgeEMF_();
+    void AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget);
     void AddPoleResistiveEdgeEMF_FromJcell_();
     void AddIdealEdgeEMF_();
     void AddHallEdgeEMF_();
@@ -251,6 +253,8 @@ private:
     void AssembleRHS_Induction_CT_HallOnly_();
     // 只更新 Bface: Bface += dt_sub * RHS_b
     void ApplyUpdate_Euler_BfaceOnly_(double dt_sub);
+    void ApplyUpdate_Euler_BfaceOnly_(double dt_sub, const IdTriplet &fid_RHSB);
+    void ResistiveDiffusionSubcycles_();
 
     void BuildHallFaceEMF_Rusanov_();
     void BuildHallFaceEMF_Rusanov_diff_();

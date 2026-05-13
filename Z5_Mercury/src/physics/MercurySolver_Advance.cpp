@@ -19,6 +19,9 @@ void MercurySolver::Time_Advance()
     // 4) Euler 1st order Advance
     ApplyUpdate_Euler_(); // U += dt*RHS, B_face += dt*RHS_Bface
 
+    // 4.5) Fixed-subcycle internal resistive magnetic diffusion.
+    ResistiveDiffusionSubcycles_();
+
     // 5) 低密度/负压修复（尽量按 Fortran：邻域平均 + 重建 E）
     // RepairNonPhysical_();
 
