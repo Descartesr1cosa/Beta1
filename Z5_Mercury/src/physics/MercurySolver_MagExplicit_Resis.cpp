@@ -7,11 +7,11 @@ void MercurySolver::AddResistiveEdgeEMF_()
 
     const int nb = fld_->num_blocks();
 
-    const double r_cut_in = 0.8;
-    const double r_cut_out = 0.98;
-    const double r0 = 0.8;
-    const double r1 = 0.98;
-    const double w = 0.01;
+    const double r_cut_in = 0.84;
+    const double r_cut_out = 1.04;
+    const double r0 = 0.84;
+    const double r1 = 1.04;
+    const double w = 0.02;
 
     auto yita0_of_r = [&](double r) -> double
     {
@@ -24,8 +24,8 @@ void MercurySolver::AddResistiveEdgeEMF_()
     for (int ib = 0; ib < nb; ++ib)
     {
         Block &blk = fld_->grd->grids(ib);
-        if (blk.block_name != "Solid")
-            continue;
+        // if (blk.block_name != "Solid")
+        //     continue;
 
         auto &Exi = fld_->field(fid_.fid_E.xi, ib);
         auto &Eeta = fld_->field(fid_.fid_E.eta, ib);
