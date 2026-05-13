@@ -165,14 +165,21 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     runtime_data_->Begin(*run_data_, par_, count_global_cells());
 
     resist_control.is_Mercury_resistance = par_->GetBoo("is_Mercury_resistance");
+    resist_control.use_implicit_mercury_resistance = par_->GetBoo("use_implicit_mercury_resistance");
     resist_control.n_subcycles = std::max(1, par_->GetInt("n_resistive_subcycles"));
     resist_control.enabled = par_->GetBoo("enable_arti_resistance");
     resist_control.eta_max = par_->GetDou("arti_resistance_max");
+    resist_control.implicit_ksp_rtol = par_->GetDou("implicit_resistive_ksp_rtol");
+    resist_control.implicit_ksp_atol = par_->GetDou("implicit_resistive_ksp_atol");
+    resist_control.implicit_ksp_max_it = par_->GetInt("implicit_resistive_ksp_max_it");
     resist_control.J_on = par_->GetDou("arti_resistance_J_on");
     resist_control.J_full = par_->GetDou("arti_resistance_J_full");
     resist_control.J_max_force = par_->GetDou("arti_resistance_J_max_force");
     resist_control.osc_on = par_->GetDou("arti_resistance_osc_on");
     resist_control.osc_full = par_->GetDou("arti_resistance_osc_full");
+
+    if (resist_control.use_implicit_mercury_resistance)
+        SetupImplicitResistiveDiffusion_();
 
 #ifdef HALL_IMPLICIT
     if (!topo_equiv_ || !edge_owner_pat_)
@@ -242,6 +249,11 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
 
     SetupHallFaceScratch_(); // setup temp block data for Rusanov Scheme
 #endif
+}
+
+MercurySolver::~MercurySolver()
+{
+    DestroyImplicitResistiveDiffusion_();
 }
 
 #ifdef HALL_IMPLICIT

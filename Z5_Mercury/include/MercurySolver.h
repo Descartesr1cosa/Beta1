@@ -7,6 +7,8 @@
 #include "2_Initial.h"
 #include "3_Control.h"
 
+#include <petscksp.h>
+
 #ifdef HALL_IMPLICIT
 #include "4_Hall_Implicit.h"
 #endif
@@ -36,9 +38,14 @@ struct ResistiveEdgeEMFControl
 {
     bool enabled = false;
     bool is_Mercury_resistance = false;
+    bool use_implicit_mercury_resistance = false;
     int n_subcycles = 1;
 
     double eta_max = 0.0;
+
+    double implicit_ksp_rtol = 1.0e-8;
+    double implicit_ksp_atol = 1.0e-12;
+    int implicit_ksp_max_it = 200;
 
     double J_on = 0.0;
     double J_full = 0.0;
@@ -72,6 +79,7 @@ public:
                   HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat
 #endif
     );
+    ~MercurySolver();
 
     void Advance();
 
@@ -136,6 +144,26 @@ private:
     double inver_Rem{0.0};
 
     ResistiveEdgeEMFControl resist_control;
+
+    struct ImplicitResistiveDof
+    {
+        TOPO::EdgeLocalID edge;
+        double eta = 0.0;
+    };
+
+    std::vector<TOPO::EdgeLocalID> resist_owner_edges_sorted_;
+    std::vector<ImplicitResistiveDof> implicit_resistive_dofs_;
+    std::vector<double> implicit_resistive_local_;
+    std::vector<Scalar> resist_Bstar_xi_;
+    std::vector<Scalar> resist_Bstar_eta_;
+    std::vector<Scalar> resist_Bstar_ze_;
+
+    KSP implicit_resistive_ksp_{nullptr};
+    Mat implicit_resistive_A_{nullptr};
+    Vec implicit_resistive_x_{nullptr};
+    Vec implicit_resistive_b_{nullptr};
+    double implicit_resistive_dt_{0.0};
+    bool implicit_resistive_ready_{false};
 
 #ifdef HALL_IMPLICIT
 
@@ -255,6 +283,19 @@ private:
     void ApplyUpdate_Euler_BfaceOnly_(double dt_sub);
     void ApplyUpdate_Euler_BfaceOnly_(double dt_sub, const IdTriplet &fid_RHSB);
     void ResistiveDiffusionSubcycles_();
+
+    void SetupImplicitResistiveDiffusion_();
+    void DestroyImplicitResistiveDiffusion_();
+    void BuildImplicitResistiveEdgeDofMap_();
+    void SolveImplicitResistiveDiffusion_(double dt_step);
+    void ApplyImplicitResistiveUpdate_(double dt_step);
+    void SnapshotImplicitResistiveBstar_();
+    void RestoreImplicitResistiveBstar_();
+    void UnpackVecToImplicitEres_(Vec X);
+    void PackImplicitJedgeToVec_(const IdTriplet &fid_Jedge, Vec Y, bool multiply_eta, double x_shift, Vec X);
+    void CalcImplicitDeltaJEdgeFromDeltaB_();
+    double ImplicitResistiveEtaAtEdge_(const TOPO::EdgeLocalID &e) const;
+    static PetscErrorCode MatMultImplicitResistive_(Mat A, Vec X, Vec Y);
 
     void BuildHallFaceEMF_Rusanov_();
     void BuildHallFaceEMF_Rusanov_diff_();

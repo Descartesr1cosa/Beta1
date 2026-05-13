@@ -554,6 +554,16 @@ void MercuryBoundary::InstallDefaultGroups()
     gEres.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gEres);
 
+    BoundGroup gEres1form;
+    gEres1form.name = "Eres1form";
+    gEres1form.fields = {"Eres_xi", "Eres_eta", "Eres_zeta"};
+    gEres1form.do_coupling = true;
+    gEres1form.do_physical = false;
+    gEres1form.do_halo = true;
+    gEres1form.halo_level = HaloLevel::Vertex;
+    gEres1form.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
+    AddGroup(gEres1form);
+
     BoundGroup gB;
     gB.name = "Bface";
     gB.fields = {"B_xi", "B_eta", "B_zeta"};
