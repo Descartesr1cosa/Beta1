@@ -119,7 +119,10 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
             "dJ_cell",
             "dEpre_xi",
             "dEpre_eta",
-            "dEpre_zeta"};
+            "dEpre_zeta",
+            "Eres_xi",
+            "Eres_eta",
+            "Eres_zeta"};
 
         // 1) 初始化 Mercury Boundary
         mercury_bound_.Setup(grd_, fld_, topo_, halo_, par_, bnd_fields);
