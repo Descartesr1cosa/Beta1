@@ -469,21 +469,34 @@ void MercurySolver::SolveImplicitResistiveDiffusion_(double dt_step)
 
     PetscCallAbort(PETSC_COMM_WORLD, VecSet(implicit_resistive_x_, 0.0));
     PetscCallAbort(PETSC_COMM_WORLD, KSPSetInitialGuessNonzero(implicit_resistive_ksp_, PETSC_FALSE)); // 初始猜测非零，0.0不是有用的猜测
+    // VecCopy(implicit_resistive_b_, implicit_resistive_x_);
+    // KSPSetInitialGuessNonzero(implicit_resistive_ksp_, PETSC_TRUE);
+
     PetscCallAbort(PETSC_COMM_WORLD, KSPSolve(implicit_resistive_ksp_,
                                               implicit_resistive_b_,
                                               implicit_resistive_x_)); // SOLVE
 
-    if (control_.if_outres && par_->GetInt("myid") == 0)
+    if (control_.if_outres)
     {
-        KSPConvergedReason reason;
-        PetscInt its = 0;
-        PetscReal rnorm = 0.0;
-        KSPGetConvergedReason(implicit_resistive_ksp_, &reason);
-        KSPGetIterationNumber(implicit_resistive_ksp_, &its);
-        KSPGetResidualNorm(implicit_resistive_ksp_, &rnorm);
-        std::cout << "[ImplicitMercuryResistive] reason=" << reason
-                  << " its=" << its
-                  << " rnorm=" << rnorm << std::endl;
+        PetscReal bnorm = 0.0;
+        VecNorm(implicit_resistive_b_, NORM_2, &bnorm);
+        if (par_->GetInt("myid") == 0)
+        {
+            KSPConvergedReason reason;
+            PetscInt its = 0;
+            PetscReal rnorm = 0.0;
+
+            KSPGetConvergedReason(implicit_resistive_ksp_, &reason);
+            KSPGetIterationNumber(implicit_resistive_ksp_, &its);
+            KSPGetResidualNorm(implicit_resistive_ksp_, &rnorm);
+            std::cout << "[ImplicitMercuryResistive] reason=" << reason
+                      << " its=" << its
+                      << " rnorm=" << rnorm
+                      << " rel=" << rnorm / std::max<PetscReal>(bnorm, 1e-300)
+                      << std::endl
+                      << std::endl
+                      << std::flush;
+        }
     }
 
     UnpackVecToImplicitEres_(implicit_resistive_x_);
