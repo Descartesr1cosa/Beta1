@@ -7,56 +7,56 @@
 
 namespace
 {
-void clear_triplet(Field *fld, const IdTriplet &fid)
-{
-    if (!fld)
-        return;
-
-    const int ids[3] = {fid.xi, fid.eta, fid.zeta};
-    for (int ib = 0; ib < fld->num_blocks(); ++ib)
+    void clear_triplet(Field *fld, const IdTriplet &fid)
     {
-        for (int q = 0; q < 3; ++q)
-        {
-            auto &F = fld->field(ids[q], ib);
-            if (!F.is_allocated())
-                continue;
+        if (!fld)
+            return;
 
-            const Int3 lo = F.get_lo();
-            const Int3 hi = F.get_hi();
-            const int ncomp = F.descriptor().ncomp;
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        for (int m = 0; m < ncomp; ++m)
-                            F(i, j, k, m) = 0.0;
+        const int ids[3] = {fid.xi, fid.eta, fid.zeta};
+        for (int ib = 0; ib < fld->num_blocks(); ++ib)
+        {
+            for (int q = 0; q < 3; ++q)
+            {
+                auto &F = fld->field(ids[q], ib);
+                if (!F.is_allocated())
+                    continue;
+
+                const Int3 lo = F.get_lo();
+                const Int3 hi = F.get_hi();
+                const int ncomp = F.descriptor().ncomp;
+                for (int i = lo.i; i < hi.i; ++i)
+                    for (int j = lo.j; j < hi.j; ++j)
+                        for (int k = lo.k; k < hi.k; ++k)
+                            for (int m = 0; m < ncomp; ++m)
+                                F(i, j, k, m) = 0.0;
+            }
         }
     }
-}
 
-int edge_fid_from_dir(const IdTriplet &fid, int dir)
-{
-    if (dir == 1)
-        return fid.xi;
-    if (dir == 2)
-        return fid.eta;
-    if (dir == 3)
-        return fid.zeta;
-    throw std::runtime_error("edge_fid_from_dir: invalid edge direction.");
-}
+    int edge_fid_from_dir(const IdTriplet &fid, int dir)
+    {
+        if (dir == 1)
+            return fid.xi;
+        if (dir == 2)
+            return fid.eta;
+        if (dir == 3)
+            return fid.zeta;
+        throw std::runtime_error("edge_fid_from_dir: invalid edge direction.");
+    }
 
-void setup_like_face_snapshot(Scalar &buf, FieldBlock &F)
-{
-    if (!F.is_allocated())
-        return;
+    void setup_like_face_snapshot(Scalar &buf, FieldBlock &F)
+    {
+        if (!F.is_allocated())
+            return;
 
-    const Int3 lo = F.get_lo();
-    const Int3 hi = F.get_hi();
-    const int ghost = -lo.i;
-    if (lo.i != -ghost || lo.j != -ghost || lo.k != -ghost)
-        throw std::runtime_error("implicit resistive Bstar scratch: non-standard ghost indexing.");
+        const Int3 lo = F.get_lo();
+        const Int3 hi = F.get_hi();
+        const int ghost = -lo.i;
+        if (lo.i != -ghost || lo.j != -ghost || lo.k != -ghost)
+            throw std::runtime_error("implicit resistive Bstar scratch: non-standard ghost indexing.");
 
-    buf.SetSize(hi.i - lo.i, hi.j - lo.j, hi.k - lo.k, ghost);
-}
+        buf.SetSize(hi.i - lo.i, hi.j - lo.j, hi.k - lo.k, ghost);
+    }
 } // namespace
 
 void MercurySolver::SetupImplicitResistiveDiffusion_()
@@ -85,14 +85,15 @@ void MercurySolver::SetupImplicitResistiveDiffusion_()
         setup_like_face_snapshot(resist_Bstar_ze_[ib], fld_->field(fid_.fid_B.zeta, ib));
     }
 
-    const PetscInt nloc = static_cast<PetscInt>(implicit_resistive_dofs_.size());
+    const PetscInt nloc = static_cast<PetscInt>(implicit_resistive_dofs_.size()); // 本进程需要隐式求解的DOF
     PetscInt nglb = 0;
-    MPI_Allreduce(&nloc, &nglb, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+    MPI_Allreduce(&nloc, &nglb, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD); // 获取全局需要隐式求解的DOF
 
     if (nglb > 0)
     {
         PetscCallAbort(PETSC_COMM_WORLD, VecCreateMPI(PETSC_COMM_WORLD, nloc, nglb, &implicit_resistive_x_));
         PetscCallAbort(PETSC_COMM_WORLD, VecDuplicate(implicit_resistive_x_, &implicit_resistive_b_));
+        // build unknown implicit_resistive_x_ implicit_resistive_b_
 
         PetscCallAbort(PETSC_COMM_WORLD,
                        MatCreateShell(PETSC_COMM_WORLD, nloc, nloc, nglb, nglb,
@@ -100,16 +101,17 @@ void MercurySolver::SetupImplicitResistiveDiffusion_()
         PetscCallAbort(PETSC_COMM_WORLD,
                        MatShellSetOperation(implicit_resistive_A_, MATOP_MULT,
                                             (void (*)(void))&MercurySolver::MatMultImplicitResistive_));
+        // 矩阵向量乘法 A \cdot x, 采用无矩阵形式
 
-        PetscCallAbort(PETSC_COMM_WORLD, KSPCreate(PETSC_COMM_WORLD, &implicit_resistive_ksp_));
+        PetscCallAbort(PETSC_COMM_WORLD, KSPCreate(PETSC_COMM_WORLD, &implicit_resistive_ksp_)); // 创建 PETSc Krylov 求解器对象
         PetscCallAbort(PETSC_COMM_WORLD, KSPSetOperators(implicit_resistive_ksp_,
                                                          implicit_resistive_A_,
-                                                         implicit_resistive_A_));
-        PetscCallAbort(PETSC_COMM_WORLD, KSPSetType(implicit_resistive_ksp_, KSPGMRES));
+                                                         implicit_resistive_A_));        // 告诉 KSP 系数矩阵，预处理矩阵
+        PetscCallAbort(PETSC_COMM_WORLD, KSPSetType(implicit_resistive_ksp_, KSPGMRES)); // 选择 GMRES 求解器
 
         PC pc = nullptr;
         PetscCallAbort(PETSC_COMM_WORLD, KSPGetPC(implicit_resistive_ksp_, &pc));
-        PetscCallAbort(PETSC_COMM_WORLD, PCSetType(pc, PCNONE));
+        PetscCallAbort(PETSC_COMM_WORLD, PCSetType(pc, PCNONE)); // 不使用Precondition
 
         PetscCallAbort(PETSC_COMM_WORLD,
                        KSPSetTolerances(implicit_resistive_ksp_,
@@ -117,7 +119,8 @@ void MercurySolver::SetupImplicitResistiveDiffusion_()
                                         resist_control.implicit_ksp_atol,
                                         PETSC_DEFAULT,
                                         resist_control.implicit_ksp_max_it));
-        PetscCallAbort(PETSC_COMM_WORLD, KSPSetFromOptions(implicit_resistive_ksp_));
+        // rtol--相对残差容差 atol--绝对残差容差 dtol--发散容差,这里用PETSC_DEFAULT max_it--最大迭代次数
+        PetscCallAbort(PETSC_COMM_WORLD, KSPSetFromOptions(implicit_resistive_ksp_)); // 允许运行程序时用 PETSc 命令行参数覆盖设置
     }
 
     implicit_resistive_ready_ = true;
@@ -150,8 +153,8 @@ void MercurySolver::DestroyImplicitResistiveDiffusion_()
 
 void MercurySolver::BuildImplicitResistiveEdgeDofMap_()
 {
-    resist_owner_edges_sorted_.clear();
-    implicit_resistive_dofs_.clear();
+    resist_owner_edges_sorted_.clear(); // 本进程的Edge自由度
+    implicit_resistive_dofs_.clear();   // Edge自由度+Edge的扩散系数eta，且要求eta>0.0
 
     HALO_OWNER::gather_local_owner_edges_sorted(*topo_equiv_, resist_owner_edges_sorted_);
 
@@ -161,7 +164,7 @@ void MercurySolver::BuildImplicitResistiveEdgeDofMap_()
         if (eta <= 0.0)
             continue;
 
-        implicit_resistive_dofs_.push_back({e, eta});
+        implicit_resistive_dofs_.push_back({e, eta}); // 构建Edge自由度+Edge的扩散系数eta
     }
 
     implicit_resistive_local_.assign(implicit_resistive_dofs_.size(), 0.0);
