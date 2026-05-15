@@ -36,26 +36,13 @@ struct NumInfo
 
 struct ResistiveEdgeEMFControl
 {
-    bool enabled = false;
     bool is_Mercury_resistance = false;
     bool use_implicit_mercury_resistance = false;
     int n_subcycles = 1;
 
-    double eta_max = 0.0;
-
     double implicit_ksp_rtol = 1.0e-8;
     double implicit_ksp_atol = 1.0e-12;
     int implicit_ksp_max_it = 200;
-
-    double J_on = 0.0;
-    double J_full = 0.0;
-
-    double osc_on = 0.5;
-    double osc_full = 1.0;
-
-    double J_max_force = 1.0e100;
-
-    double eps = 1.0e-30;
 };
 
 // ---- forward declarations (avoid heavy includes in header) ----
@@ -264,7 +251,6 @@ private:
     //---------------------------------------------------------------
     // For Magnetic
     void AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget);
-    void AddPoleResistiveEdgeEMF_FromJcell_();
     void AddIdealEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
     void AddHallEdgeEMF_();

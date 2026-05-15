@@ -21,11 +21,3 @@ bool    use_implicit_mercury_resistance 0
 double  implicit_resistive_ksp_rtol 1.0e-8
 double  implicit_resistive_ksp_atol 1.0e-12
 int     implicit_resistive_ksp_max_it 200
-
-bool    enable_arti_resistance      1
-double  arti_resistance_max         0.5
-double  arti_resistance_J_on        3000
-double  arti_resistance_J_full      10000
-double  arti_resistance_J_max_force 12000
-double  arti_resistance_osc_on      0.5
-double  arti_resistance_osc_full    1.0
