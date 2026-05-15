@@ -22,9 +22,11 @@ bool MercurySolver::StepOnce()
 {
     Compute_Timestep();
 
+#if HALL_IMPLICIT == 1
     double Emag0 = 0.0;
     if (control_.if_outres)
         Emag0 = ComputeMagEnergy_Cell_();
+#endif
 
     ZeroRHS_();
 
