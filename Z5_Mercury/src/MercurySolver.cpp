@@ -117,9 +117,6 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
             "dB_eta",
             "dB_zeta",
             "dJ_cell",
-            "dEpre_xi",
-            "dEpre_eta",
-            "dEpre_zeta",
             "Eres_xi",
             "Eres_eta",
             "Eres_zeta"};

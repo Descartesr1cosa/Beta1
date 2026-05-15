@@ -167,10 +167,6 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Solid", "Fluid", "dJ_eta", StaggerLocation::EdgeEt, 1, ngg);     // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "dJ_zeta", StaggerLocation::EdgeZe, 1, ngg);    // Solid -> Fluid
         fld->register_coupling_channel("Solid", "Fluid", "dJ_cell", StaggerLocation::Cell, 3, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dEpre_xi", StaggerLocation::EdgeXi, 1, ngg);   // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dEpre_eta", StaggerLocation::EdgeEt, 1, ngg);  // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dEpre_zeta", StaggerLocation::EdgeZe, 1, ngg); // Solid -> Fluid
-
         fld->register_coupling_channel("Fluid", "Solid", "B_xi", StaggerLocation::FaceXi, 1, ngg);       // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "B_eta", StaggerLocation::FaceEt, 1, ngg);      // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "B_zeta", StaggerLocation::FaceZe, 1, ngg);     // Fluid -> Solid
@@ -207,9 +203,6 @@ int main(int arg, char **argv)
         fld->register_coupling_channel("Fluid", "Solid", "dJ_eta", StaggerLocation::EdgeEt, 1, ngg);     // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "dJ_zeta", StaggerLocation::EdgeZe, 1, ngg);    // Fluid -> Solid
         fld->register_coupling_channel("Fluid", "Solid", "dJ_cell", StaggerLocation::Cell, 3, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dEpre_xi", StaggerLocation::EdgeXi, 1, ngg);   // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dEpre_eta", StaggerLocation::EdgeEt, 1, ngg);  // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dEpre_zeta", StaggerLocation::EdgeZe, 1, ngg); // Fluid -> Solid
         // Build coupling buffers (YOU CAN ONLY USE it ONCE!)
         fld->build_coupling_buffers(topology, par->GetInt("dimension"));
         //--------------------------------------------------------------------------
@@ -278,12 +271,6 @@ int main(int arg, char **argv)
         fieldname = "dJ_eta";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "dJ_zeta";
-        hal->register_halo_field(fieldname, HaloLevel::Vertex);
-        fieldname = "dEpre_xi";
-        hal->register_halo_field(fieldname, HaloLevel::Vertex);
-        fieldname = "dEpre_eta";
-        hal->register_halo_field(fieldname, HaloLevel::Vertex);
-        fieldname = "dEpre_zeta";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "dJ_cell";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);

@@ -654,16 +654,6 @@ void MercuryBoundary::InstallDefaultGroups()
     gdJcell.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
     AddGroup(gdJcell);
 
-    BoundGroup gdEpre;
-    gdEpre.name = "dEpre";
-    gdEpre.fields = {"dEpre_xi", "dEpre_eta", "dEpre_zeta"};
-    gdEpre.do_coupling = true;
-    gdEpre.do_physical = true;
-    gdEpre.do_halo = true;
-    gdEpre.halo_level = HaloLevel::Vertex;
-    gdEpre.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};
-    AddGroup(gdEpre);
-
     BoundGroup gBadd;
     gBadd.name = "Badd";
     gBadd.fields = {"Badd_xi", "Badd_eta", "Badd_zeta"};
