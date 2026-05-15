@@ -204,9 +204,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     };
     cb.build_Ehall_from_current_B = [this]()
     {
-        calc_Bcell();
-        Calc_J_Edge();
-        calc_Jcell();
+        UpdateMagneticDerivedFields_();
         AddHallEdgeEMF_();
     };
     cb.calc_Bcell_from_current_Bface = [this]()

@@ -276,6 +276,26 @@ void MercurySolver::calc_Uplus()
     mercury_bound_.Sync("Uplus");
 }
 
+void MercurySolver::UpdateFluidDerivedFields_()
+{
+    calc_PV();
+    calc_Uplus();
+}
+
+void MercurySolver::UpdateMagneticDerivedFields_()
+{
+    // B_face is the CT state; J_cell is reconstructed from mimetic J_edge.
+    calc_Bcell();
+    Calc_J_Edge();
+    calc_Jcell();
+}
+
+void MercurySolver::UpdateDerivedFields_()
+{
+    UpdateMagneticDerivedFields_();
+    UpdateFluidDerivedFields_();
+}
+
 void MercurySolver::calc_Bcell()
 {
     const int nblock = fld_->num_blocks();
@@ -1208,4 +1228,3 @@ void MercurySolver::calc_Jcell()
     // }
     // mercury_bound_.Sync("J_cell");
 }
-

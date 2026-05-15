@@ -6,12 +6,7 @@
 void MercurySolver::Advance()
 {
     // 初始先算一遍派生量（用于输出/诊断）
-    // Boundary_Condition();
-    calc_Bcell();
-    Calc_J_Edge();
-    calc_Jcell();
-    calc_PV();
-    calc_Uplus();
+    UpdateDerivedFields_();
 
     // step=0 也允许输出一次
     control_.UpdateSwitches(*run_data_);
@@ -25,11 +20,54 @@ void MercurySolver::Advance()
 
 bool MercurySolver::StepOnce()
 {
-    // Calculate time step From CFL
     Compute_Timestep();
 
-    // Time Advance
-    Time_Advance();
+    double Emag0 = 0.0;
+    if (control_.if_outres)
+        Emag0 = ComputeMagEnergy_Cell_();
+
+    ZeroRHS_();
+
+    // Conservative Euler update: fluid RHS plus CT induction RHS.
+    Scheme_U_();
+    AddSourceToRHS_Fluid();
+    AssembleRHS_Induction_CT_();
+    ApplyUpdate_Euler_();
+
+    // Mercury internal resistive correction acts only on B_face.
+    if (resist_control.use_implicit_mercury_resistance)
+    {
+        mercury_bound_.Sync("Bface");
+        SolveImplicitResistiveDiffusion_(dt);
+    }
+    else
+    {
+        ResistiveDiffusionSubcycles_();
+    }
+
+#if HALL_IMPLICIT == 1
+    // Implicit Hall substep also updates B_face only.
+    hall_implicit_.SolveOneStep(dt, control_.if_outres);
+    calc_Bcell();
+
+    if (control_.if_outres)
+    {
+        const double Emag1 = ComputeMagEnergy_Cell_();
+        if (par_->GetInt("myid") == 0)
+        {
+            const double dE = Emag1 - Emag0;
+            const double rel = dE / std::max(std::abs(Emag0), 1e-300);
+            std::cout << "[HallOnlyEnergy] dt=" << dt
+                      << " Emag0=" << Emag0
+                      << " Emag1=" << Emag1
+                      << " dE=" << dE
+                      << " rel=" << rel
+                      << std::endl
+                      << std::endl
+                      << std::endl;
+        }
+    }
+#endif
 
     // Record and Update Runtime DATA
     {
@@ -43,11 +81,7 @@ bool MercurySolver::StepOnce()
         mercury_bound_.Sync("Ucell");
         mercury_bound_.Sync("Bface");
 
-        calc_Bcell();
-        Calc_J_Edge();
-        calc_Jcell();
-        calc_PV();
-        calc_Uplus();
+        UpdateDerivedFields_();
     }
 
     // When Stop/Output/Print

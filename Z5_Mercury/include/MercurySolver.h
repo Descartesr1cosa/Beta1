@@ -236,6 +236,9 @@ private:
     void calc_divB();
     void calc_PV();
     void calc_Uplus();
+    void UpdateFluidDerivedFields_();
+    void UpdateMagneticDerivedFields_();
+    void UpdateDerivedFields_();
     void calc_physical_constant(Param *par);
     void PrintMinMaxDiagnostics_();
     // void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
@@ -251,10 +254,7 @@ private:
     //=========================================================================
 
     //=========================================================================
-    void Time_Advance();
-    //---------------------------------------------------------------
     void ZeroRHS_();
-    void AssembleRHS_Fluid_();
     void AssembleRHS_Induction_CT_();
     void ApplyUpdate_Euler_();
     //---------------------------------------------------------------
@@ -263,23 +263,14 @@ private:
     void AddSourceToRHS_Fluid();
     //---------------------------------------------------------------
     // For Magnetic
-    void Build_E_explicit_edge_();
-    void AddResistiveEdgeEMF_();
     void AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget);
     void AddPoleResistiveEdgeEMF_FromJcell_();
     void AddIdealEdgeEMF_();
-    void AddHallEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
+    void AddHallEdgeEMF_();
     void Calc_J_Edge();
-    void FilterPoleNearAxisEedge_();
 
-    void AddHyperResistiveEdgeEMF_();
-    void AddSecondResistiveEdgeEMF_();
-
-    // 只组装 Hall 的 RHS_b（不动 U 的 RHS）
-    void AssembleRHS_Induction_CT_HallOnly_();
     // 只更新 Bface: Bface += dt_sub * RHS_b
-    void ApplyUpdate_Euler_BfaceOnly_(double dt_sub);
     void ApplyUpdate_Euler_BfaceOnly_(double dt_sub, const IdTriplet &fid_RHSB);
     void ResistiveDiffusionSubcycles_();
 
@@ -296,9 +287,7 @@ private:
     double ImplicitResistiveEtaAtEdge_(const TOPO::EdgeLocalID &e) const;
     static PetscErrorCode MatMultImplicitResistive_(Mat A, Vec X, Vec Y);
 
-    void BuildHallFaceEMF_Rusanov_();
     void BuildHallFaceEMF_Rusanov_diff_();
-    void AssembleEdgeEMF_FromFaceE_Hall_();
     //--------------------------------
     //  For Ideal
     void AssembleOneDirectionEMF_(int dir, FieldBlock &E_face,
