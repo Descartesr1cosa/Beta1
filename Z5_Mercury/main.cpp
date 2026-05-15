@@ -81,7 +81,7 @@ int main(int arg, char **argv)
         fld->register_field({"J_xi", StaggerLocation::EdgeXi, 1, ngg});   // Integration of electric current along Edge Xi
         fld->register_field({"J_eta", StaggerLocation::EdgeEt, 1, ngg});  // Integration of electric current along Edge Eta
         fld->register_field({"J_zeta", StaggerLocation::EdgeZe, 1, ngg}); // Integration of electric current along Edge Zeta
-        fld->register_field({"J_cell", StaggerLocation::Cell, 3, ngg});   // Total magnetic fields
+        fld->register_field({"J_cell", StaggerLocation::Cell, 3, ngg});   // Cell-centered current reconstructed from J_edge
 
         // For implicit Hall PreCondition
         fld->register_field({"dE_xi", StaggerLocation::EdgeXi, 1, ngg});

@@ -333,7 +333,8 @@ void MercurySolver::CalcImplicitDeltaJcellFromDeltaB_()
     copy_triplet(fld_, fid_.fid_B, fid_.fid_dB);
     mercury_bound_.Sync("Bface");
     calc_Bcell();
-    calc_Jcell_from_Bcell_metric_();
+    Calc_J_Edge();
+    calc_Jcell();
     RestoreImplicitResistiveBstar_();
     mercury_bound_.Sync("Bface");
 }
@@ -459,8 +460,9 @@ void MercurySolver::SolveImplicitResistiveDiffusion_(double dt_step)
 
     implicit_resistive_dt_ = dt_step;
 
-    calc_Bcell();                    // 根据当前 Bface 得到 Bindcell
-    calc_Jcell_from_Bcell_metric_(); // 根据 Bindcell 得到 Jcell
+    calc_Bcell(); // 根据当前 Bface 得到 cell-centered B 派生量
+    Calc_J_Edge();
+    calc_Jcell(); // Jcell 只由 mimetic J_edge 重构得到
     PackImplicitJcellToEdgeVec_(
         implicit_resistive_b_,
         /*multiply_eta=*/true,

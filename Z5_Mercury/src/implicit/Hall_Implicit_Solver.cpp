@@ -669,7 +669,7 @@ void ImplicitHallSolver::Calc_DeltaJcell_FromDeltaJedge_Frozen_()
         auto &Jeta = fld_->field(fid_.fid_dJ.eta, ib);
         auto &Jzeta = fld_->field(fid_.fid_dJ.zeta, ib);
 
-        auto &W = (*hall_face_scratch_)[ib].dJcell_w;
+        auto &W = fld_->field(fid_.fid_Jcell_from_Jedge_w, ib);
 
         if (!Jcell.is_allocated() || !Jxi.is_allocated() ||
             !Jeta.is_allocated() || !Jzeta.is_allocated())
@@ -970,10 +970,10 @@ void ImplicitHallSolver::BuildLinearHallFaceEMF_()
     {
         auto &scratch = (*hall_face_scratch_)[ib];
 
-        auto &dEhc = scratch.dEhc;  // 3-comp cell
-        auto &Pxi = scratch.P_xi;   // 6-comp xi-face projector
-        auto &Pet = scratch.P_eta;  // 6-comp eta-face projector
-        auto &Pze = scratch.P_zeta; // 6-comp zeta-face projector
+        auto &dEhc = scratch.dEhc; // 3-comp cell
+        auto &Pxi = fld_->field(fid_.Face_projector.xi, ib);
+        auto &Pet = fld_->field(fid_.Face_projector.eta, ib);
+        auto &Pze = fld_->field(fid_.Face_projector.zeta, ib);
 
         auto &Efxi = fld_->field(fid_.fid_Eface.xi, ib); // 3-comp face
         auto &Efet = fld_->field(fid_.fid_Eface.eta, ib);

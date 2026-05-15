@@ -296,34 +296,6 @@ void MercurySolver::SetupHallFaceScratch_()
         buf.Bflat.SetSize(dim1, dim2, dim3, ghost, 3);
         buf.alpha_flat.SetSize(dim1, dim2, dim3, ghost);
         buf.dEhc.SetSize(dim1, dim2, dim3, ghost, 3);
-        // buf.beta_flat.SetSize(dim1, dim2, dim3, ghost);
-        buf.dJcell_w.SetSize(dim1, dim2, dim3, ghost, 36);
-        buf.dBcell_w.SetSize(dim1, dim2, dim3, ghost, 18);
-
-        auto setup_like = [](auto &buf, auto &F, int ncomp)
-        {
-            if (!F.is_allocated())
-                return;
-
-            const Int3 lo = F.get_lo();
-            const Int3 hi = F.get_hi();
-
-            const int ghost = -lo.i;
-            const int dim1 = hi.i - lo.i;
-            const int dim2 = hi.j - lo.j;
-            const int dim3 = hi.k - lo.k;
-
-            buf.SetSize(dim1, dim2, dim3, ghost, ncomp);
-        };
-        // face projectors: 6 comps
-        setup_like(buf.P_xi, fld_->field(fid_.fid_Eface.xi, ib), 6);
-        setup_like(buf.P_eta, fld_->field(fid_.fid_Eface.eta, ib), 6);
-        setup_like(buf.P_zeta, fld_->field(fid_.fid_Eface.zeta, ib), 6);
-
-        // edge dr: 3 comps
-        setup_like(buf.dr_xi, fld_->field(fid_.fid_Ehall.xi, ib), 3);
-        setup_like(buf.dr_eta, fld_->field(fid_.fid_Ehall.eta, ib), 3);
-        setup_like(buf.dr_zeta, fld_->field(fid_.fid_Ehall.zeta, ib), 3);
     }
 
     {
@@ -438,8 +410,7 @@ void MercurySolver::SetupHallFaceScratch_()
             if (!Bc.is_allocated())
                 continue;
 
-            auto &buf = hall_face_scratch_[ib];
-            auto &W = buf.dBcell_w;
+            auto &W = fld_->field(fid_.fid_Bcell_from_Bface_w, ib);
 
             auto &JDxi = fld_->field(fid_.fid_metric.xi, ib);
             auto &JDet = fld_->field(fid_.fid_metric.eta, ib);
@@ -770,8 +741,7 @@ void MercurySolver::SetupHallFaceScratch_()
             if (!Jc.is_allocated())
                 continue;
 
-            auto &buf = hall_face_scratch_[ib];
-            auto &W = buf.dJcell_w;
+            auto &W = fld_->field(fid_.fid_Jcell_from_Jedge_w, ib);
 
             auto &x = grd_->grids(ib).x;
             auto &y = grd_->grids(ib).y;
@@ -1095,7 +1065,7 @@ void MercurySolver::SetupHallFaceScratch_()
     //             continue;
 
     //         auto &buf = hall_face_scratch_[ib];
-    //         auto &W = buf.dBcell_w;
+    //         auto &W = fld_->field(fid_.fid_Bcell_from_Bface_w, ib);
 
     //         auto &JDxi = fld_->field(fid_.fid_metric.xi, ib);
     //         auto &JDet = fld_->field(fid_.fid_metric.eta, ib);
@@ -1371,7 +1341,7 @@ void MercurySolver::SetupHallFaceScratch_()
     //             continue;
 
     //         auto &buf = hall_face_scratch_[ib];
-    //         auto &W = buf.dBcell_w;
+    //         auto &W = fld_->field(fid_.fid_Bcell_from_Bface_w, ib);
 
     //         auto &JDxi = fld_->field(fid_.fid_metric.xi, ib);
     //         auto &JDet = fld_->field(fid_.fid_metric.eta, ib);
@@ -1694,7 +1664,7 @@ void MercurySolver::SetupHallFaceScratch_()
     // continue;
 
     // auto &buf = hall_face_scratch_[ib];
-    // auto &W = buf.dJcell_w;
+    // auto &W = fld_->field(fid_.fid_Jcell_from_Jedge_w, ib);
 
     // auto &dl_xi = fld_->field("dl_xi", ib);
     // auto &dl_eta = fld_->field("dl_eta", ib);
@@ -1947,7 +1917,7 @@ void MercurySolver::SetupHallFaceScratch_()
     //             continue;
 
     //         auto &buf = hall_face_scratch_[ib];
-    //         auto &W = buf.dJcell_w;
+    //         auto &W = fld_->field(fid_.fid_Jcell_from_Jedge_w, ib);
 
     //         auto &dl_xi = fld_->field("dl_xi", ib);
     //         auto &dl_eta = fld_->field("dl_eta", ib);
@@ -2091,8 +2061,8 @@ void MercurySolver::SetupHallFaceScratch_()
             if (!Sfield.is_allocated())
                 return;
 
-            Int3 lo = Sfield.get_lo();
-            Int3 hi = Sfield.get_hi();
+            Int3 lo = Pbuf.get_lo();
+            Int3 hi = Pbuf.get_hi();
 
             for (int i = lo.i; i < hi.i; ++i)
                 for (int j = lo.j; j < hi.j; ++j)
@@ -2125,10 +2095,12 @@ void MercurySolver::SetupHallFaceScratch_()
 
         for (int ib = 0; ib < nb; ++ib)
         {
-            auto &buf = hall_face_scratch_[ib];
-            fill_projector(buf.P_xi, fld_->field(fid_.fid_metric.xi, ib));
-            fill_projector(buf.P_eta, fld_->field(fid_.fid_metric.eta, ib));
-            fill_projector(buf.P_zeta, fld_->field(fid_.fid_metric.zeta, ib));
+            fill_projector(fld_->field(fid_.Face_projector.xi, ib),
+                           fld_->field(fid_.fid_metric.xi, ib));
+            fill_projector(fld_->field(fid_.Face_projector.eta, ib),
+                           fld_->field(fid_.fid_metric.eta, ib));
+            fill_projector(fld_->field(fid_.Face_projector.zeta, ib),
+                           fld_->field(fid_.fid_metric.zeta, ib));
         }
     }
 }

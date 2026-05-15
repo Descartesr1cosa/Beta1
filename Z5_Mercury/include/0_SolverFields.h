@@ -17,11 +17,14 @@ struct SolverFields
     IdTriplet fid_metric;     // (xi,eta,zeta) <- (JDxi,JDet,JDze)
     IdTriplet fid_pinvGT;     // (pinvGT_xi, pinvGT_eta, pinvGT_zeta)  ncomp=9
     IdTriplet fid_pinvAT;     // (pinvAT_xi, pinvAT_eta, pinvAT_zeta)  ncomp=9
+    int fid_Bcell_from_Bface_w = -1; // Cell ncomp=18
+    int fid_Jcell_from_Jedge_w = -1; // Cell ncomp=36
 
     // Face metrics:
     IdTriplet Face_Area;   // Face: |S_xi|  |S_eta| |S_ze| ncomp = 1
     IdTriplet Face_dlstar; // Face: |l*_xi|  |l*_eta| |l*_ze| ncomp = 1
     IdTriplet Face_beta;   // Face: beta=  |l*_|/|S_| ncomp = 1
+    IdTriplet Face_projector; // Face tangent projectors, ncomp = 6
     // Edge metrics:
     IdTriplet Edge_metric; // Edge: S*_xi  S*_eta S*_ze ncomp = 3
     IdTriplet Edge_Astar;  // Edge: |S*_xi|  |S*_eta| |S*_ze| ncomp = 1
@@ -95,6 +98,8 @@ struct SolverFields
         fid_pinvAT.zeta = fld->field_id("pinvAT_zeta");
 
         fid_pinvGT_Cell = fld->field_id("pinvGT_cell");
+        fid_Bcell_from_Bface_w = fld->field_id("Bcell_from_Bface_w");
+        fid_Jcell_from_Jedge_w = fld->field_id("Jcell_from_Jedge_w");
 
         Face_Area.xi = fld->field_id("Area_xi");
         Face_Area.eta = fld->field_id("Area_eta");
@@ -105,6 +110,9 @@ struct SolverFields
         Face_beta.xi = fld->field_id("beta_xi");
         Face_beta.eta = fld->field_id("beta_eta");
         Face_beta.zeta = fld->field_id("beta_zeta");
+        Face_projector.xi = fld->field_id("Pface_xi");
+        Face_projector.eta = fld->field_id("Pface_eta");
+        Face_projector.zeta = fld->field_id("Pface_zeta");
         Edge_metric.xi = fld->field_id("Sstar_xi");
         Edge_metric.eta = fld->field_id("Sstar_eta");
         Edge_metric.zeta = fld->field_id("Sstar_zeta");
@@ -224,6 +232,8 @@ struct SolverFields
         // ---- geometry ----
         require_id(fid_Jac, "Jac");
         require_id(fid_pinvGT_Cell, "pinvGT_Cell");
+        require_id(fid_Bcell_from_Bface_w, "Bcell_from_Bface_w");
+        require_id(fid_Jcell_from_Jedge_w, "Jcell_from_Jedge_w");
         fid_metric.require_all("metric(JDxi/JDet/JDze)");
         fid_pinvGT.require_all("pinvGT(edge)");
         fid_pinvAT.require_all("pinvAT(edge)");
@@ -231,6 +241,7 @@ struct SolverFields
         Face_Area.require_all("Face_Area");
         Face_dlstar.require_all("Face_dlstar");
         Face_beta.require_all("Face_beta");
+        Face_projector.require_all("Face_projector");
 
         Edge_metric.require_all("Edge_metric");
         Edge_Astar.require_all("Edge_Astar");

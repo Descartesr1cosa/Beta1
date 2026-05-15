@@ -28,6 +28,12 @@ void Field::build_geometry(int geomtry_ghost_)
     // from covariant 1-form components at cell centers: v = pinvGT_cell * w
     register_field(FieldDescriptor{"pinvGT_cell", StaggerLocation::Cell, 9, 0});
 
+    // Mimetic reconstruction caches:
+    // B_cell is reconstructed from the six surrounding face 2-form DOFs.
+    // J_cell is reconstructed from the twelve surrounding edge 1-form DOFs.
+    register_field(FieldDescriptor{"Bcell_from_Bface_w", StaggerLocation::Cell, 18, geomtry_ghost_ - 1});
+    register_field(FieldDescriptor{"Jcell_from_Jedge_w", StaggerLocation::Cell, 36, geomtry_ghost_ - 1});
+
     // Face metrics: |S| (primal face area magnitude), dual-edge length |l*|, beta = |l*|/|S|
     register_field(FieldDescriptor{"Area_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_ - 1});   // |S_xi|  (primal face area magnitude)
     register_field(FieldDescriptor{"Area_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_ - 1});  // |S_eta|
@@ -40,6 +46,10 @@ void Field::build_geometry(int geomtry_ghost_)
     register_field(FieldDescriptor{"beta_xi", StaggerLocation::FaceXi, 1, geomtry_ghost_ - 1});   // beta_xi  = |l*_xi|/|S_xi|  (Hodge star *_2 scale)
     register_field(FieldDescriptor{"beta_eta", StaggerLocation::FaceEt, 1, geomtry_ghost_ - 1});  // beta_eta = |l*_eta|/|S_eta|
     register_field(FieldDescriptor{"beta_zeta", StaggerLocation::FaceZe, 1, geomtry_ghost_ - 1}); // beta_ze  = |l*_ze|/|S_ze|
+
+    register_field(FieldDescriptor{"Pface_xi", StaggerLocation::FaceXi, 6, geomtry_ghost_ - 1});
+    register_field(FieldDescriptor{"Pface_eta", StaggerLocation::FaceEt, 6, geomtry_ghost_ - 1});
+    register_field(FieldDescriptor{"Pface_zeta", StaggerLocation::FaceZe, 6, geomtry_ghost_ - 1});
 
     // Edge metrics: primal edge length |e|, dual face area vector S* and magnitude |S*|, alpha = |e|/|S*|
     register_field(FieldDescriptor{"dl_xi", StaggerLocation::EdgeXi, 1, geomtry_ghost_ - 1});   // |e_xi|   (primal edge length along xi)

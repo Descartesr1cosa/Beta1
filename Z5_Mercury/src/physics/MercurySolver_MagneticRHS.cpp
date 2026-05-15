@@ -85,7 +85,8 @@ void MercurySolver::ResistiveDiffusionSubcycles_()
     {
         mercury_bound_.Sync("Bface");
         calc_Bcell();
-        calc_Jcell_from_Bcell_metric_();
+        Calc_J_Edge();
+        calc_Jcell();
 
         for (int ib = 0; ib < nb; ++ib)
         {

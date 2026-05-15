@@ -241,7 +241,6 @@ private:
     // void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
     NumInfo Hall_Num_Limiter(double rhoH, double rhoNa);
 
-    void calc_Jcell_from_Bcell_metric_();
     //=========================================================================
 
     //=========================================================================

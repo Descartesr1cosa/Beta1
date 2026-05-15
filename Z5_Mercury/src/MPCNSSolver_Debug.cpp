@@ -1761,7 +1761,7 @@ void MercurySolver::Debug_TestJOperator_Manufactured(int test_id)
             if (!Jc.is_allocated())
                 continue;
 
-            auto &W = hall_face_scratch_[ib].dJcell_w;
+            auto &W = fld_->field(fid_.fid_Jcell_from_Jedge_w, ib);
 
             Int3 lo = Jc.inner_lo();
             Int3 hi = Jc.inner_hi();
@@ -1834,7 +1834,7 @@ void MercurySolver::Debug_TestJOperator_Manufactured(int test_id)
                     }
         }
 
-        out << "\n[JTEST][" << mode_label << "] dJcell_w conditioning\n";
+        out << "\n[JTEST][" << mode_label << "] Jcell_from_Jedge_w conditioning\n";
         out << std::scientific << std::setprecision(8);
 
         out << "  ALL  max sum|W_Jx| = " << maxWx_all
