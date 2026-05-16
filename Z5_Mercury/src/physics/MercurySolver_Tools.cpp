@@ -1027,6 +1027,210 @@ void MercurySolver::calc_Jcell()
                 }
     }
 
+    if (topo_)
+    {
+        auto solve3x3 = [](double A[3][3], double b[3], double x[3]) -> bool
+        {
+            const double trA = A[0][0] + A[1][1] + A[2][2];
+            const double reg = 1.0e-12 * std::max(1.0, trA);
+
+            A[0][0] += reg;
+            A[1][1] += reg;
+            A[2][2] += reg;
+
+            double M[3][4] = {
+                {A[0][0], A[0][1], A[0][2], b[0]},
+                {A[1][0], A[1][1], A[1][2], b[1]},
+                {A[2][0], A[2][1], A[2][2], b[2]}};
+
+            for (int c = 0; c < 3; ++c)
+            {
+                int piv = c;
+                double amax = std::abs(M[c][c]);
+
+                for (int r0 = c + 1; r0 < 3; ++r0)
+                {
+                    const double av = std::abs(M[r0][c]);
+                    if (av > amax)
+                    {
+                        amax = av;
+                        piv = r0;
+                    }
+                }
+
+                if (amax < 1.0e-300)
+                    return false;
+
+                if (piv != c)
+                {
+                    for (int q = c; q < 4; ++q)
+                        std::swap(M[c][q], M[piv][q]);
+                }
+
+                const double inv = 1.0 / M[c][c];
+                for (int q = c; q < 4; ++q)
+                    M[c][q] *= inv;
+
+                for (int r0 = 0; r0 < 3; ++r0)
+                {
+                    if (r0 == c)
+                        continue;
+
+                    const double fac = M[r0][c];
+                    for (int q = c; q < 4; ++q)
+                        M[r0][q] -= fac * M[c][q];
+                }
+            }
+
+            x[0] = M[0][3];
+            x[1] = M[1][3];
+            x[2] = M[2][3];
+            return true;
+        };
+
+        constexpr double eps_len = 1.0e-14;
+
+        for (const auto &p : topo_->physical_patches)
+        {
+            if (p.bc_name != "Pole")
+                continue;
+
+            const int dir = std::abs(p.direction);
+            if (dir != 1 && dir != 2)
+                continue;
+
+            const int ib = p.this_block;
+            if (ib < 0 || ib >= nblock)
+                continue;
+
+            auto &Jcell = fld_->field(fid_.fid_Jcell, ib);
+            auto &Jxi = fld_->field(fid_.fid_J.xi, ib);
+            auto &Jeta = fld_->field(fid_.fid_J.eta, ib);
+            auto &Jzeta = fld_->field(fid_.fid_J.zeta, ib);
+            auto &dr_xi = fld_->field(fid_.Edge_dr.xi, ib);
+            auto &dr_eta = fld_->field(fid_.Edge_dr.eta, ib);
+            auto &dr_zeta = fld_->field(fid_.Edge_dr.zeta, ib);
+
+            if (!Jcell.is_allocated() || !Jxi.is_allocated() ||
+                !Jeta.is_allocated() || !Jzeta.is_allocated() ||
+                !dr_xi.is_allocated() || !dr_eta.is_allocated() ||
+                !dr_zeta.is_allocated())
+                continue;
+
+            const bool high_side = (p.direction > 0);
+            const Box3 &node = p.this_box_node;
+
+            auto push_edge = [&](FieldBlock &Je, FieldBlock &dr,
+                                 int i, int j, int k,
+                                 double A[3][3], double b[3], int &cnt)
+            {
+                const double dx = dr(i, j, k, 0);
+                const double dy = dr(i, j, k, 1);
+                const double dz = dr(i, j, k, 2);
+                const double L = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (L < eps_len)
+                    return;
+
+                const double tau[3] = {dx / L, dy / L, dz / L};
+                const double y = Je(i, j, k, 0) / L;
+
+                for (int a = 0; a < 3; ++a)
+                {
+                    b[a] += y * tau[a];
+                    for (int c = 0; c < 3; ++c)
+                        A[a][c] += tau[a] * tau[c];
+                }
+
+                ++cnt;
+            };
+
+            auto write_ring = [&](int ic, int jc,
+                                  double A[3][3], double b[3], int cnt,
+                                  int klo, int khi)
+            {
+                if (cnt <= 0)
+                    return;
+
+                double Jp[3] = {0.0, 0.0, 0.0};
+                if (!solve3x3(A, b, Jp))
+                    return;
+
+                for (int k = klo; k < khi; ++k)
+                {
+                    Jcell(ic, jc, k, 0) = Jp[0];
+                    Jcell(ic, jc, k, 1) = Jp[1];
+                    Jcell(ic, jc, k, 2) = Jp[2];
+                }
+            };
+
+            if (dir == 1)
+            {
+                const int ic = high_side ? (node.lo.i - 1) : node.lo.i;
+                const int it = high_side ? ic : (ic + 1);
+
+                for (int j = node.lo.j; j < node.hi.j - 1; ++j)
+                {
+                    double A[3][3] = {
+                        {0.0, 0.0, 0.0},
+                        {0.0, 0.0, 0.0},
+                        {0.0, 0.0, 0.0}};
+                    double b[3] = {0.0, 0.0, 0.0};
+                    int cnt = 0;
+
+                    for (int k = node.lo.k; k < node.hi.k - 1; ++k)
+                    {
+                        // norm edges on the Pole layer
+                        push_edge(Jxi, dr_xi, ic, j, k, A, b, cnt);
+                        push_edge(Jxi, dr_xi, ic, j + 1, k, A, b, cnt);
+                        push_edge(Jxi, dr_xi, ic, j, k + 1, A, b, cnt);
+                        push_edge(Jxi, dr_xi, ic, j + 1, k + 1, A, b, cnt);
+
+                        // axis/rotate edges one layer away from the Pole
+                        push_edge(Jeta, dr_eta, it, j, k, A, b, cnt);
+                        push_edge(Jeta, dr_eta, it, j, k + 1, A, b, cnt);
+                        push_edge(Jzeta, dr_zeta, it, j, k, A, b, cnt);
+                        push_edge(Jzeta, dr_zeta, it, j + 1, k, A, b, cnt);
+                    }
+
+                    write_ring(ic, j, A, b, cnt, node.lo.k, node.hi.k - 1);
+                }
+            }
+            else
+            {
+                const int jc = high_side ? (node.lo.j - 1) : node.lo.j;
+                const int jt = high_side ? jc : (jc + 1);
+
+                for (int i = node.lo.i; i < node.hi.i - 1; ++i)
+                {
+                    double A[3][3] = {
+                        {0.0, 0.0, 0.0},
+                        {0.0, 0.0, 0.0},
+                        {0.0, 0.0, 0.0}};
+                    double b[3] = {0.0, 0.0, 0.0};
+                    int cnt = 0;
+
+                    for (int k = node.lo.k; k < node.hi.k - 1; ++k)
+                    {
+                        // norm edges on the Pole layer
+                        push_edge(Jeta, dr_eta, i, jc, k, A, b, cnt);
+                        push_edge(Jeta, dr_eta, i + 1, jc, k, A, b, cnt);
+                        push_edge(Jeta, dr_eta, i, jc, k + 1, A, b, cnt);
+                        push_edge(Jeta, dr_eta, i + 1, jc, k + 1, A, b, cnt);
+
+                        // axis/rotate edges one layer away from the Pole
+                        push_edge(Jxi, dr_xi, i, jt, k, A, b, cnt);
+                        push_edge(Jxi, dr_xi, i, jt, k + 1, A, b, cnt);
+                        push_edge(Jzeta, dr_zeta, i, jt, k, A, b, cnt);
+                        push_edge(Jzeta, dr_zeta, i + 1, jt, k, A, b, cnt);
+                    }
+
+                    write_ring(i, jc, A, b, cnt, node.lo.k, node.hi.k - 1);
+                }
+            }
+        }
+    }
+
     mercury_bound_.Sync("J_cell");
 
     // const int nblock = fld_->num_blocks();
