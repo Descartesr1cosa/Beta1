@@ -236,6 +236,36 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Eres_eta", "Pole", E_eta_pole);
     RegisterPhysical_("Eres_zeta", "Pole", E_zeta_pole);
 
+    // ------------------------------------------
+    //   J_xi / E_eta / J_zeta
+    // ------------------------------------------
+    // Pole
+    auto J_xi_pole = [this, copy](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        const int dir = (r.direction < 0) ? -r.direction : r.direction;
+
+        if (dir == 1)
+            this->BC_Pole_Jedge_RegulateK_Norm(U, fld, r, ngh); // xi norm
+        else
+            this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
+    };
+    auto J_eta_pole = [this, copy](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        const int dir = (r.direction < 0) ? -r.direction : r.direction;
+
+        if (dir == 2)
+            this->BC_Pole_Jedge_RegulateK_Norm(U, fld, r, ngh); // eta norm
+        else
+            this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
+    };
+    auto J_zeta_pole = [this, copy](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
+    };
+    RegisterPhysical_("J_xi", "Pole", J_xi_pole);
+    RegisterPhysical_("J_eta", "Pole", J_eta_pole);
+    RegisterPhysical_("J_zeta", "Pole", J_zeta_pole);
+
     // -------------------------------------------------------------------------
     // Coupling handlers
     //

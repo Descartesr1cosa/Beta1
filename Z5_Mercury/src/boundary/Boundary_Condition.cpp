@@ -475,6 +475,101 @@ void MercuryBoundary::BC_Pole_Eedge_RegulateK_Norm(FieldBlock &U, Field *fld, co
     }
 }
 
+void MercuryBoundary::BC_Pole_Jedge_RegulateK_Norm(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+{
+    const Box3 &inner = r.inner_slab;
+    const int ax = std::abs(r.direction);
+
+    auto zero_ghost = [&]()
+    {
+        const Box3 g = BoundaryCore::MakeGhostSlabFromInner(inner, r.direction, ngh);
+        for (int i = g.lo.i; i < g.hi.i; ++i)
+            for (int j = g.lo.j; j < g.hi.j; ++j)
+                for (int k = g.lo.k; k < g.hi.k; ++k)
+                    U(i, j, k, 0) = 0.0;
+    };
+
+    if (!fld || (ax != 1 && ax != 2))
+    {
+        zero_ghost();
+        return;
+    }
+
+    const std::string fname = U.descriptor().name;
+    const int ib = r.this_block;
+
+    auto get_block = [&](const std::string &name) -> FieldBlock *
+    {
+        if (!fld->has_field(name))
+            return nullptr;
+
+        FieldBlock &F = fld->field(name, ib);
+        if (!F.is_allocated())
+            return nullptr;
+
+        return &F;
+    };
+
+    constexpr double eps_area = 1.0e-300;
+
+    // Pole norm edge:
+    // Use beta*Bface to convert the magnetic 2-form on a primal face to the
+    // line integral on the corresponding dual edge, then use the uncapped
+    // dl/Astar ratio to get the edge current 1-form. The stored alpha_* is
+    // intentionally not used here because it is capped to zero when the dual
+    // face touches the Pole.
+    if (ax == 1 && fname == "J_xi")
+    {
+        FieldBlock *Bze = get_block("B_zeta");
+        FieldBlock *beta_ze = get_block("beta_zeta");
+        FieldBlock *dl_xi = get_block("dl_xi");
+        FieldBlock *Ast_xi = get_block("Astar_xi");
+
+        if (Bze && beta_ze && dl_xi && Ast_xi)
+        {
+            for (int i = inner.lo.i; i < inner.hi.i; ++i)
+                for (int j = inner.lo.j; j < inner.hi.j; ++j)
+                    for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    {
+                        const double circ =
+                            (*beta_ze)(i, j, k, 0) * (*Bze)(i, j, k, 0) -
+                            (*beta_ze)(i, j - 1, k, 0) * (*Bze)(i, j - 1, k, 0);
+
+                        const double Astar = (*Ast_xi)(i, j, k, 0);
+                        const double dl = (*dl_xi)(i, j, k, 0);
+
+                        U(i, j, k, 0) = (std::abs(Astar) <= eps_area) ? 0.0 : (dl / Astar) * circ;
+                    }
+        }
+    }
+    else if (ax == 2 && fname == "J_eta")
+    {
+        FieldBlock *Bze = get_block("B_zeta");
+        FieldBlock *beta_ze = get_block("beta_zeta");
+        FieldBlock *dl_et = get_block("dl_eta");
+        FieldBlock *Ast_et = get_block("Astar_eta");
+
+        if (Bze && beta_ze && dl_et && Ast_et)
+        {
+            for (int i = inner.lo.i; i < inner.hi.i; ++i)
+                for (int j = inner.lo.j; j < inner.hi.j; ++j)
+                    for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    {
+                        const double circ =
+                            (*beta_ze)(i - 1, j, k, 0) * (*Bze)(i - 1, j, k, 0) -
+                            (*beta_ze)(i, j, k, 0) * (*Bze)(i, j, k, 0);
+
+                        const double Astar = (*Ast_et)(i, j, k, 0);
+                        const double dl = (*dl_et)(i, j, k, 0);
+
+                        U(i, j, k, 0) = (std::abs(Astar) <= eps_area) ? 0.0 : (dl / Astar) * circ;
+                    }
+        }
+    }
+
+    zero_ghost();
+}
+
 void MercuryBoundary::BC_Farfield_Eedge_set_zerocurl(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
 {
     double u_inf[3] = {bc_state_.q_pv_inf[0], bc_state_.q_pv_inf[1], bc_state_.q_pv_inf[2]};

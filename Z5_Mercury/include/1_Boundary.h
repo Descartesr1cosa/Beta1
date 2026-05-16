@@ -128,6 +128,7 @@ private:
     void BC_Pole_Eedge_Axis(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Pole_Eedge_Zero_Rotate(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Pole_Eedge_RegulateK_Norm(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
+    void BC_Pole_Jedge_RegulateK_Norm(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
 
     void BC_Pole_Bface_Collapse_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
     void BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh);
