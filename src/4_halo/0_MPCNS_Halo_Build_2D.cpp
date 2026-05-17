@@ -3,12 +3,12 @@
 #include "4_halo/detail/halo_build_tools.h"
 #include "4_halo/detail/halo_build_boxmakers.h"
 
-void Halo::build_parallel_2DCorner_pattern(StaggerLocation loc, int nghost)
+void Halo::build_parallel_2DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost)
 {
     int myid;
     PARALLEL::mpi_rank(&myid);
 
-    PatternKey key{loc, nghost};
+    PatternKey key{field_name, loc, nghost};
     if (parallel_edge_patterns_recv.count(key))
         return;
 
@@ -22,9 +22,13 @@ void Halo::build_parallel_2DCorner_pattern(StaggerLocation loc, int nghost)
     // 每个 neighbor_rank 自增 tag
     std::map<int, int> next_tag;
 
+    const int fid = fld_->field_id(field_name);
+
     for (TOPO::EdgePatch &ep : topo_->parallel_edge_patches)
     {
         if (ep.is_coupling)
+            continue;
+        if (!field_active_(fid, ep.this_block) || !field_active_on_block_name_(fid, ep.nb_block_name))
             continue;
         //=========================
         // 1. 先搞清发送侧的方向
@@ -83,7 +87,7 @@ void Halo::build_parallel_2DCorner_pattern(StaggerLocation loc, int nghost)
         // 3. 打一个 EdgeMeta，准备发给 send_rank
         //=========================
         EdgeMeta meta;
-        meta.key = key;
+        meta.key = {loc, nghost};
         meta.recv_rank = ep.this_rank;
         meta.send_rank = ep.nb_rank;
         meta.recv_block = ep.this_block;
@@ -150,9 +154,9 @@ void Halo::build_parallel_2DCorner_pattern(StaggerLocation loc, int nghost)
     parallel_edge_patterns_send[key] = std::move(pat_send);
 }
 
-void Halo::build_inner_2DCorner_pattern(StaggerLocation loc, int nghost)
+void Halo::build_inner_2DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost)
 {
-    PatternKey key{loc, nghost};
+    PatternKey key{field_name, loc, nghost};
     if (inner_edge_patterns_.find(key) != inner_edge_patterns_.end())
         return; // 已经建过
 
@@ -161,9 +165,13 @@ void Halo::build_inner_2DCorner_pattern(StaggerLocation loc, int nghost)
     pat.nghost = nghost;
     pat.regions.clear();
 
+    const int fid = fld_->field_id(field_name);
+
     for (TOPO::EdgePatch &ep : topo_->inner_edge_patches)
     {
         if (ep.is_coupling)
+            continue;
+        if (!field_active_(fid, ep.this_block) || !field_active_(fid, ep.nb_block))
             continue;
         //=====================================================================
         // 获取邻居block中edge的dir1 dir2

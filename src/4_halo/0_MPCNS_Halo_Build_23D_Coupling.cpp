@@ -88,7 +88,7 @@ void Halo::build_coupling_parallel_2DCorner_pattern(const std::string &src,
 
         // --- meta for src side to build send_box ---
         EdgeMeta meta;
-        meta.key = PatternKey{loc, nghost};
+        meta.key = {loc, nghost};
         meta.recv_rank = ep.this_rank;
         meta.send_rank = ep.nb_rank;
         meta.recv_block = ep.this_block;
@@ -245,7 +245,7 @@ void Halo::build_coupling_parallel_3DCorner_pattern(const std::string &src,
         // 3) send VertexMeta to src rank so it can build its send pattern
         //=========================
         VertexMeta meta;
-        meta.key = PatternKey{loc, nghost};
+        meta.key = {loc, nghost};
         meta.recv_rank = vp.this_rank; // dst
         meta.send_rank = vp.nb_rank;   // src
         meta.recv_block = vp.this_block;

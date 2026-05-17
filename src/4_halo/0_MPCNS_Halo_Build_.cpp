@@ -46,10 +46,9 @@ void Halo::build_registered_patterns()
     // 维度
     const int dim = fld_->grd->dimension;
 
-    using PatternKey = std::pair<StaggerLocation, int>;
-    std::set<PatternKey> face_keys, edge_keys, vertex_keys;
-
-    // 1) 收集 keys
+    // 1) Build patterns per field. Material-restricted fields can share
+    //    location/nghost with full-domain fields, but their active block set
+    //    is different.
     for (const auto &kv : halo_registry_)
     {
         const std::string &fname = kv.first;
@@ -58,44 +57,23 @@ void Halo::build_registered_patterns()
         int fid = fld_->field_id(fname); // 这里要求 field_id 不产生副作用；最好配合 has_field
         const auto &desc = fld_->descriptor(fid);
 
-        PatternKey key = {desc.location, desc.nghost};
-        face_keys.insert(key);
+        build_inner_1DCorner_pattern(fname, desc.location, desc.nghost);
+        build_parallel_1DCorner_pattern(fname, desc.location, desc.nghost);
 
         if (dim >= 2 && static_cast<int>(lv) >= static_cast<int>(HaloLevel::Edge))
-            edge_keys.insert(key);
+        {
+            build_inner_2DCorner_pattern(fname, desc.location, desc.nghost);
+            build_parallel_2DCorner_pattern(fname, desc.location, desc.nghost);
+        }
 
         if (dim >= 3 && static_cast<int>(lv) >= static_cast<int>(HaloLevel::Vertex))
-            vertex_keys.insert(key);
-    }
-
-    // 2) Face patterns
-    for (const auto &k : face_keys)
-    {
-        build_inner_1DCorner_pattern(k.first, k.second);
-        build_parallel_1DCorner_pattern(k.first, k.second);
-    }
-
-    // 3) Edge patterns
-    if (!edge_keys.empty())
-    {
-        for (const auto &k : edge_keys)
         {
-            build_inner_2DCorner_pattern(k.first, k.second);
-            build_parallel_2DCorner_pattern(k.first, k.second);
+            build_inner_3DCorner_pattern(fname, desc.location, desc.nghost);
+            build_parallel_3DCorner_pattern(fname, desc.location, desc.nghost);
         }
     }
 
-    // 4) Vertex patterns
-    if (!vertex_keys.empty())
-    {
-        for (const auto &k : vertex_keys)
-        {
-            build_inner_3DCorner_pattern(k.first, k.second);
-            build_parallel_3DCorner_pattern(k.first, k.second);
-        }
-    }
-
-    // 5) Coupling parallel corner patterns (directed src -> dst)
+    // 2) Coupling parallel corner patterns (directed src -> dst)
     //    Build once here to avoid lazy rebuild during frequent coupling exchanges.
     const auto &cpairs = fld_->coupling_pairs();
     if (!cpairs.empty())
@@ -122,9 +100,9 @@ void Halo::build_registered_patterns()
             const std::string &src = pd.pair.src;
             const std::string &dst = pd.pair.dst;
 
-            std::set<PatternKey> ckeys;
+            std::set<std::pair<StaggerLocation, int>> ckeys;
             for (const auto &ch : pd.channels)
-                ckeys.insert(PatternKey{ch.location, ch.nghost});
+                ckeys.insert({ch.location, ch.nghost});
 
             if (dim >= 2 && has_parallel_coupling_edge(src, dst))
             {

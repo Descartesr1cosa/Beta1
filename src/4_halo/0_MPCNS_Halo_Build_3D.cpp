@@ -3,12 +3,12 @@
 #include "4_halo/detail/halo_build_boxmakers.h"
 #include "4_halo/detail/halo_build_tools.h"
 
-void Halo::build_parallel_3DCorner_pattern(StaggerLocation loc, int nghost)
+void Halo::build_parallel_3DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost)
 {
     int myid;
     PARALLEL::mpi_rank(&myid);
 
-    PatternKey key{loc, nghost};
+    PatternKey key{field_name, loc, nghost};
     if (parallel_vertex_patterns_recv.count(key))
         return;
 
@@ -22,9 +22,13 @@ void Halo::build_parallel_3DCorner_pattern(StaggerLocation loc, int nghost)
     // 每个 neighbor_rank 自增 tag
     std::map<int, int> next_tag;
 
+    const int fid = fld_->field_id(field_name);
+
     for (TOPO::VertexPatch &vp : topo_->parallel_vertex_patches)
     {
         if (vp.is_coupling)
+            continue;
+        if (!field_active_(fid, vp.this_block) || !field_active_on_block_name_(fid, vp.nb_block_name))
             continue;
         //=========================
         // 1. 先搞清发送侧的方向
@@ -90,7 +94,7 @@ void Halo::build_parallel_3DCorner_pattern(StaggerLocation loc, int nghost)
         // 3. 打一个 EdgeMeta，准备发给 send_rank
         //=========================
         VertexMeta meta;
-        meta.key = key;
+        meta.key = {loc, nghost};
         meta.recv_rank = vp.this_rank;
         meta.send_rank = vp.nb_rank;
         meta.recv_block = vp.this_block;
@@ -159,9 +163,9 @@ void Halo::build_parallel_3DCorner_pattern(StaggerLocation loc, int nghost)
     parallel_vertex_patterns_send[key] = std::move(pat_send);
 }
 
-void Halo::build_inner_3DCorner_pattern(StaggerLocation loc, int nghost)
+void Halo::build_inner_3DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost)
 {
-    PatternKey key{loc, nghost};
+    PatternKey key{field_name, loc, nghost};
     if (inner_vertex_patterns_.count(key))
         return;
 
@@ -169,9 +173,13 @@ void Halo::build_inner_3DCorner_pattern(StaggerLocation loc, int nghost)
     pat.location = loc;
     pat.nghost = nghost;
 
+    const int fid = fld_->field_id(field_name);
+
     for (TOPO::VertexPatch &vp : topo_->inner_vertex_patches)
     {
         if (vp.is_coupling)
+            continue;
+        if (!field_active_(fid, vp.this_block) || !field_active_(fid, vp.nb_block))
             continue;
         //=====================================================================
         // 获取邻居block中edge的dir1 dir2

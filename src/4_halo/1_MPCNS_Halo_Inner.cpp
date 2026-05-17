@@ -19,7 +19,7 @@ void Halo::exchange_inner(std::string field_name)
         exit(-1);
     }
 
-    PatternKey key = {desc->location, desc->nghost};
+    PatternKey key = {field_name, desc->location, desc->nghost};
 
     // 找到该 (location, nghost) 的 halo pattern
     auto it = inner_patterns_.find(key);
@@ -85,7 +85,7 @@ void Halo::exchange_inner_edge(std::string field_name)
         exit(-1);
     }
 
-    PatternKey key = {desc->location, desc->nghost};
+    PatternKey key = {field_name, desc->location, desc->nghost};
 
     // 找到该 (location, nghost) 的 halo pattern
     auto it = inner_edge_patterns_.find(key);
@@ -153,7 +153,7 @@ void Halo::exchange_inner_vertex(std::string field_name)
         exit(-1);
     }
 
-    PatternKey key = {desc->location, desc->nghost};
+    PatternKey key = {field_name, desc->location, desc->nghost};
 
     // 找到该 (location, nghost) 的 halo pattern
     auto it = inner_vertex_patterns_.find(key);

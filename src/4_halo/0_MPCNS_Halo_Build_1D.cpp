@@ -2,9 +2,9 @@
 #include "4_halo/detail/halo_build_tools.h"
 #include "4_halo/detail/halo_build_boxmakers.h"
 
-void Halo::build_inner_1DCorner_pattern(StaggerLocation loc, int nghost)
+void Halo::build_inner_1DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost)
 {
-    PatternKey key{loc, nghost};
+    PatternKey key{field_name, loc, nghost};
     // 已经 build 过了，直接返回，避免重复构造
     if (inner_patterns_.find(key) != inner_patterns_.end())
         return;
@@ -14,6 +14,8 @@ void Halo::build_inner_1DCorner_pattern(StaggerLocation loc, int nghost)
     pat.nghost = nghost;
     pat.regions.clear();
 
+    const int fid = fld_->field_id(field_name);
+
     // 遍历所有 inner_patches（同一 rank 的块-块接口）
     for (const TOPO::InterfacePatch &patch : topo_->inner_patches)
     {
@@ -22,6 +24,8 @@ void Halo::build_inner_1DCorner_pattern(StaggerLocation loc, int nghost)
 
         const int this_b = patch.this_block;
         const int nb_b = patch.nb_block;
+        if (!field_active_(fid, this_b) || !field_active_(fid, nb_b))
+            continue;
 
         // 取出两个 block
         const Block &blk_this = fld_->grd->grids(this_b); // blocks_ 是 Field 里的
@@ -58,9 +62,9 @@ void Halo::build_inner_1DCorner_pattern(StaggerLocation loc, int nghost)
     inner_patterns_[key] = std::move(pat);
 }
 
-void Halo::build_parallel_1DCorner_pattern(StaggerLocation loc, int nghost)
+void Halo::build_parallel_1DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost)
 {
-    PatternKey key{loc, nghost};
+    PatternKey key{field_name, loc, nghost};
     if (parallel_patterns_.find(key) != parallel_patterns_.end())
         return; // 已经建过，直接返回
 
@@ -69,6 +73,8 @@ void Halo::build_parallel_1DCorner_pattern(StaggerLocation loc, int nghost)
     pat.nghost = nghost;
     pat.regions.clear();
 
+    const int fid = fld_->field_id(field_name);
+
     // 遍历所有 parallel_patches（跨 rank 的接口）
     for (const TOPO::InterfacePatch &patch : topo_->parallel_patches)
     {
@@ -76,6 +82,8 @@ void Halo::build_parallel_1DCorner_pattern(StaggerLocation loc, int nghost)
             continue; // 跳过耦合接口
 
         const int this_b = patch.this_block;
+        if (!field_active_(fid, this_b) || !field_active_on_block_name_(fid, patch.nb_block_name))
+            continue;
 
         // 只知道本 rank 上的 block，邻居 block 不在本 rank 上
         const Block &blk_this = fld_->grd->grids(this_b);

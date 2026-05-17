@@ -23,7 +23,7 @@ void Halo::exchange_parallel(std::string field_name)
         std::exit(-1);
     }
 
-    PatternKey key{desc->location, desc->nghost};
+    PatternKey key{field_name, desc->location, desc->nghost};
 
     //=========================================================================
     // 2. 找到对应的 parallel pattern
@@ -247,7 +247,7 @@ void Halo::exchange_parallel_vertex(std::string field_name)
         std::exit(-1);
     }
 
-    PatternKey key{desc->location, desc->nghost};
+    PatternKey key{field_name, desc->location, desc->nghost};
 
     //=========================================================================
     // 2. 找到对应的 parallel pattern
@@ -485,7 +485,7 @@ void Halo::exchange_parallel_edge(std::string field_name)
         std::exit(-1);
     }
 
-    PatternKey key{desc->location, desc->nghost};
+    PatternKey key{field_name, desc->location, desc->nghost};
 
     //=========================================================================
     // 2. 找到对应的 parallel pattern

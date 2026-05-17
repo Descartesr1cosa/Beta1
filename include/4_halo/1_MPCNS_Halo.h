@@ -131,8 +131,24 @@ private:
     // 同一个 field_name 多次注册时取更高等级（FaceOnly < Edge < Vertex）
     std::unordered_map<std::string, HaloLevel> halo_registry_;
 
-    // key = (StaggerLocation, nghost)，value = HaloPattern
-    using PatternKey = std::pair<StaggerLocation, int>;
+    // key = (field_name, StaggerLocation, nghost)，value = HaloPattern
+    // Patterns must be field-specific because material-restricted fields
+    // allocate only on a subset of blocks.
+    struct PatternKey
+    {
+        std::string field_name;
+        StaggerLocation loc;
+        int nghost;
+
+        bool operator<(const PatternKey &o) const
+        {
+            if (field_name != o.field_name)
+                return field_name < o.field_name;
+            if ((int)loc != (int)o.loc)
+                return (int)loc < (int)o.loc;
+            return nghost < o.nghost;
+        }
+    };
     std::map<PatternKey, HaloPattern> inner_patterns_;
     std::map<PatternKey, HaloPattern> parallel_patterns_;
 
@@ -183,12 +199,12 @@ private:
 
     //=========================================================================
 
-    void build_inner_1DCorner_pattern(StaggerLocation loc, int nghost);
-    void build_parallel_1DCorner_pattern(StaggerLocation loc, int nghost);
-    void build_inner_2DCorner_pattern(StaggerLocation loc, int nghost);
-    void build_parallel_2DCorner_pattern(StaggerLocation loc, int nghost);
-    void build_inner_3DCorner_pattern(StaggerLocation loc, int nghost);
-    void build_parallel_3DCorner_pattern(StaggerLocation loc, int nghost);
+    void build_inner_1DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost);
+    void build_parallel_1DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost);
+    void build_inner_2DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost);
+    void build_parallel_2DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost);
+    void build_inner_3DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost);
+    void build_parallel_3DCorner_pattern(const std::string &field_name, StaggerLocation loc, int nghost);
 
     // Coupling (Parallel) corner patterns (directed src -> dst)
     void build_coupling_parallel_2DCorner_pattern(const std::string &src,
@@ -210,5 +226,11 @@ private:
     bool field_active_(int fid, int iblock) const
     {
         return fld_->field(fid, iblock).is_allocated();
+    }
+
+    bool field_active_on_block_name_(int fid, const std::string &block_name) const
+    {
+        const FieldDescriptor &desc = fld_->descriptor(fid);
+        return desc.physics.empty() || block_name == desc.physics;
     }
 };
