@@ -30,7 +30,12 @@ void Halo::exchange_parallel(std::string field_name)
     auto it = parallel_patterns_.find(key);
     if (it == parallel_patterns_.end())
     {
-        std::cout << "Fatal Error!!! Can not find Parallel Halo pattern of field:\t"
+        build_parallel_1DCorner_pattern(field_name, desc->location, desc->nghost);
+        it = parallel_patterns_.find(key);
+    }
+    if (it == parallel_patterns_.end())
+    {
+        std::cout << "Fatal Error!!! Can not build Parallel Halo pattern of field:\t"
                   << field_name << std::endl;
         std::exit(-1);
     }
@@ -252,17 +257,18 @@ void Halo::exchange_parallel_vertex(std::string field_name)
     //=========================================================================
     // 2. 找到对应的 parallel pattern
     auto it_send = parallel_vertex_patterns_send.find(key);
-    if (it_send == parallel_vertex_patterns_send.end())
-    {
-        std::cout << "Fatal Error!!! Can not find Parallel Halo pattern of field:\t"
-                  << field_name << std::endl;
-        std::exit(-1);
-    }
-
     auto it_recv = parallel_vertex_patterns_recv.find(key);
-    if (it_recv == parallel_vertex_patterns_recv.end())
+    if (it_send == parallel_vertex_patterns_send.end() ||
+        it_recv == parallel_vertex_patterns_recv.end())
     {
-        std::cout << "Fatal Error!!! Can not find Parallel Halo pattern of field:\t"
+        build_parallel_3DCorner_pattern(field_name, desc->location, desc->nghost);
+        it_send = parallel_vertex_patterns_send.find(key);
+        it_recv = parallel_vertex_patterns_recv.find(key);
+    }
+    if (it_send == parallel_vertex_patterns_send.end() ||
+        it_recv == parallel_vertex_patterns_recv.end())
+    {
+        std::cout << "Fatal Error!!! Can not build Parallel Halo pattern of field:\t"
                   << field_name << std::endl;
         std::exit(-1);
     }
@@ -490,17 +496,18 @@ void Halo::exchange_parallel_edge(std::string field_name)
     //=========================================================================
     // 2. 找到对应的 parallel pattern
     auto it_send = parallel_edge_patterns_send.find(key);
-    if (it_send == parallel_edge_patterns_send.end())
-    {
-        std::cout << "Fatal Error!!! Can not find Parallel Halo pattern of field:\t"
-                  << field_name << std::endl;
-        std::exit(-1);
-    }
-
     auto it_recv = parallel_edge_patterns_recv.find(key);
-    if (it_recv == parallel_edge_patterns_recv.end())
+    if (it_send == parallel_edge_patterns_send.end() ||
+        it_recv == parallel_edge_patterns_recv.end())
     {
-        std::cout << "Fatal Error!!! Can not find Parallel Halo pattern of field:\t"
+        build_parallel_2DCorner_pattern(field_name, desc->location, desc->nghost);
+        it_send = parallel_edge_patterns_send.find(key);
+        it_recv = parallel_edge_patterns_recv.find(key);
+    }
+    if (it_send == parallel_edge_patterns_send.end() ||
+        it_recv == parallel_edge_patterns_recv.end())
+    {
+        std::cout << "Fatal Error!!! Can not build Parallel Halo pattern of field:\t"
                   << field_name << std::endl;
         std::exit(-1);
     }

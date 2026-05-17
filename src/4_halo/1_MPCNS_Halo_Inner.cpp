@@ -25,7 +25,12 @@ void Halo::exchange_inner(std::string field_name)
     auto it = inner_patterns_.find(key);
     if (it == inner_patterns_.end())
     {
-        std::cout << "Can not find the  Halo pattern of field:\t" << field_name << std::endl;
+        build_inner_1DCorner_pattern(field_name, desc->location, desc->nghost);
+        it = inner_patterns_.find(key);
+    }
+    if (it == inner_patterns_.end())
+    {
+        std::cout << "Can not build the  Halo pattern of field:\t" << field_name << std::endl;
         exit(-1);
     }
 
@@ -91,7 +96,12 @@ void Halo::exchange_inner_edge(std::string field_name)
     auto it = inner_edge_patterns_.find(key);
     if (it == inner_edge_patterns_.end())
     {
-        std::cout << "Can not find the  Halo pattern of field:\t" << field_name << std::endl;
+        build_inner_2DCorner_pattern(field_name, desc->location, desc->nghost);
+        it = inner_edge_patterns_.find(key);
+    }
+    if (it == inner_edge_patterns_.end())
+    {
+        std::cout << "Can not build the  Halo pattern of field:\t" << field_name << std::endl;
         exit(-1);
     }
 
@@ -159,7 +169,12 @@ void Halo::exchange_inner_vertex(std::string field_name)
     auto it = inner_vertex_patterns_.find(key);
     if (it == inner_vertex_patterns_.end())
     {
-        std::cout << "Can not find the  Halo pattern of field:\t" << field_name << std::endl;
+        build_inner_3DCorner_pattern(field_name, desc->location, desc->nghost);
+        it = inner_vertex_patterns_.find(key);
+    }
+    if (it == inner_vertex_patterns_.end())
+    {
+        std::cout << "Can not build the  Halo pattern of field:\t" << field_name << std::endl;
         exit(-1);
     }
 
