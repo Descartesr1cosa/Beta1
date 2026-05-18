@@ -1,5 +1,69 @@
 #include "MercurySolver.h"
 
+#include <algorithm>
+#include <cmath>
+
+void MercurySolver::AddArtificialResistivityToEdgeEMF_()
+{
+    const double eta_max = arti_resist_control.eta_max;
+    if (eta_max <= 0.0)
+        return;
+
+    constexpr double small = 1.0e-30;
+    const double J_start = arti_resist_control.J_range_start;
+    const double J_on = arti_resist_control.J_range_on;
+
+    auto eta_art = [&](double Jmag) -> double
+    {
+        if (J_on <= J_start)
+            return (Jmag > J_start) ? eta_max : 0.0;
+
+        double q = (Jmag - J_start) / (J_on - J_start);
+        q = std::max(0.0, std::min(1.0, q));
+        const double S = q * q * (3.0 - 2.0 * q);
+        return eta_max * S;
+    };
+
+    auto add_one_edge = [&](FieldBlock &E, FieldBlock &J, FieldBlock &dr)
+    {
+        if (!E.is_allocated() || !J.is_allocated() || !dr.is_allocated())
+            return;
+
+        const Int3 lo = E.inner_lo();
+        const Int3 hi = E.inner_hi();
+
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                {
+                    const double J1form = J(i, j, k, 0);
+                    const double dx = dr(i, j, k, 0);
+                    const double dy = dr(i, j, k, 1);
+                    const double dz = dr(i, j, k, 2);
+                    const double dr_len = std::sqrt(dx * dx + dy * dy + dz * dz);
+                    const double Jmag = std::abs(J1form) / std::max(dr_len, small);
+
+                    E(i, j, k, 0) += eta_art(Jmag) * J1form;
+                }
+    };
+
+    const int nb = fld_->num_blocks();
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        add_one_edge(fld_->field(fid_.fid_E.xi, ib),
+                     fld_->field(fid_.fid_J.xi, ib),
+                     fld_->field(fid_.Edge_dr.xi, ib));
+
+        add_one_edge(fld_->field(fid_.fid_E.eta, ib),
+                     fld_->field(fid_.fid_J.eta, ib),
+                     fld_->field(fid_.Edge_dr.eta, ib));
+
+        add_one_edge(fld_->field(fid_.fid_E.zeta, ib),
+                     fld_->field(fid_.fid_J.zeta, ib),
+                     fld_->field(fid_.Edge_dr.zeta, ib));
+    }
+}
+
 void MercurySolver::AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget)
 {
     if (!resist_control.is_Mercury_resistance)

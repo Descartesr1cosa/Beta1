@@ -30,6 +30,7 @@ void MercurySolver::AssembleRHS_Induction_CT_()
 
     AddIdealEdgeEMF_();
     AddAmbipolarEdgeEMF_();
+    AddArtificialResistivityToEdgeEMF_();
 
     mercury_bound_.Sync("Eedge");
 

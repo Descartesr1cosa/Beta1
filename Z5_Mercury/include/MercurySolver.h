@@ -45,6 +45,13 @@ struct ResistiveEdgeEMFControl
     int implicit_ksp_max_it = 200;
 };
 
+struct ArtificialResistivityControl
+{
+    double eta_max = 0.0;
+    double J_range_start = 0.0;
+    double J_range_on = 0.0;
+};
+
 // ---- forward declarations (avoid heavy includes in header) ----
 class Grid;
 namespace TOPO
@@ -131,6 +138,7 @@ private:
     double inver_Rem{0.0};
 
     ResistiveEdgeEMFControl resist_control;
+    ArtificialResistivityControl arti_resist_control;
 
     struct ImplicitResistiveDof
     {
@@ -251,6 +259,7 @@ private:
     //---------------------------------------------------------------
     // For Magnetic
     void AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget);
+    void AddArtificialResistivityToEdgeEMF_();
     void AddIdealEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
     void AddHallEdgeEMF_();
