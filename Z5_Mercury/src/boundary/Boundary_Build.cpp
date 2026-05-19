@@ -109,12 +109,15 @@ void MercuryBoundary::InstallHandlers()
     RegisterPhysical_("Bind_cell", "Farfield", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                       { this->BC_Farfield_Bface(U, fld, r, ngh); });
     // J_cell Pole无需特别处理，在计算的时候就已经处理过了
-    // J_cell 壁面层cell置零，虚网格会有耦合场拷贝
-    RegisterPhysical_("J_cell", "Coupled-Solid",
-                      [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
-                      {
-                          this->BC_Solid_Surface_Jcell(U, fld, r, ngh);
-                      });
+    // J_cell 壁面层 cell 复制域内相邻一层，虚网格再从该壁面层拷贝
+    if (!is_Mercury_interior_resis)
+    {
+        RegisterPhysical_("J_cell", "Coupled-Solid",
+                          [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                          {
+                              this->BC_Solid_Surface_Jcell(U, fld, r, ngh);
+                          });
+    }
     // -------------------------------------------------------------------------
     // Face: B_xi/eta/zeta Eface_xi/eta/zeta
     // -------------------------------------------------------------------------

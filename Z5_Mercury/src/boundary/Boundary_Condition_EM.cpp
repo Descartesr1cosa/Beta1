@@ -383,13 +383,41 @@ void MercuryBoundary::BC_Solid_Surface_Jcell(FieldBlock &U, Field *fld, const BO
 {
     const Box3 &inner = r.inner_slab;
     const int ncomp = U.descriptor().ncomp;
+    const int ax = std::abs(r.direction);
+    const int sgn = (r.direction > 0) ? +1 : -1;
+    const int inward = -sgn;
+    const Int3 lo = U.inner_lo();
+    const Int3 hi = U.inner_hi();
+
+    auto inside = [&](int i, int j, int k) -> bool
+    {
+        return i >= lo.i && i < hi.i &&
+               j >= lo.j && j < hi.j &&
+               k >= lo.k && k < hi.k;
+    };
 
     for (int i = inner.lo.i; i < inner.hi.i; ++i)
         for (int j = inner.lo.j; j < inner.hi.j; ++j)
         {
             for (int k = inner.lo.k; k < inner.hi.k; ++k)
+            {
+                int is = i;
+                int js = j;
+                int ks = k;
+
+                if (ax == 1)
+                    is += inward;
+                else if (ax == 2)
+                    js += inward;
+                else
+                    ks += inward;
+
+                if (!inside(is, js, ks))
+                    continue;
+
                 for (int n = 0; n < ncomp; n++)
-                    U(i, j, k, n) = 0.0;
+                    U(i, j, k, n) = U(is, js, ks, n);
+            }
         }
     BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
 }
