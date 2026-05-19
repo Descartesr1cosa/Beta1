@@ -40,7 +40,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
         io_.ClearRestartFields();
         io_.SetRestartFields(bin_name);
 
-        io_.SetTecplotMode(IOModule::TecplotMode::CellAsNode);
+        io_.SetTecplotMode(IOModule::TecplotMode::Mixed);
         std::vector<std::string> tec_block_name = {}; // 全部物理块输出
         io_.SetTecplotBlock(tec_block_name);
 
