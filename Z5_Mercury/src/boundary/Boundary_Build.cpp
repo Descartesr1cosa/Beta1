@@ -176,7 +176,7 @@ void MercuryBoundary::InstallHandlers()
     auto Eedge_1stlayer_to_zero = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
     {
         // no operators
-        this->BC_Solid_Surface_Eedge_(U, fld, r, ngh);
+        // this->BC_Solid_Surface_Eedge_(U, fld, r, ngh);
     };
     if (!is_Mercury_interior_resis)
     {

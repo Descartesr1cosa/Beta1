@@ -401,6 +401,8 @@ void MercuryBoundary::BC_Solid_Surface_Jcell(FieldBlock &U, Field *fld, const BO
         {
             for (int k = inner.lo.k; k < inner.hi.k; ++k)
             {
+                for (int n = 0; n < ncomp; n++)
+                    U(i, j, k, n) = 0.0;
                 int is = i;
                 int js = j;
                 int ks = k;
@@ -412,11 +414,13 @@ void MercuryBoundary::BC_Solid_Surface_Jcell(FieldBlock &U, Field *fld, const BO
                 else
                     ks += inward;
 
-                if (!inside(is, js, ks))
-                    continue;
-
                 for (int n = 0; n < ncomp; n++)
-                    U(i, j, k, n) = U(is, js, ks, n);
+                    U(is, js, ks, n) = 0.0;
+                // if (!inside(is, js, ks))
+                //     continue;
+
+                // for (int n = 0; n < ncomp; n++)
+                //     U(i, j, k, n) = U(is, js, ks, n);
             }
         }
     BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
