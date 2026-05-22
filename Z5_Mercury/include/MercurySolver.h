@@ -277,8 +277,9 @@ private:
     void SnapshotImplicitResistiveBstar_();
     void RestoreImplicitResistiveBstar_();
     void UnpackVecToImplicitEres_(Vec X);
-    void PackImplicitJcellToEdgeVec_(Vec v, bool multiply_eta, double x_shift, const PetscScalar *x_extra);
-    void CalcImplicitDeltaJcellFromDeltaB_();
+    void PackImplicitJedgeToVec_(Vec v, const IdTriplet &fid_Jedge,
+                                 bool multiply_eta, double x_shift, const PetscScalar *x_extra);
+    void CalcImplicitDeltaJedgeFromDeltaB_();
     double ImplicitResistiveEtaAtEdge_(const TOPO::EdgeLocalID &e) const;
     static PetscErrorCode MatMultImplicitResistive_(Mat A, Vec X, Vec Y);
 

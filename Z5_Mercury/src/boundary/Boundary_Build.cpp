@@ -232,12 +232,37 @@ void MercuryBoundary::InstallHandlers()
         this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
     };
 
+    auto Eres_xi_pole = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        const int dir = std::abs(r.direction);
+
+        if (dir == 1)
+            this->BC_Pole_Eedge_RegulateK_Norm(U, fld, r, ngh);
+        else
+            this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
+    };
+
+    auto Eres_eta_pole = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        const int dir = std::abs(r.direction);
+
+        if (dir == 2)
+            this->BC_Pole_Eedge_RegulateK_Norm(U, fld, r, ngh);
+        else
+            this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
+    };
+
+    auto Eres_zeta_pole = [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+    {
+        this->BC_Pole_Eedge_Zero_Rotate(U, fld, r, ngh);
+    };
+
     RegisterPhysical_("E_xi", "Pole", E_xi_pole);
     RegisterPhysical_("E_eta", "Pole", E_eta_pole);
     RegisterPhysical_("E_zeta", "Pole", E_zeta_pole);
-    RegisterPhysical_("Eres_xi", "Pole", E_xi_pole);
-    RegisterPhysical_("Eres_eta", "Pole", E_eta_pole);
-    RegisterPhysical_("Eres_zeta", "Pole", E_zeta_pole);
+    RegisterPhysical_("Eres_xi", "Pole", Eres_xi_pole);
+    RegisterPhysical_("Eres_eta", "Pole", Eres_eta_pole);
+    RegisterPhysical_("Eres_zeta", "Pole", Eres_zeta_pole);
 
     // ------------------------------------------
     //   J_xi / E_eta / J_zeta
@@ -591,7 +616,7 @@ void MercuryBoundary::InstallDefaultGroups()
     gEres1form.name = "Eres1form";
     gEres1form.fields = {"Eres_xi", "Eres_eta", "Eres_zeta"};
     gEres1form.do_coupling = true;
-    gEres1form.do_physical = false;
+    gEres1form.do_physical = true;
     gEres1form.do_halo = true;
     gEres1form.halo_level = HaloLevel::Vertex;
     gEres1form.coupling_pairs = {{"Solid", "Fluid"}, {"Fluid", "Solid"}};

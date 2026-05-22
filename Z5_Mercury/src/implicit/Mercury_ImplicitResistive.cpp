@@ -45,61 +45,6 @@ namespace
         throw std::runtime_error("edge_fid_from_dir: invalid edge direction.");
     }
 
-    std::array<Int3, 4> edge_adjacent_cells(int edge_axis, int i, int j, int k)
-    {
-        std::array<Int3, 4> c;
-
-        if (edge_axis == 0)
-        {
-            c[0] = {i, j, k};
-            c[1] = {i, j - 1, k};
-            c[2] = {i, j, k - 1};
-            c[3] = {i, j - 1, k - 1};
-        }
-        else if (edge_axis == 1)
-        {
-            c[0] = {i, j, k};
-            c[1] = {i - 1, j, k};
-            c[2] = {i, j, k - 1};
-            c[3] = {i - 1, j, k - 1};
-        }
-        else
-        {
-            c[0] = {i, j, k};
-            c[1] = {i - 1, j, k};
-            c[2] = {i, j - 1, k};
-            c[3] = {i - 1, j - 1, k};
-        }
-
-        return c;
-    }
-
-    void copy_triplet(Field *fld, const IdTriplet &dst, const IdTriplet &src)
-    {
-        if (!fld)
-            return;
-
-        const int dst_ids[3] = {dst.xi, dst.eta, dst.zeta};
-        const int src_ids[3] = {src.xi, src.eta, src.zeta};
-        for (int ib = 0; ib < fld->num_blocks(); ++ib)
-        {
-            for (int q = 0; q < 3; ++q)
-            {
-                auto &D = fld->field(dst_ids[q], ib);
-                auto &S = fld->field(src_ids[q], ib);
-                if (!D.is_allocated() || !S.is_allocated())
-                    continue;
-
-                const Int3 lo = D.get_lo();
-                const Int3 hi = D.get_hi();
-                for (int i = lo.i; i < hi.i; ++i)
-                    for (int j = lo.j; j < hi.j; ++j)
-                        for (int k = lo.k; k < hi.k; ++k)
-                            D(i, j, k, 0) = S(i, j, k, 0);
-            }
-        }
-    }
-
     void setup_like_face_snapshot(Scalar &buf, FieldBlock &F)
     {
         if (!F.is_allocated())
@@ -233,6 +178,15 @@ double MercurySolver::ImplicitResistiveEtaAtEdge_(const TOPO::EdgeLocalID &e) co
     if (!E.is_allocated())
         return 0.0;
 
+    const int fid_dl = edge_fid_from_dir(fid_.Edge_dl, e.dir);
+    auto &dl = fld_->field(fid_dl, e.gblock);
+    if (!dl.is_allocated())
+        return 0.0;
+
+    constexpr double collapsed_edge_len = 1.0e-12;
+    if (std::abs(dl(e.i, e.j, e.k, 0)) <= collapsed_edge_len)
+        return 0.0;
+
     const int di = (e.dir == 1) ? 1 : 0;
     const int dj = (e.dir == 2) ? 1 : 0;
     const int dk = (e.dir == 3) ? 1 : 0;
@@ -328,16 +282,69 @@ void MercurySolver::UnpackVecToImplicitEres_(Vec X)
     mercury_bound_.Sync("Eres1form");
 }
 
-void MercurySolver::CalcImplicitDeltaJcellFromDeltaB_()
+void MercurySolver::CalcImplicitDeltaJedgeFromDeltaB_()
 {
-    copy_triplet(fld_, fid_.fid_B, fid_.fid_dB);
-    mercury_bound_.Sync("Bface");
-    UpdateMagneticDerivedFields_();
-    RestoreImplicitResistiveBstar_();
-    mercury_bound_.Sync("Bface");
+    clear_triplet(fld_, fid_.fid_dJ);
+
+    for (int iblk = 0; iblk < fld_->num_blocks(); ++iblk)
+    {
+        auto &Bxi = fld_->field(fid_.fid_dB.xi, iblk);
+        auto &Beta = fld_->field(fid_.fid_dB.eta, iblk);
+        auto &Bzeta = fld_->field(fid_.fid_dB.zeta, iblk);
+
+        auto &Jxi = fld_->field(fid_.fid_dJ.xi, iblk);
+        auto &Jeta = fld_->field(fid_.fid_dJ.eta, iblk);
+        auto &Jzeta = fld_->field(fid_.fid_dJ.zeta, iblk);
+
+        auto &beta_xi = fld_->field(fid_.Face_beta.xi, iblk);
+        auto &beta_eta = fld_->field(fid_.Face_beta.eta, iblk);
+        auto &beta_zeta = fld_->field(fid_.Face_beta.zeta, iblk);
+
+        auto &alpha_xi = fld_->field(fid_.Edge_alpha.xi, iblk);
+        auto &alpha_eta = fld_->field(fid_.Edge_alpha.eta, iblk);
+        auto &alpha_zeta = fld_->field(fid_.Edge_alpha.zeta, iblk);
+
+        if (!Bxi.is_allocated() || !Beta.is_allocated() || !Bzeta.is_allocated() ||
+            !Jxi.is_allocated() || !Jeta.is_allocated() || !Jzeta.is_allocated() ||
+            !beta_xi.is_allocated() || !beta_eta.is_allocated() || !beta_zeta.is_allocated() ||
+            !alpha_xi.is_allocated() || !alpha_eta.is_allocated() || !alpha_zeta.is_allocated())
+            continue;
+
+        CTOperators::CurlAdjFaceToEdge(iblk,
+                                       Bxi, Beta, Bzeta,
+                                       beta_xi, beta_eta, beta_zeta,
+                                       Jxi, Jeta, Jzeta,
+                                       /*multiper=*/1.0);
+
+        {
+            Int3 lo = Jxi.inner_lo(), hi = Jxi.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Jxi(i, j, k, 0) *= alpha_xi(i, j, k, 0);
+        }
+        {
+            Int3 lo = Jeta.inner_lo(), hi = Jeta.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Jeta(i, j, k, 0) *= alpha_eta(i, j, k, 0);
+        }
+        {
+            Int3 lo = Jzeta.inner_lo(), hi = Jzeta.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        Jzeta(i, j, k, 0) *= alpha_zeta(i, j, k, 0);
+        }
+    }
+
+    HALO_OWNER::sync_edge_1form(*fld_, fid_.fid_dJ, *edge_owner_pat_);
+    mercury_bound_.Sync("dJ");
 }
 
-void MercurySolver::PackImplicitJcellToEdgeVec_(Vec v, bool multiply_eta, double x_shift, const PetscScalar *x_extra)
+void MercurySolver::PackImplicitJedgeToVec_(Vec v, const IdTriplet &fid_Jedge,
+                                            bool multiply_eta, double x_shift, const PetscScalar *x_extra)
 {
     PetscScalar *yarr = nullptr;
 
@@ -346,42 +353,14 @@ void MercurySolver::PackImplicitJcellToEdgeVec_(Vec v, bool multiply_eta, double
     for (PetscInt lid = 0; lid < static_cast<PetscInt>(implicit_resistive_dofs_.size()); ++lid)
     {
         const auto &dof = implicit_resistive_dofs_[static_cast<size_t>(lid)];
-        auto &Jcell = fld_->field(fid_.fid_Jcell, dof.edge.gblock);
-        auto &dr = fld_->field(edge_fid_from_dir(fid_.Edge_dr, dof.edge.dir), dof.edge.gblock);
-
-        double Jdotdr = 0.0;
-        if (Jcell.is_allocated() && dr.is_allocated())
-        {
-            const int edge_axis = dof.edge.dir - 1;
-            const auto cells = edge_adjacent_cells(edge_axis, dof.edge.i, dof.edge.j, dof.edge.k);
-
-            double Jx = 0.0;
-            double Jy = 0.0;
-            double Jz = 0.0;
-
-            for (int q = 0; q < 4; ++q)
-            {
-                const int ic = cells[q].i;
-                const int jc = cells[q].j;
-                const int kc = cells[q].k;
-                Jx += Jcell(ic, jc, kc, 0);
-                Jy += Jcell(ic, jc, kc, 1);
-                Jz += Jcell(ic, jc, kc, 2);
-            }
-
-            Jx *= 0.25;
-            Jy *= 0.25;
-            Jz *= 0.25;
-
-            Jdotdr =
-                Jx * dr(dof.edge.i, dof.edge.j, dof.edge.k, 0) +
-                Jy * dr(dof.edge.i, dof.edge.j, dof.edge.k, 1) +
-                Jz * dr(dof.edge.i, dof.edge.j, dof.edge.k, 2);
-        }
+        auto &Jedge = fld_->field(edge_fid_from_dir(fid_Jedge, dof.edge.dir), dof.edge.gblock);
+        const double J1form = Jedge.is_allocated()
+                                  ? Jedge(dof.edge.i, dof.edge.j, dof.edge.k, 0)
+                                  : 0.0;
 
         const double eta = multiply_eta ? dof.eta : 1.0;
         const double base = x_extra ? x_shift * static_cast<double>(x_extra[lid]) : 0.0;
-        yarr[lid] = base + eta * Jdotdr;
+        yarr[lid] = base + eta * J1form;
     }
 
     PetscCallAbort(PETSC_COMM_WORLD, VecRestoreArray(v, &yarr));
@@ -418,17 +397,26 @@ PetscErrorCode MercurySolver::MatMultImplicitResistive_(Mat A, Vec X, Vec Y)
         }
 
         S->mercury_bound_.Sync("dB");
-        S->CalcImplicitDeltaJcellFromDeltaB_();
+        S->CalcImplicitDeltaJedgeFromDeltaB_();
 
-        const PetscScalar *xarr = nullptr;
-        PetscCall(VecGetArrayRead(X, &xarr));
-        S->PackImplicitJcellToEdgeVec_(Y,
-                                       /*multiply_eta=*/true,
-                                       /*x_shift=*/1.0,
-                                       xarr);
-        PetscCall(VecRestoreArrayRead(X, &xarr));
-        PetscCall(VecScale(Y, -1.0));
-        PetscCall(VecAXPY(Y, 2.0, X)); // Y = X - eta*Jdelta after previous Y = -(X+eta*Jdelta)+2X
+        PetscScalar *yarr = nullptr;
+        PetscCall(VecGetArray(Y, &yarr));
+        for (PetscInt lid = 0; lid < static_cast<PetscInt>(S->implicit_resistive_dofs_.size()); ++lid)
+        {
+            const auto &dof = S->implicit_resistive_dofs_[static_cast<size_t>(lid)];
+            auto &Eres = S->fld_->field(edge_fid_from_dir(S->fid_.fid_Eres, dof.edge.dir), dof.edge.gblock);
+            auto &dJ = S->fld_->field(edge_fid_from_dir(S->fid_.fid_dJ, dof.edge.dir), dof.edge.gblock);
+
+            const double E1form = Eres.is_allocated()
+                                      ? Eres(dof.edge.i, dof.edge.j, dof.edge.k, 0)
+                                      : 0.0;
+            const double dJ1form = dJ.is_allocated()
+                                       ? dJ(dof.edge.i, dof.edge.j, dof.edge.k, 0)
+                                       : 0.0;
+
+            yarr[lid] = E1form - dof.eta * dJ1form;
+        }
+        PetscCall(VecRestoreArray(Y, &yarr));
     }
     catch (const std::exception &e)
     {
@@ -458,9 +446,10 @@ void MercurySolver::SolveImplicitResistiveDiffusion_(double dt_step)
 
     implicit_resistive_dt_ = dt_step;
 
-    UpdateMagneticDerivedFields_(); // Bface -> Bcell, Jedge, Jcell
-    PackImplicitJcellToEdgeVec_(
+    Calc_J_Edge(); // Bface -> CurlAdjFaceToEdge -> Jedge
+    PackImplicitJedgeToVec_(
         implicit_resistive_b_,
+        fid_.fid_J,
         /*multiply_eta=*/true,
         /*x_shift=*/0.0,
         nullptr); // 求Ax=b中的b, 这是根据输入磁场求出的扩散电场eta.J_edge(Bface)
