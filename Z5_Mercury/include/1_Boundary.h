@@ -10,6 +10,7 @@
 #include "6_boundary/Boundary.h"   // BoundaryCore, BOUND::PhysicalRegion, CouplingBufferBlock...
 #include "4_halo/1_MPCNS_Halo.h"   // Halo, HaloLevel
 #include "3_field/2_MPCNS_Field.h" // Field, FieldBlock, StaggerLocation
+#include "0_BackgroundState.h"
 // Grid/Topology/Param forward decl
 class Grid;
 namespace TOPO
@@ -47,6 +48,20 @@ private:
         double state_coeff_H{0.0};
         double state_coeff_Na{0.0};
         double CFL{0.0};
+
+        void SetBackground(const MercuryBackgroundState &state)
+        {
+            gamma = state.gamma;
+            for (int i = 0; i < 5; ++i)
+            {
+                q_pv_inf[i] = state.q_pv_inf[i];
+                q_pv_infs[i] = state.q_pv_infs[i];
+                qinf[i] = state.qinf[i];
+                qinfs[i] = state.qinfs[i];
+            }
+            for (int i = 0; i < 3; ++i)
+                B_imf[i] = state.B_imf[i];
+        }
     };
 
     struct BoundGroup
