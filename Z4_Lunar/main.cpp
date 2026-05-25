@@ -122,85 +122,6 @@ int main(int arg, char **argv)
         fld->register_field(FieldDescriptor{"RHS_Bres_eta", StaggerLocation::FaceEt, 1, 0});
         fld->register_field(FieldDescriptor{"RHS_Bres_zeta", StaggerLocation::FaceZe, 1, 0});
         //--------------------------------------------------------------------------
-        // Register Coupling Pair Description（CouplingPairDesc）
-        //   register_coupling_channel("A", "B", "A_field",**):
-        //   Let A_field in Block A transfer to coresponding coupling buffer area of Block B
-        fld->register_coupling_channel("Solid", "Fluid", "B_xi", StaggerLocation::FaceXi, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "B_eta", StaggerLocation::FaceEt, 1, ngg);     // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "B_zeta", StaggerLocation::FaceZe, 1, ngg);    // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Badd_xi", StaggerLocation::FaceXi, 1, ngg);   // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Badd_eta", StaggerLocation::FaceEt, 1, ngg);  // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Badd_zeta", StaggerLocation::FaceZe, 1, ngg); // Solid -> Fluid
-
-        fld->register_coupling_channel("Solid", "Fluid", "Eface_xi", StaggerLocation::FaceXi, 3, ngg);   // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Eface_eta", StaggerLocation::FaceEt, 3, ngg);  // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Eface_zeta", StaggerLocation::FaceZe, 3, ngg); // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "E_xi", StaggerLocation::EdgeXi, 1, ngg);       // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "E_eta", StaggerLocation::EdgeEt, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "E_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Ehall_xi", StaggerLocation::EdgeXi, 1, ngg);   // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Ehall_eta", StaggerLocation::EdgeEt, 1, ngg);  // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Ehall_zeta", StaggerLocation::EdgeZe, 1, ngg); // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Eres_xi", StaggerLocation::EdgeXi, 1, ngg);    // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Eres_eta", StaggerLocation::EdgeEt, 1, ngg);   // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Eres_zeta", StaggerLocation::EdgeZe, 1, ngg);  // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "J_xi", StaggerLocation::EdgeXi, 1, ngg);       // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "J_eta", StaggerLocation::EdgeEt, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "J_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "J_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "U_plus", StaggerLocation::Cell, 3, ngg);       // Solid -> Fluid
-
-        fld->register_coupling_channel("Solid", "Fluid", "dE_xi", StaggerLocation::EdgeXi, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dE_eta", StaggerLocation::EdgeEt, 1, ngg);     // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dE_zeta", StaggerLocation::EdgeZe, 1, ngg);    // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dB_xi", StaggerLocation::FaceXi, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dB_eta", StaggerLocation::FaceEt, 1, ngg);     // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dB_zeta", StaggerLocation::FaceZe, 1, ngg);    // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dJ_xi", StaggerLocation::EdgeXi, 1, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dJ_eta", StaggerLocation::EdgeEt, 1, ngg);     // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dJ_zeta", StaggerLocation::EdgeZe, 1, ngg);    // Solid -> Fluid
-        fld->register_coupling_channel("Solid", "Fluid", "dJ_cell", StaggerLocation::Cell, 3, ngg);      // Solid -> Fluid
-        fld->register_coupling_channel("Fluid", "Solid", "B_xi", StaggerLocation::FaceXi, 1, ngg);       // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "B_eta", StaggerLocation::FaceEt, 1, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "B_zeta", StaggerLocation::FaceZe, 1, ngg);     // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Badd_xi", StaggerLocation::FaceXi, 1, ngg);    // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Badd_eta", StaggerLocation::FaceEt, 1, ngg);   // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Badd_zeta", StaggerLocation::FaceZe, 1, ngg);  // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Eface_xi", StaggerLocation::FaceXi, 3, ngg);   // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Eface_eta", StaggerLocation::FaceEt, 3, ngg);  // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Eface_zeta", StaggerLocation::FaceZe, 3, ngg); // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "E_xi", StaggerLocation::EdgeXi, 1, ngg);       // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "E_eta", StaggerLocation::EdgeEt, 1, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "E_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Ehall_xi", StaggerLocation::EdgeXi, 1, ngg);   // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Ehall_eta", StaggerLocation::EdgeEt, 1, ngg);  // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Ehall_zeta", StaggerLocation::EdgeZe, 1, ngg); // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Eres_xi", StaggerLocation::EdgeXi, 1, ngg);    // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Eres_eta", StaggerLocation::EdgeEt, 1, ngg);   // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Eres_zeta", StaggerLocation::EdgeZe, 1, ngg);  // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "J_xi", StaggerLocation::EdgeXi, 1, ngg);       // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "J_eta", StaggerLocation::EdgeEt, 1, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "J_zeta", StaggerLocation::EdgeZe, 1, ngg);     // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "J_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "B_cell", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "Bind_cell", StaggerLocation::Cell, 3, ngg);    // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "U_plus", StaggerLocation::Cell, 3, ngg);       // Fluid -> Solid
-
-        fld->register_coupling_channel("Fluid", "Solid", "dE_xi", StaggerLocation::EdgeXi, 1, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dE_eta", StaggerLocation::EdgeEt, 1, ngg);     // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dE_zeta", StaggerLocation::EdgeZe, 1, ngg);    // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dB_xi", StaggerLocation::FaceXi, 1, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dB_eta", StaggerLocation::FaceEt, 1, ngg);     // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dB_zeta", StaggerLocation::FaceZe, 1, ngg);    // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dJ_xi", StaggerLocation::EdgeXi, 1, ngg);      // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dJ_eta", StaggerLocation::EdgeEt, 1, ngg);     // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dJ_zeta", StaggerLocation::EdgeZe, 1, ngg);    // Fluid -> Solid
-        fld->register_coupling_channel("Fluid", "Solid", "dJ_cell", StaggerLocation::Cell, 3, ngg);      // Fluid -> Solid
-        // Build coupling buffers (YOU CAN ONLY USE it ONCE!)
-        fld->build_coupling_buffers(topology, par->GetInt("dimension"));
-        //--------------------------------------------------------------------------
         // Build Halo Communicator
         Halo *hal = new Halo(fld, &topology);
 
@@ -267,7 +188,7 @@ int main(int arg, char **argv)
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
         fieldname = "dJ_cell";
         hal->register_halo_field(fieldname, HaloLevel::Vertex);
-        // Build halo communicator patterns between blocks with same fields and coupling fields
+        // Build halo communicator patterns between neighboring fluid blocks.
         hal->build_registered_patterns();
         //--------------------------------------------------------------------------
         // Build Owner Sync Pattern for Hall Implicit Process

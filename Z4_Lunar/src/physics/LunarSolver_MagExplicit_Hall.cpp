@@ -421,7 +421,7 @@ void LunarSolver::BuildHallFaceEMF_Rusanov_diff_()
             if (p.this_block != ib)
                 continue;
 
-            if (p.bc_name != "Solid_Surface" && p.bc_name != "Coupled-Solid") // 换成你的壁面 patch 名
+            if (p.bc_name != "Solid_Surface")
                 continue;
 
             const int nlayer = 20; // 先试 1；不够再试 2

@@ -6,7 +6,6 @@ void LunarBoundary::Sync_(const BoundGroup &g)
     // CheckSetupOrAbort_("Sync_");
 
     std::string field_name_temp;
-    std::string field_name_temp2;
 
     // ---------------- Stage 1: FaceOnly (1D) ----------------
     if (g.do_physical)
@@ -21,18 +20,6 @@ void LunarBoundary::Sync_(const BoundGroup &g)
         {
             field_name_temp = fn;
             halo_->data_trans_1DCorner(field_name_temp);
-        }
-    }
-
-    if (g.do_coupling)
-    {
-        for (auto &pr : g.coupling_pairs)
-        {
-            field_name_temp = pr.first;
-            field_name_temp2 = pr.second;
-            std::vector<int32_t> tmp_cids = g.fields_cids.at(pr);
-            halo_->coupling_trans_1DCorner(field_name_temp, field_name_temp2, tmp_cids);
-            bound_.ApplyCouplingPair_1DCorner(field_name_temp, field_name_temp2, tmp_cids);
         }
     }
 
@@ -54,17 +41,6 @@ void LunarBoundary::Sync_(const BoundGroup &g)
             }
         }
 
-        if (g.do_coupling)
-        {
-            for (auto &pr : g.coupling_pairs)
-            {
-                field_name_temp = pr.first;
-                field_name_temp2 = pr.second;
-                std::vector<int32_t> tmp_cids = g.fields_cids.at(pr);
-                halo_->coupling_trans_2DCorner(field_name_temp, field_name_temp2, tmp_cids);
-                bound_.ApplyCouplingPair_2DCorner(field_name_temp, field_name_temp2, tmp_cids);
-            }
-        }
     }
 
     // ---------------- Stage 3: Vertex (3D) ----------------
@@ -85,16 +61,5 @@ void LunarBoundary::Sync_(const BoundGroup &g)
             }
         }
 
-        if (g.do_coupling)
-        {
-            for (auto &pr : g.coupling_pairs)
-            {
-                field_name_temp = pr.first;
-                field_name_temp2 = pr.second;
-                std::vector<int32_t> tmp_cids = g.fields_cids.at(pr);
-                halo_->coupling_trans_3DCorner(field_name_temp, field_name_temp2, tmp_cids);
-                bound_.ApplyCouplingPair_3DCorner(field_name_temp, field_name_temp2, tmp_cids);
-            }
-        }
     }
 }

@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "6_boundary/Boundary.h"   // BoundaryCore, BOUND::PhysicalRegion, CouplingBufferBlock...
+#include "6_boundary/Boundary.h"   // BoundaryCore, BOUND::PhysicalRegion
 #include "4_halo/1_MPCNS_Halo.h"   // Halo, HaloLevel
 #include "3_field/2_MPCNS_Field.h" // Field, FieldBlock, StaggerLocation
 #include "0_BackgroundState.h"
@@ -34,9 +34,6 @@ public:
 private:
     // ----------------------------- Internal types ----------------------------
     using PhysicalHandler = std::function<void(FieldBlock &, Field *, const BOUND::PhysicalRegion &, int ngh)>;
-    using CouplingHandler = std::function<void(FieldBlock &, Field *, CouplingBufferBlock &,
-                                               const std::string &src, const std::string &dst,
-                                               const std::string &tag)>;
 
     struct BCState
     {
@@ -64,17 +61,12 @@ private:
     {
         std::string name;
         std::vector<std::string> fields;
-        std::map<std::pair<std::string, std::string>, std::vector<int32_t>> fields_cids;
 
-        bool do_coupling = false; // whether to apply coupling before physical BC
         bool do_physical = true;  // whether to apply physical BC
         bool do_halo = true;      // whether to halo-exchange
 
         HaloLevel halo_level = HaloLevel::Vertex;
         int ngh = 0; // reserved: boundary ngh (if BoundaryCore later supports per-call ngh)
-
-        // directed pairs for coupling stage (e.g., {{"Solid","Fluid"},{"Fluid","Solid"}})
-        std::vector<std::pair<std::string, std::string>> coupling_pairs;
     };
 
 private:
@@ -101,7 +93,7 @@ private:
     // 0) BCstate
     void InitBCStateFromParam_();
 
-    // 1) install all physical/coupling handlers (table-driven inside this class)
+    // 1) install all physical handlers (table-driven inside this class)
     void InstallHandlers();
 
     // 2) install default groups (Ucell/Bface/Baddface/...); user can extend in cpp later
@@ -117,10 +109,6 @@ private:
 
     // handler registration (build-time)
     void RegisterPhysical_(const std::string &field, const std::string &region, PhysicalHandler h);
-    void RegisterCoupling_(const std::string &src, const std::string &dst,
-                           StaggerLocation loc,
-                           const std::string &channel_tag, const std::string &dst_field,
-                           CouplingHandler h);
 
     // ----------------------------- Sync pipeline (run-time) ------------------
     void Sync_(const BoundGroup &g);
