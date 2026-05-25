@@ -1,0 +1,17 @@
+// The Moon has no Mercury-like global dipole in this baseline model.
+int     num_of_dipole                   0
+
+// Lunar interior resistivity
+bool    is_Lunar_resistance           0
+bool    use_implicit_lunar_resistance 0
+int     n_resistive_subcycles           1
+double  implicit_resistive_ksp_rtol     5.0e-4
+double  implicit_resistive_ksp_atol     5.0e-1
+int     implicit_resistive_ksp_max_it   20
+
+// artificial resistivity limiter
+double  arti_eta_max                    0.0
+double  J_range_start                   800.0
+double  J_range_on                      3000.0
+
+END_OF_FILE
