@@ -10,23 +10,16 @@
 #include "MercurySolver.h"
 
 MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo,
-                             Param *par
-#ifdef HALL_IMPLICIT
-                             ,
+                             Param *par,
                              TOPO::TopologyEquiv *topo_equiv,
-                             HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat
-#endif
-                             )
+                             HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat)
     : grd_(grd),
       topo_(topo),
       fld_(fld),
       halo_(halo),
-      par_(par)
-#ifdef HALL_IMPLICIT
-      ,
+      par_(par),
       topo_equiv_(topo_equiv),
       edge_owner_pat_(edge_owner_pat)
-#endif
 {
     // ---- Cache field ids ----
     fid_.Init(fld_);
@@ -175,7 +168,7 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     if (resist_control.use_implicit_mercury_resistance)
         SetupImplicitResistiveDiffusion_();
 
-#ifdef HALL_IMPLICIT
+#if HALL_IMPLICIT == 1
     if (!topo_equiv_ || !edge_owner_pat_)
         throw std::runtime_error("MercurySolver: hall implicit topology/pattern is null.");
 
@@ -240,6 +233,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     hall_implicit_.InitializePetsc();
 
     SetupHallFaceScratch_(); // setup temp block data for Rusanov Scheme
+#else
+    SetupHallFaceScratch_(); // setup temp block data for Hall EMF storage
 #endif
 }
 
@@ -248,7 +243,6 @@ MercurySolver::~MercurySolver()
     DestroyImplicitResistiveDiffusion_();
 }
 
-#ifdef HALL_IMPLICIT
 void MercurySolver::SetupHallFaceScratch_()
 {
     const int nb = fld_->num_blocks();
@@ -2096,4 +2090,3 @@ void MercurySolver::SetupHallFaceScratch_()
         }
     }
 }
-#endif

@@ -6,10 +6,13 @@
 #include "0_SolverFields.h"
 #include "2_Initial.h"
 #include "3_Control.h"
+#include "2_topology/2_MPCNS_Topology_Equiv.h"
+#include "4_halo/1_MPCNS_Halo_EdgeOwner.h"
+#include "4_Hall_Implicit_Type.h"
 
 #include <petscksp.h>
 
-#ifdef HALL_IMPLICIT
+#if HALL_IMPLICIT == 1
 #include "4_Hall_Implicit.h"
 #endif
 
@@ -66,13 +69,9 @@ class FieldBlock;
 class MercurySolver
 {
 public:
-    MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo, Param *par
-#ifdef HALL_IMPLICIT
-                  ,
+    MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *halo, Param *par,
                   TOPO::TopologyEquiv *topo_equiv,
-                  HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat
-#endif
-    );
+                  HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat);
     ~MercurySolver();
 
     void Advance();
@@ -85,9 +84,9 @@ private:
     Halo *halo_{nullptr};
     Param *par_{nullptr};
 
-#ifdef HALL_IMPLICIT
     TOPO::TopologyEquiv *topo_equiv_{nullptr};
     HALO_OWNER::EdgeOwnerSyncPattern *edge_owner_pat_{nullptr};
+#if HALL_IMPLICIT == 1
     ImplicitHallSolver hall_implicit_;
 #endif
     // --- components ---
@@ -160,11 +159,10 @@ private:
     double implicit_resistive_dt_{0.0};
     bool implicit_resistive_ready_{false};
 
-#ifdef HALL_IMPLICIT
-
     std::vector<HallFaceScratchBlock_> hall_face_scratch_;
     void SetupHallFaceScratch_();
 
+#if HALL_IMPLICIT == 1
     void FillFrozenBflatFromCurrentBcell_()
     {
         const int nb = fld_->num_blocks();

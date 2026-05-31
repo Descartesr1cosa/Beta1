@@ -4,7 +4,6 @@
 #include "3_field/Field_Array.h"
 #include "0_basic/TYPES.h"
 
-#ifdef HALL_IMPLICIT
 struct HallFaceScratchBlock_ // For Rusanov Scheme
 {
     Int3 clo{}, chi{};
@@ -21,4 +20,3 @@ struct HallFaceScratchBlock_ // For Rusanov Scheme
     // Geometry caches used by Hall live in Field:
     //   Bcell_from_Bface_w, Jcell_from_Jedge_w, Pface_xi/eta/zeta, dr_xi/eta/zeta.
 };
-#endif

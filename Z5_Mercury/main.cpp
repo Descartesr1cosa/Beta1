@@ -12,11 +12,8 @@
 
 #include "MercurySolver.h"
 
-#ifdef HALL_IMPLICIT
 #include "2_topology/2_MPCNS_Topology_Equiv.h"
 #include "4_halo/1_MPCNS_Halo_EdgeOwner.h"
-// #include "4_solver/ImplicitHall_Solver.h"
-#endif
 //==============================================================================
 
 //==============================================================================
@@ -30,9 +27,7 @@ int main(int arg, char **argv)
     int myid;
     PARALLEL::mpi_initial(arg, argv);
     PARALLEL::mpi_rank(&myid);
-#ifdef HALL_IMPLICIT
     PetscInitialize(&arg, &argv, NULL, NULL); // 再 PETSc 初始化
-#endif
     //=============================================================================================
     {
         //=============================================================================================
@@ -47,10 +42,8 @@ int main(int arg, char **argv)
         //--------------------------------------------------------------------------
         // Build topology
         TOPO::Topology topology = TOPO::build_topology(*grd, myid, par->GetInt("dimension"));
-#ifdef HALL_IMPLICIT
         TOPO::TopologyEquiv topo_equiv;
         TOPO::build_topology_equiv(topology, *grd, myid, par->GetInt("dimension"), topo_equiv);
-#endif
         //--------------------------------------------------------------------------
         int ngg = par->GetInt("ngg");
         // Build Field
@@ -277,21 +270,15 @@ int main(int arg, char **argv)
         // Build halo communicator patterns between blocks with same fields and coupling fields
         hal->build_registered_patterns();
         //--------------------------------------------------------------------------
-        // Build Owner Sync Pattern for Hall Implicit Process
-#ifdef HALL_IMPLICIT
+        // Build owner-edge sync pattern for implicit edge solves.
         HALO_OWNER::EdgeOwnerSyncPattern edge_owner_pattern;
         HALO_OWNER::build_edge_owner_sync_pattern(topo_equiv, edge_owner_pattern);
-#endif
         //=============================================================================================
 
         //=============================================================================================
-        MercurySolver solver(grd, &topology, fld, hal, par
-#ifdef HALL_IMPLICIT
-                             ,
+        MercurySolver solver(grd, &topology, fld, hal, par,
                              &topo_equiv,
-                             &edge_owner_pattern
-#endif
-        );
+                             &edge_owner_pattern);
         solver.Advance();
         if (myid == 0)
             std::cout << "Program is finished normally ! !  ^_^\n"
@@ -310,9 +297,7 @@ int main(int arg, char **argv)
     //--------------------------------------------------------------------------
     // MPI finalization
 
-#ifdef HALL_IMPLICIT
     PetscFinalize(); // 先 PETSc finalize
-#endif
     PARALLEL::mpi_finalize();
     return 0;
 }
