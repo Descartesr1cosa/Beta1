@@ -153,6 +153,7 @@ private:
     void CopyEhallToE_();
     void ClearEdgeTriplet_(const IdTriplet &fid_triplet);
     void ClearFaceTriplet_(const IdTriplet &fid_triplet);
+    bool IsFluidBlock_(int ib) const;
 
     void EvaluatePredictedEhallFromTrialB_();
     void WriteResidual_(Vec X, Vec F);

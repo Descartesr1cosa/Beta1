@@ -238,6 +238,7 @@ void ImplicitHallSolver::SolveOneStep(double dt, bool if_outres)
 
     // 1) snapshot B*
     SnapshotCurrentBface_();
+    ClearEdgeTriplet_(fid_.fid_Ehall);
 
     p0_frozen_ready_ = false;
     if (use_shell_pc_)

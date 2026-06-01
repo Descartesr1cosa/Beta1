@@ -1,6 +1,28 @@
 #include "MercurySolver.h"
 void MercurySolver::AddHallEdgeEMF_()
 {
+#if HALL_IMPLICIT == 1
+    auto zero_one = [](FieldBlock &F)
+    {
+        if (!F.is_allocated())
+            return;
+
+        Int3 lo = F.get_lo();
+        Int3 hi = F.get_hi();
+        for (int i = lo.i; i < hi.i; ++i)
+            for (int j = lo.j; j < hi.j; ++j)
+                for (int k = lo.k; k < hi.k; ++k)
+                    F(i, j, k, 0) = 0.0;
+    };
+
+    for (int ib = 0; ib < fld_->num_blocks(); ++ib)
+    {
+        zero_one(fld_->field(fid_.fid_Ehall.xi, ib));
+        zero_one(fld_->field(fid_.fid_Ehall.eta, ib));
+        zero_one(fld_->field(fid_.fid_Ehall.zeta, ib));
+    }
+#endif
+
     BuildHallFaceEMF_Rusanov_diff_();
 }
 

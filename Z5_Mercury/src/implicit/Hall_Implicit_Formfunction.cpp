@@ -45,7 +45,7 @@ void ImplicitHallSolver::BuildTrialBfaceFromUnknownE_()
     cb_.sync_Ehalledge();
 
     // RHS_B = -curl(E)
-    // ClearFaceTriplet_(fid_.fid_RHS_b);
+    ClearFaceTriplet_(fid_.fid_RHS_b);
 
     const int nb = fld_->num_blocks();
     for (int ib = 0; ib < nb; ++ib)
