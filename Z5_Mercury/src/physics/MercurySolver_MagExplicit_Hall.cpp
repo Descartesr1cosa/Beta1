@@ -135,8 +135,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
         // 2) xi-edge:
         //
         // Exi(i,j,k) = <Ehc>_4cell · dr_xi
-        //            - 0.5 * mu_eta  * (Bzeta(i,j,k)-Bzeta(i,j-1,k))
-        //            + 0.5 * mu_zeta * (Beta (i,j,k)-Beta (i,j,k-1))
+        //            + 0.5 * mu_eta  * (Bzeta(i,j,k)-Bzeta(i,j-1,k))
+        //            - 0.5 * mu_zeta * (Beta (i,j,k)-Beta (i,j,k-1))
         //
         // surrounding 4 cells:
         // (i, j-1, k-1), (i, j-1, k), (i, j, k-1), (i, j, k)
@@ -195,7 +195,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                         const double dBeta_zeta = Bet(i, j, k, 0) - Bet(i, j, k - 1, 0);
 
                         Exi(i, j, k, 0) =
-                            Ecen - 0.5 * mu_eta * dBzeta_eta + 0.5 * mu_zeta * dBeta_zeta;
+                            Ecen + 0.5 * mu_eta * dBzeta_eta - 0.5 * mu_zeta * dBeta_zeta;
                     }
         }
 
@@ -203,8 +203,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
         // 3) eta-edge:
         //
         // Eeta(i,j,k) = <Ehc>_4cell · dr_eta
-        //             - 0.5 * mu_zeta * (Bxi(i,j,k)-Bxi(i,j,k-1))
-        //             + 0.5 * mu_xi   * (Bzeta(i,j,k)-Bzeta(i-1,j,k))
+        //             + 0.5 * mu_zeta * (Bxi(i,j,k)-Bxi(i,j,k-1))
+        //             - 0.5 * mu_xi   * (Bzeta(i,j,k)-Bzeta(i-1,j,k))
         //
         // surrounding 4 cells:
         // (i-1, j, k-1), (i-1, j, k), (i, j, k-1), (i, j, k)
@@ -260,7 +260,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                         const double dBzeta_xi = Bze(i, j, k, 0) - Bze(i - 1, j, k, 0);
 
                         Eet(i, j, k, 0) =
-                            Ecen - 0.5 * mu_zeta * dBxi_zeta + 0.5 * mu_xi * dBzeta_xi;
+                            Ecen + 0.5 * mu_zeta * dBxi_zeta - 0.5 * mu_xi * dBzeta_xi;
                     }
         }
 
@@ -268,8 +268,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
         // 4) zeta-edge:
         //
         // Ezeta(i,j,k) = <Ehc>_4cell · dr_zeta
-        //              - 0.5 * mu_xi  * (Beta(i,j,k)-Beta(i-1,j,k))
-        //              + 0.5 * mu_eta * (Bxi (i,j,k)-Bxi (i,j-1,k))
+        //              + 0.5 * mu_xi  * (Beta(i,j,k)-Beta(i-1,j,k))
+        //              - 0.5 * mu_eta * (Bxi (i,j,k)-Bxi (i,j-1,k))
         //
         // surrounding 4 cells:
         // (i-1, j-1, k), (i-1, j, k), (i, j-1, k), (i, j, k)
@@ -325,7 +325,7 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                         const double dBxi_eta = Bxi(i, j, k, 0) - Bxi(i, j - 1, k, 0);
 
                         Eze(i, j, k, 0) =
-                            Ecen - 0.5 * mu_xi * dBeta_xi + 0.5 * mu_eta * dBxi_eta;
+                            Ecen + 0.5 * mu_xi * dBeta_xi - 0.5 * mu_eta * dBxi_eta;
                     }
         }
 
