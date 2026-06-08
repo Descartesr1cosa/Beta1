@@ -1,6 +1,8 @@
 #include "4_halo/1_MPCNS_Halo_EdgeOwner.h"
 #include "0_basic/MPI_WRAPPER.h"
 
+#include <algorithm>
+
 namespace HALO_OWNER
 {
     namespace
