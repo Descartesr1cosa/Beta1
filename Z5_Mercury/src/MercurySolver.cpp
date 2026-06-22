@@ -161,6 +161,8 @@ MercurySolver::MercurySolver(Grid *grd, TOPO::Topology *topo, Field *fld, Halo *
     resist_control.implicit_ksp_atol = par_->GetDou("implicit_resistive_ksp_atol");
     resist_control.implicit_ksp_max_it = par_->GetInt("implicit_resistive_ksp_max_it");
 
+    ambipolar_control.enabled = par_->GetBoo("is_Ambipolar_Efield");
+
     arti_resist_control.eta_max = par_->GetDou("arti_eta_max");
     arti_resist_control.J_range_start = par_->GetDou("J_range_start");
     arti_resist_control.J_range_on = par_->GetDou("J_range_on");

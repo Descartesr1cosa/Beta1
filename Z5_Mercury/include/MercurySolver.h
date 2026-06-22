@@ -55,6 +55,11 @@ struct ArtificialResistivityControl
     double J_range_on = 0.0;
 };
 
+struct AmbipolarEdgeEMFControl
+{
+    bool enabled = false;
+};
+
 // ---- forward declarations (avoid heavy includes in header) ----
 class Grid;
 namespace TOPO
@@ -138,6 +143,7 @@ private:
 
     ResistiveEdgeEMFControl resist_control;
     ArtificialResistivityControl arti_resist_control;
+    AmbipolarEdgeEMFControl ambipolar_control;
 
     struct ImplicitResistiveDof
     {

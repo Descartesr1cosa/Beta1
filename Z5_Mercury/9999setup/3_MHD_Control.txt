@@ -16,6 +16,9 @@ double  implicit_resistive_ksp_rtol     5.0e-4
 double  implicit_resistive_ksp_atol     5.0e-1
 int     implicit_resistive_ksp_max_it   20
 
+// ambipolar electric field
+bool    is_Ambipolar_Efield             1
+
 // artificial resistivity limiter
 double  arti_eta_max                    0.00
 double  J_range_start                   800.0
