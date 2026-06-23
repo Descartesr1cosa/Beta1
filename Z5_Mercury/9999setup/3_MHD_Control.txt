@@ -19,6 +19,10 @@ int     implicit_resistive_ksp_max_it   20
 // ambipolar electric field
 bool    is_Ambipolar_Efield             1
 
+// explicit Hall taper in magnetic induction equation
+double  r_min                           1.1
+double  r_max                           1.2
+
 // artificial resistivity limiter
 double  arti_eta_max                    0.00
 double  J_range_start                   800.0

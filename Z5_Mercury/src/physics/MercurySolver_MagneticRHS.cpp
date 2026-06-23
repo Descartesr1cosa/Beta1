@@ -32,6 +32,31 @@ void MercurySolver::AssembleRHS_Induction_CT_()
     AddAmbipolarEdgeEMF_();
     AddArtificialResistivityToEdgeEMF_();
 
+#if HALL_EXPLICIT == 1
+    AddHallEdgeEMF_();
+    mercury_bound_.Sync("Ehall");
+
+    for (int ib = 0; ib < nb; ++ib)
+    {
+        auto add_one = [](FieldBlock &E, FieldBlock &Eh)
+        {
+            if (!E.is_allocated() || !Eh.is_allocated())
+                return;
+
+            const Int3 lo = E.inner_lo();
+            const Int3 hi = E.inner_hi();
+            for (int i = lo.i; i < hi.i; ++i)
+                for (int j = lo.j; j < hi.j; ++j)
+                    for (int k = lo.k; k < hi.k; ++k)
+                        E(i, j, k, 0) += Eh(i, j, k, 0);
+        };
+
+        add_one(fld_->field(fid_.fid_E.xi, ib), fld_->field(fid_.fid_Ehall.xi, ib));
+        add_one(fld_->field(fid_.fid_E.eta, ib), fld_->field(fid_.fid_Ehall.eta, ib));
+        add_one(fld_->field(fid_.fid_E.zeta, ib), fld_->field(fid_.fid_Ehall.zeta, ib));
+    }
+#endif
+
     mercury_bound_.Sync("Eedge");
 
     for (int ib = 0; ib < nb; ++ib)

@@ -134,6 +134,8 @@ private:
     double CFL{0.0};
     double hall_coef{0.0};
     double ambi_coef{0.0};
+    double hall_taper_r_min{0.0};
+    double hall_taper_r_max{0.0};
 
     double momentum_induce_coeff{0.0};
     double momentum_hall_coeff{0.0};
@@ -242,6 +244,8 @@ private:
     void PrintMinMaxDiagnostics_();
     // void Hall_Num_Limiter(double rhoH, double rhoNa, double *num);
     NumInfo Hall_Num_Limiter(double rhoH, double rhoNa);
+    double HallRadialTaper_(double x, double y, double z);
+    double HallRadialTaperEdge_(int ib, StaggerLocation loc, int i, int j, int k);
 
     //=========================================================================
 

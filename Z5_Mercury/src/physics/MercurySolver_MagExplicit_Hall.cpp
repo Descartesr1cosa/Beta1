@@ -1,7 +1,43 @@
 #include "MercurySolver.h"
+#include "1_grid/1_MPCNS_Grid.h"
+
+#include <algorithm>
+#include <cmath>
+
+double MercurySolver::HallRadialTaper_(double x, double y, double z)
+{
+    const double r = std::sqrt(x * x + y * y + z * z);
+    const double width = hall_taper_r_max - hall_taper_r_min;
+
+    if (width <= 0.0)
+        return (r >= hall_taper_r_min) ? 1.0 : 0.0;
+
+    const double mid = 0.5 * (hall_taper_r_min + hall_taper_r_max);
+    return 0.5 * (1.0 + std::tanh(2.0 * (r - mid) / width));
+}
+
+double MercurySolver::HallRadialTaperEdge_(int ib, StaggerLocation loc, int i, int j, int k)
+{
+    auto &blk = grd_->grids(ib);
+
+    int ip = i;
+    int jp = j;
+    int kp = k;
+    if (loc == StaggerLocation::EdgeXi)
+        ++ip;
+    else if (loc == StaggerLocation::EdgeEt)
+        ++jp;
+    else
+        ++kp;
+
+    const double xc = 0.5 * (blk.x(i, j, k) + blk.x(ip, jp, kp));
+    const double yc = 0.5 * (blk.y(i, j, k) + blk.y(ip, jp, kp));
+    const double zc = 0.5 * (blk.z(i, j, k) + blk.z(ip, jp, kp));
+    return HallRadialTaper_(xc, yc, zc);
+}
+
 void MercurySolver::AddHallEdgeEMF_()
 {
-#if HALL_IMPLICIT == 1
     auto zero_one = [](FieldBlock &F)
     {
         if (!F.is_allocated())
@@ -21,7 +57,6 @@ void MercurySolver::AddHallEdgeEMF_()
         zero_one(fld_->field(fid_.fid_Ehall.eta, ib));
         zero_one(fld_->field(fid_.fid_Ehall.zeta, ib));
     }
-#endif
 
     BuildHallFaceEMF_Rusanov_diff_();
 }
@@ -195,7 +230,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                         const double dBeta_zeta = Bet(i, j, k, 0) - Bet(i, j, k - 1, 0);
 
                         Exi(i, j, k, 0) =
-                            Ecen + 0.5 * mu_eta * dBzeta_eta - 0.5 * mu_zeta * dBeta_zeta;
+                            HallRadialTaperEdge_(ib, StaggerLocation::EdgeXi, i, j, k) *
+                            (Ecen + 0.5 * mu_eta * dBzeta_eta - 0.5 * mu_zeta * dBeta_zeta);
                     }
         }
 
@@ -260,7 +296,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                         const double dBzeta_xi = Bze(i, j, k, 0) - Bze(i - 1, j, k, 0);
 
                         Eet(i, j, k, 0) =
-                            Ecen + 0.5 * mu_zeta * dBxi_zeta - 0.5 * mu_xi * dBzeta_xi;
+                            HallRadialTaperEdge_(ib, StaggerLocation::EdgeEt, i, j, k) *
+                            (Ecen + 0.5 * mu_zeta * dBxi_zeta - 0.5 * mu_xi * dBzeta_xi);
                     }
         }
 
@@ -325,7 +362,8 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                         const double dBxi_eta = Bxi(i, j, k, 0) - Bxi(i, j - 1, k, 0);
 
                         Eze(i, j, k, 0) =
-                            Ecen + 0.5 * mu_xi * dBeta_xi - 0.5 * mu_eta * dBxi_eta;
+                            HallRadialTaperEdge_(ib, StaggerLocation::EdgeZe, i, j, k) *
+                            (Ecen + 0.5 * mu_xi * dBeta_xi - 0.5 * mu_eta * dBxi_eta);
                     }
         }
 
@@ -374,89 +412,6 @@ void MercurySolver::BuildHallFaceEMF_Rusanov_diff_()
                     for (int k = lo.k; k < hi.k; ++k)
                         E(i, j, k, 0) = 0.0;
         };
-
-        auto zero_edge_box_inward = [](FieldBlock &E,
-                                       StaggerLocation loc,
-                                       const Box3 &node_box,
-                                       int direction,
-                                       int nlayer)
-        {
-            if (!E.is_allocated())
-                return;
-
-            Int3 lo = node_box.lo;
-            Int3 hi = node_box.hi;
-
-            const int ax = std::abs(direction) - 1;
-
-            // 沿法向向内扩展 nlayer 层（node box）
-            if (direction < 0)
-            {
-                if (ax == 0)
-                    hi.i += nlayer;
-                if (ax == 1)
-                    hi.j += nlayer;
-                if (ax == 2)
-                    hi.k += nlayer;
-            }
-            else
-            {
-                if (ax == 0)
-                    lo.i -= nlayer;
-                if (ax == 1)
-                    lo.j -= nlayer;
-                if (ax == 2)
-                    lo.k -= nlayer;
-            }
-
-            // node-box -> edge dof box
-            if (loc == StaggerLocation::EdgeXi)
-            {
-                hi.i -= 1;
-            }
-            else if (loc == StaggerLocation::EdgeEt)
-            {
-                hi.j -= 1;
-            }
-            else if (loc == StaggerLocation::EdgeZe)
-            {
-                hi.k -= 1;
-            }
-
-            Int3 elo = E.inner_lo();
-            Int3 ehi = E.inner_hi();
-
-            lo.i = std::max(lo.i, elo.i);
-            lo.j = std::max(lo.j, elo.j);
-            lo.k = std::max(lo.k, elo.k);
-
-            hi.i = std::min(hi.i, ehi.i);
-            hi.j = std::min(hi.j, ehi.j);
-            hi.k = std::min(hi.k, ehi.k);
-
-            if (!(lo.i < hi.i && lo.j < hi.j && lo.k < hi.k))
-                return;
-
-            for (int i = lo.i; i < hi.i; ++i)
-                for (int j = lo.j; j < hi.j; ++j)
-                    for (int k = lo.k; k < hi.k; ++k)
-                        E(i, j, k, 0) = 0.0;
-        };
-
-        for (const auto &p : topo_->physical_patches)
-        {
-            if (p.this_block != ib)
-                continue;
-
-            if (p.bc_name != "Solid_Surface" && p.bc_name != "Coupled-Solid") // 换成你的壁面 patch 名
-                continue;
-
-            const int nlayer = 20; // 先试 1；不够再试 2
-
-            zero_edge_box_inward(Exi, StaggerLocation::EdgeXi, p.this_box_node, p.direction, nlayer);
-            zero_edge_box_inward(Eet, StaggerLocation::EdgeEt, p.this_box_node, p.direction, nlayer);
-            zero_edge_box_inward(Eze, StaggerLocation::EdgeZe, p.this_box_node, p.direction, nlayer);
-        }
 
         for (const auto &p : topo_->physical_patches)
         {
