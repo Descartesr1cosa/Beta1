@@ -31,6 +31,7 @@ void MercurySolver::AssembleRHS_Induction_CT_()
     AddIdealEdgeEMF_();
     AddAmbipolarEdgeEMF_();
     AddArtificialResistivityToEdgeEMF_();
+    AddLocalArtificialResistivityToEdgeEMF_();
 
 #if HALL_EXPLICIT == 1
     AddHallEdgeEMF_();

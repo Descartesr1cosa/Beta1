@@ -12,6 +12,9 @@
 
 #include <petscksp.h>
 
+#include <array>
+#include <vector>
+
 #if HALL_IMPLICIT == 1
 #include "4_Hall_Implicit.h"
 #endif
@@ -53,6 +56,12 @@ struct ArtificialResistivityControl
     double eta_max = 0.0;
     double J_range_start = 0.0;
     double J_range_on = 0.0;
+
+    bool local_enabled = false;
+    double local_eta_max = 0.0;
+    double local_center[3] = {0.0, 0.0, 0.0};
+    double local_r_decay = 1.0;
+    double local_r_cutoff = 0.0;
 };
 
 struct AmbipolarEdgeEMFControl
@@ -159,6 +168,11 @@ private:
     std::vector<Scalar> resist_Bstar_xi_;
     std::vector<Scalar> resist_Bstar_eta_;
     std::vector<Scalar> resist_Bstar_ze_;
+
+    std::vector<Scalar> local_arti_eta_xi_;
+    std::vector<Scalar> local_arti_eta_eta_;
+    std::vector<Scalar> local_arti_eta_ze_;
+    bool local_arti_eta_ready_{false};
 
     KSP implicit_resistive_ksp_{nullptr};
     Mat implicit_resistive_A_{nullptr};
@@ -268,6 +282,7 @@ private:
     // For Magnetic
     void AddResistiveEdgeEMF_To_(const IdTriplet &fid_Etarget);
     void AddArtificialResistivityToEdgeEMF_();
+    void AddLocalArtificialResistivityToEdgeEMF_();
     void AddIdealEdgeEMF_();
     void AddAmbipolarEdgeEMF_();
     void AddHallEdgeEMF_();
