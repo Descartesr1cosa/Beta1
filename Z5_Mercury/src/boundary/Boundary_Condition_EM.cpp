@@ -14,254 +14,54 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
     }
 
     const std::string field_name = U.descriptor().name;
-
-    const bool is_total_Bcell = (field_name == "B_cell");
-    const bool is_bind_Bcell = (field_name == "Bind_cell");
-
-    if (!is_total_Bcell && !is_bind_Bcell)
+    if (field_name != "B_cell" && field_name != "Bind_cell")
     {
         BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
         return;
     }
 
-    const int ib = r.this_block;
     const Box3 &inner = r.inner_slab;
+    const Int3 lo = U.inner_lo();
+    const Int3 hi = U.inner_hi();
 
-    auto get_required = [&](const std::string &name) -> FieldBlock *
+    auto inside = [&](int i, int j, int k) -> bool
     {
-        if (!fld->has_field(name))
-            return nullptr;
-
-        FieldBlock &F = fld->field(name, ib);
-
-        if (!F.is_allocated())
-            return nullptr;
-
-        return &F;
+        return i >= lo.i && i < hi.i &&
+               j >= lo.j && j < hi.j &&
+               k >= lo.k && k < hi.k;
     };
 
-    auto get_optional = [&](const std::string &name) -> FieldBlock *
-    {
-        if (!fld->has_field(name))
-            return nullptr;
-
-        FieldBlock &F = fld->field(name, ib);
-
-        if (!F.is_allocated())
-            return nullptr;
-
-        return &F;
-    };
-
-    FieldBlock *Bxi = get_required("B_xi");
-    FieldBlock *Bet = get_required("B_eta");
-
-    FieldBlock *Axi = get_required("JDxi");
-    FieldBlock *Aet = get_required("JDet");
-
-    FieldBlock *Baddxi = get_optional("Badd_xi");
-    FieldBlock *Baddet = get_optional("Badd_eta");
-
-    if (!Bxi || !Bet || !Axi || !Aet)
-    {
-        BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
-        return;
-    }
-
-    auto face_value = [&](FieldBlock *F, FieldBlock *Fadd,
-                          int i, int j, int k) -> double
-    {
-        double v = (*F)(i, j, k, 0);
-
-        // B_cell    : total B = induced Bface + background Badd
-        // Bind_cell : induced B only
-        if (is_total_Bcell && Fadd)
-            v += (*Fadd)(i, j, k, 0);
-
-        return v;
-    };
-
-    auto push_eq = [](double Sx, double Sy, double Sz, double phi,
-                      double M[3][3], double b[3])
-    {
-        const double sn2 = Sx * Sx + Sy * Sy + Sz * Sz;
-
-        if (sn2 <= 1.0e-300)
-            return;
-
-        const double S[3] = {Sx, Sy, Sz};
-
-        for (int a = 0; a < 3; ++a)
-        {
-            b[a] += phi * S[a];
-
-            for (int c = 0; c < 3; ++c)
-                M[a][c] += S[a] * S[c];
-        }
-    };
-
-    auto solve3 = [](double A[3][3], double b[3], double x[3]) -> bool
-    {
-        const double tr =
-            std::abs(A[0][0]) +
-            std::abs(A[1][1]) +
-            std::abs(A[2][2]);
-
-        const double reg = 1.0e-12 * std::max(1.0, tr);
-
-        A[0][0] += reg;
-        A[1][1] += reg;
-        A[2][2] += reg;
-
-        double M[3][4] = {
-            {A[0][0], A[0][1], A[0][2], b[0]},
-            {A[1][0], A[1][1], A[1][2], b[1]},
-            {A[2][0], A[2][1], A[2][2], b[2]}};
-
-        for (int c = 0; c < 3; ++c)
-        {
-            int piv = c;
-            double amax = std::abs(M[c][c]);
-
-            for (int r0 = c + 1; r0 < 3; ++r0)
-            {
-                const double av = std::abs(M[r0][c]);
-
-                if (av > amax)
-                {
-                    amax = av;
-                    piv = r0;
-                }
-            }
-
-            if (amax < 1.0e-300)
-                return false;
-
-            if (piv != c)
-            {
-                for (int q = c; q < 4; ++q)
-                    std::swap(M[c][q], M[piv][q]);
-            }
-
-            const double inv = 1.0 / M[c][c];
-
-            for (int q = c; q < 4; ++q)
-                M[c][q] *= inv;
-
-            for (int r0 = 0; r0 < 3; ++r0)
-            {
-                if (r0 == c)
-                    continue;
-
-                const double fac = M[r0][c];
-
-                for (int q = c; q < 4; ++q)
-                    M[r0][q] -= fac * M[c][q];
-            }
-        }
-
-        x[0] = M[0][3];
-        x[1] = M[1][3];
-        x[2] = M[2][3];
-
-        return true;
-    };
-
-    // =====================================================================
-    // xi-Pole:
-    //
-    //   norm = xi / i
-    //   axis = eta / j
-    //   zeta = k
-    //
-    // Collapsed cell ring:
-    //   (i0, j, k = all)
-    //
-    // Use only:
-    //   1. outer norm face: B_xi(i_norm_face, j, k)
-    //   2. lower axis face: B_eta(i0, j,   k)
-    //   3. upper axis face: B_eta(i0, j+1, k)
-    //
-    // Do NOT use B_zeta.
-    // =====================================================================
+    // Use the off-axis ring one cell away from the Pole. The averaged
+    // Cartesian B vector is then written back to the collapsed Pole ring.
     if (dir == 1)
     {
         for (int i0 = inner.lo.i; i0 < inner.hi.i; ++i0)
         {
-            // inner range is boundary range for Cell
-            const int i_norm_face = (sgn < 0) ? (i0 + 1) : i0;
-
-            // low-side Pole:
-            //   collapsed cell lower xi face is degenerate;
-            //   outer xi face is upper face, outward +xi.
-            //
-            // high-side Pole:
-            //   collapsed cell upper xi face is degenerate;
-            //   outer xi face is lower face, outward -xi.
-            const double s_norm = (sgn < 0) ? +1.0 : -1.0;
+            const int is = i0 - sgn;
 
             for (int j = inner.lo.j; j < inner.hi.j; ++j)
             {
-                double M[3][3] = {
-                    {0.0, 0.0, 0.0},
-                    {0.0, 0.0, 0.0},
-                    {0.0, 0.0, 0.0}};
-
-                double b[3] = {0.0, 0.0, 0.0};
+                double Bp[3] = {0.0, 0.0, 0.0};
+                int cnt = 0;
 
                 for (int k = inner.lo.k; k < inner.hi.k; ++k)
                 {
-                    // ----------------------------------------------------
-                    // 1. Outer norm face: B_xi(i_norm_face, j, k)
-                    // ----------------------------------------------------
-                    {
-                        const double Sx = s_norm * (*Axi)(i_norm_face, j, k, 0);
-                        const double Sy = s_norm * (*Axi)(i_norm_face, j, k, 1);
-                        const double Sz = s_norm * (*Axi)(i_norm_face, j, k, 2);
+                    if (!inside(is, j, k))
+                        continue;
 
-                        const double phi = s_norm * face_value(Bxi, Baddxi,
-                                                               i_norm_face, j, k);
-
-                        push_eq(Sx, Sy, Sz, phi, M, b);
-                    }
-
-                    // ----------------------------------------------------
-                    // 2. Lower axis face: B_eta(i0, j, k)
-                    //    outward direction = -eta
-                    // ----------------------------------------------------
-                    {
-                        const double Sx = -(*Aet)(i0, j, k, 0);
-                        const double Sy = -(*Aet)(i0, j, k, 1);
-                        const double Sz = -(*Aet)(i0, j, k, 2);
-
-                        const double phi = -face_value(Bet, Baddet,
-                                                       i0, j, k);
-
-                        push_eq(Sx, Sy, Sz, phi, M, b);
-                    }
-
-                    // ----------------------------------------------------
-                    // 3. Upper axis face: B_eta(i0, j + 1, k)
-                    //    outward direction = +eta
-                    // ----------------------------------------------------
-                    {
-                        const double Sx = (*Aet)(i0, j + 1, k, 0);
-                        const double Sy = (*Aet)(i0, j + 1, k, 1);
-                        const double Sz = (*Aet)(i0, j + 1, k, 2);
-
-                        const double phi = face_value(Bet, Baddet,
-                                                      i0, j + 1, k);
-
-                        push_eq(Sx, Sy, Sz, phi, M, b);
-                    }
+                    Bp[0] += U(is, j, k, 0);
+                    Bp[1] += U(is, j, k, 1);
+                    Bp[2] += U(is, j, k, 2);
+                    ++cnt;
                 }
 
-                double Bp[3] = {0.0, 0.0, 0.0};
-
-                if (!solve3(M, b, Bp))
+                if (cnt == 0)
                     continue;
 
-                // Write the same collapsed B_pole to all k.
+                Bp[0] /= cnt;
+                Bp[1] /= cnt;
+                Bp[2] /= cnt;
+
                 for (int k = inner.lo.k; k < inner.hi.k; ++k)
                 {
                     U(i0, j, k, 0) = Bp[0];
@@ -272,99 +72,35 @@ void MercuryBoundary::BC_Pole_Bcell_Collapse_(FieldBlock &U, Field *fld,
         }
     }
 
-    // =====================================================================
-    // eta-Pole:
-    //
-    //   norm = eta / j
-    //   axis = xi / i
-    //   zeta = k
-    //
-    // Collapsed cell ring:
-    //   (i, j0, k = all)
-    //
-    // Use only:
-    //   1. outer norm face: B_eta(i, j_norm_face, k)
-    //   2. lower axis face: B_xi(i,   j0, k)
-    //   3. upper axis face: B_xi(i+1, j0, k)
-    //
-    // Do NOT use B_zeta.
-    // =====================================================================
     if (dir == 2)
     {
         for (int j0 = inner.lo.j; j0 < inner.hi.j; ++j0)
         {
-            // inner range is boundary range for Cell
-            const int j_norm_face = (sgn < 0) ? (j0 + 1) : j0;
-
-            // low-side Pole:
-            //   outer eta face is upper face, outward +eta.
-            //
-            // high-side Pole:
-            //   outer eta face is lower face, outward -eta.
-            const double s_norm = (sgn < 0) ? +1.0 : -1.0;
+            const int js = j0 - sgn;
 
             for (int i = inner.lo.i; i < inner.hi.i; ++i)
             {
-                double M[3][3] = {
-                    {0.0, 0.0, 0.0},
-                    {0.0, 0.0, 0.0},
-                    {0.0, 0.0, 0.0}};
-
-                double b[3] = {0.0, 0.0, 0.0};
+                double Bp[3] = {0.0, 0.0, 0.0};
+                int cnt = 0;
 
                 for (int k = inner.lo.k; k < inner.hi.k; ++k)
                 {
-                    // ----------------------------------------------------
-                    // 1. Outer norm face: B_eta(i, j_norm_face, k)
-                    // ----------------------------------------------------
-                    {
-                        const double Sx = s_norm * (*Aet)(i, j_norm_face, k, 0);
-                        const double Sy = s_norm * (*Aet)(i, j_norm_face, k, 1);
-                        const double Sz = s_norm * (*Aet)(i, j_norm_face, k, 2);
+                    if (!inside(i, js, k))
+                        continue;
 
-                        const double phi = s_norm * face_value(Bet, Baddet,
-                                                               i, j_norm_face, k);
-
-                        push_eq(Sx, Sy, Sz, phi, M, b);
-                    }
-
-                    // ----------------------------------------------------
-                    // 2. Lower axis face: B_xi(i, j0, k)
-                    //    outward direction = -xi
-                    // ----------------------------------------------------
-                    {
-                        const double Sx = -(*Axi)(i, j0, k, 0);
-                        const double Sy = -(*Axi)(i, j0, k, 1);
-                        const double Sz = -(*Axi)(i, j0, k, 2);
-
-                        const double phi = -face_value(Bxi, Baddxi,
-                                                       i, j0, k);
-
-                        push_eq(Sx, Sy, Sz, phi, M, b);
-                    }
-
-                    // ----------------------------------------------------
-                    // 3. Upper axis face: B_xi(i + 1, j0, k)
-                    //    outward direction = +xi
-                    // ----------------------------------------------------
-                    {
-                        const double Sx = (*Axi)(i + 1, j0, k, 0);
-                        const double Sy = (*Axi)(i + 1, j0, k, 1);
-                        const double Sz = (*Axi)(i + 1, j0, k, 2);
-
-                        const double phi = face_value(Bxi, Baddxi,
-                                                      i + 1, j0, k);
-
-                        push_eq(Sx, Sy, Sz, phi, M, b);
-                    }
+                    Bp[0] += U(i, js, k, 0);
+                    Bp[1] += U(i, js, k, 1);
+                    Bp[2] += U(i, js, k, 2);
+                    ++cnt;
                 }
 
-                double Bp[3] = {0.0, 0.0, 0.0};
-
-                if (!solve3(M, b, Bp))
+                if (cnt == 0)
                     continue;
 
-                // Write the same collapsed B_pole to all k.
+                Bp[0] /= cnt;
+                Bp[1] /= cnt;
+                Bp[2] /= cnt;
+
                 for (int k = inner.lo.k; k < inner.hi.k; ++k)
                 {
                     U(i, j0, k, 0) = Bp[0];
