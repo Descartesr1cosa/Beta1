@@ -104,6 +104,11 @@ void MercuryBoundary::InstallHandlers()
                       {
                           this->BC_Pole_Bcell_Collapse_(U, fld, r, ngh);
                       });
+    RegisterPhysical_("J_cell", "Pole",
+                      [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
+                      {
+                          this->BC_Pole_Jcell_Collapse_(U, fld, r, ngh);
+                      });
     RegisterPhysical_("B_cell", "Farfield", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)
                       { this->BC_Farfield_Bface(U, fld, r, ngh); });
     RegisterPhysical_("Bind_cell", "Farfield", [this](FieldBlock &U, Field *fld, const BOUND::PhysicalRegion &r, int ngh)

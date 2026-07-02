@@ -162,6 +162,101 @@ void MercuryBoundary::BC_Solid_Surface_Jcell(FieldBlock &U, Field *fld, const BO
     BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
 }
 
+void MercuryBoundary::BC_Pole_Jcell_Collapse_(FieldBlock &U, Field *fld,
+                                             const BOUND::PhysicalRegion &r,
+                                             int ngh)
+{
+    const int dir = std::abs(r.direction); // 1: xi, 2: eta
+    const int sgn = (r.direction > 0) ? +1 : -1;
+
+    if (dir != 1 && dir != 2)
+    {
+        BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
+        return;
+    }
+
+    const Box3 &inner = r.inner_slab;
+    const Int3 lo = U.inner_lo();
+    const Int3 hi = U.inner_hi();
+    const int ncomp = U.descriptor().ncomp;
+
+    auto inside = [&](int i, int j, int k) -> bool
+    {
+        return i >= lo.i && i < hi.i &&
+               j >= lo.j && j < hi.j &&
+               k >= lo.k && k < hi.k;
+    };
+
+    if (dir == 1)
+    {
+        for (int i0 = inner.lo.i; i0 < inner.hi.i; ++i0)
+        {
+            const int is = i0 - sgn;
+
+            for (int j = inner.lo.j; j < inner.hi.j; ++j)
+            {
+                double Jp[3] = {0.0, 0.0, 0.0};
+                int cnt = 0;
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                {
+                    if (!inside(is, j, k))
+                        continue;
+
+                    for (int n = 0; n < ncomp; ++n)
+                        Jp[n] += U(is, j, k, n);
+                    ++cnt;
+                }
+
+                if (cnt == 0)
+                    continue;
+
+                for (int n = 0; n < ncomp; ++n)
+                    Jp[n] /= static_cast<double>(cnt);
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    for (int n = 0; n < ncomp; ++n)
+                        U(i0, j, k, n) = Jp[n];
+            }
+        }
+    }
+    else if (dir == 2)
+    {
+        for (int j0 = inner.lo.j; j0 < inner.hi.j; ++j0)
+        {
+            const int js = j0 - sgn;
+
+            for (int i = inner.lo.i; i < inner.hi.i; ++i)
+            {
+                double Jp[3] = {0.0, 0.0, 0.0};
+                int cnt = 0;
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                {
+                    if (!inside(i, js, k))
+                        continue;
+
+                    for (int n = 0; n < ncomp; ++n)
+                        Jp[n] += U(i, js, k, n);
+                    ++cnt;
+                }
+
+                if (cnt == 0)
+                    continue;
+
+                for (int n = 0; n < ncomp; ++n)
+                    Jp[n] /= static_cast<double>(cnt);
+
+                for (int k = inner.lo.k; k < inner.hi.k; ++k)
+                    for (int n = 0; n < ncomp; ++n)
+                        U(i, j0, k, n) = Jp[n];
+            }
+        }
+    }
+
+    BoundaryCore::DefaultPhysicalCopy(U, fld, r, ngh);
+}
+
 void MercuryBoundary::BC_Pole_Bface_Collapse_(FieldBlock &U, Field *fld,
                                               const BOUND::PhysicalRegion &r,
                                               int ngh)
