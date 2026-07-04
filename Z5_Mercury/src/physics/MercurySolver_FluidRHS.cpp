@@ -207,8 +207,8 @@ void MercurySolver::AddSourceToRHS_Fluid()
 {
     // ---------- constants  ----------
     const double Tn0 = 185.0;  // K
-    const double sk1 = 5.0e-5; // 1/s  (day side)
-    const double sk2 = 1.0e-5; // 1/s  (night side)
+    const double sk1 = 5.0e-5; // 1/s  (illuminated region)
+    const double sk2 = 1.0e-5; // 1/s  (geometric shadow region)
 
     // coefficients matching Fortran structure (see explanation in my previous message)
 
@@ -386,13 +386,14 @@ void MercurySolver::AddSourceToRHS_Fluid()
                     const double sss = Photo(i, j, k, 0); // cm^-3 s^-1
 
                     // -------------------- drag frequency vst (1/s) --------------------
-                    // Fortran: if(x>=0) vst=sk1 else vst=sk2  （x 为无量纲坐标）
-                    // C++ 目前没有直接取物理坐标，这里用 Jac/metric 无法得到 x；
-                    // 因此：如果你要严格复现 Fortran 的 x 判定，请从几何场里取坐标场（例如 fid_.fid_coord）再判断。
-                    // 这里给一个保守默认：统一用 sk1（你也可以改成 sk2 或按你已有的坐标场实现）
-                    // const double sk1 = 5E-5;
-                    // const double sk2 = 1E-5;
-                    const double vst = (cx(i, j, k) >= 0) ? sk1 : sk2;
+                    // Use the same geometric shadow criterion as Photo_rate:
+                    // behind Mercury and inside the cylindrical shadow.
+                    const double x = cx(i + 1, j + 1, k + 1);
+                    const double y = cy(i + 1, j + 1, k + 1);
+                    const double z = cz(i + 1, j + 1, k + 1);
+                    const double rho_cyl = std::sqrt(y * y + z * z);
+                    const bool in_shadow = (x < 0.0 && rho_cyl < 1.0);
+                    const double vst = in_shadow ? sk2 : sk1;
 
                     // b2 = (sm2/(sm1+sm2))*vst ;  b1 = (Tn0 - Ts0)*sm1/(sm1+sm2)
 

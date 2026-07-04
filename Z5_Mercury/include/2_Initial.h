@@ -391,6 +391,8 @@ private:
         }
     }
 
+    // // Obsolete reference implementation, not compiled.
+    // // The active implementation above uses sk2 only in Mercury's geometric shadow.
     // // Build neutral Na density and photoionization rate
     // void Initial_Na_And_PhotoRate_(Field *fld, const SolverFields &fid)
     // {
