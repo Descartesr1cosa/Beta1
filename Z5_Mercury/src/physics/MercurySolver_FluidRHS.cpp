@@ -206,7 +206,7 @@ void MercurySolver::Scheme_U_()
 void MercurySolver::AddSourceToRHS_Fluid()
 {
     // ---------- constants  ----------
-    const double Tn0 = 185.0;  // K
+    const double Tn0 = 1000.0; // 185.0;  // K
     const double sk1 = 5.0e-5; // 1/s  (illuminated region)
     const double sk2 = 1.0e-5; // 1/s  (geometric shadow region)
 
